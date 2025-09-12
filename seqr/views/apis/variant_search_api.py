@@ -12,10 +12,11 @@ from django.shortcuts import redirect
 from math import ceil
 import re
 
+from clickhouse_search.search import variant_lookup, sv_variant_lookup
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
-    variant_lookup, sv_variant_lookup, parse_variant_id
+    parse_variant_id, clickhouse_only
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
 from seqr.utils.search.utils import InvalidSearchException
 from seqr.utils.xpos_utils import get_xpos
@@ -552,19 +553,23 @@ def _parse_lookup_request(request):
     return parsed_variant_id, variant_id, kwargs
 
 @login_and_policies_required
+@clickhouse_only
 def variant_lookup_handler(request):
     parsed_variant_id, variant_id, kwargs = _parse_lookup_request(request)
     is_sv = not parsed_variant_id
-    genome_version = kwargs.get('genome_version', GENOME_VERSION_GRCh38)
+    genome_version = kwargs.pop('genome_version', GENOME_VERSION_GRCh38)
     if is_sv:
         families = _all_genome_version_families(
             genome_version, request.user,
         )
         if not families:
             raise PermissionDenied()
-        variants = sv_variant_lookup(request.user, variant_id, families, **kwargs)
+        sample_type = kwargs.get('sample_type')
+        if not sample_type:
+            raise InvalidSearchException('Sample type must be specified to look up a structural variant')
+        variants = sv_variant_lookup(request.user, variant_id, genome_version, families, sample_type, **kwargs)
     else:
-        variant = variant_lookup(request.user, parsed_variant_id, **kwargs)
+        variant = variant_lookup(request.user, parsed_variant_id, genome_version, **kwargs)
         variants = [variant]
         families = Family.objects.filter(
             guid__in=variant['familyGenotypes'],

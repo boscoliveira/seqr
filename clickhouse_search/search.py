@@ -1,5 +1,6 @@
 from clickhouse_backend.models import ArrayField, StringField
 from collections import defaultdict
+from datetime import timedelta
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import connections
@@ -12,13 +13,13 @@ from clickhouse_search.backend.functions import Array, ArrayFilter, ArrayInterse
     ArrayDistinct, ArrayMap
 from clickhouse_search.models import ENTRY_CLASS_MAP, ANNOTATIONS_CLASS_MAP, TRANSCRIPTS_CLASS_MAP, KEY_LOOKUP_CLASS_MAP, \
     BaseClinvar, BaseAnnotationsMitoSnvIndel, BaseAnnotationsGRCh37SnvIndel, BaseAnnotationsSvGcnv
-from reference_data.models import GeneConstraint, Omim, GENOME_VERSION_LOOKUP
+from reference_data.models import GeneConstraint, Omim, GENOME_VERSION_LOOKUP, GENOME_VERSION_GRCh37
 from seqr.models import Sample, PhenotypePrioritization, Individual
 from seqr.utils.logging_utils import SeqrLogger
+from seqr.utils.redis_utils import safe_redis_get_json, safe_redis_set_json
 from seqr.utils.search.constants import MAX_VARIANTS, XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY, \
     PRIORITIZED_GENE_SORT, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS, RECESSIVE
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
-from settings import CLICKHOUSE_SERVICE_HOSTNAME
 
 logger = SeqrLogger(__name__)
 
@@ -552,7 +553,7 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples):
         variant = format_clickhouse_results([variant], genome_version)[0]
     return variant
 
-def clickhouse_variant_lookup(user, variant_id, data_type, genome_version=None, samples=None, **kwargs):
+def clickhouse_variant_lookup(user, variant_id, data_type, genome_version, samples=None, **kwargs):
     logger.info(f'Looking up variant {variant_id} with data type {data_type}', user)
 
     variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples)
@@ -605,6 +606,61 @@ def get_clickhouse_variant_by_id(variant_id, samples, genome_version, dataset_ty
         if variant:
             return variant
     return None
+
+
+def _variant_lookup(lookup_func, user, variant_id, genome_version, dataset_type, cache_key_suffix='', **kwargs):
+    _validate_dataset_type_genome_version(dataset_type, genome_version)
+    cache_key = f'variant_lookup_results__{variant_id}__{genome_version}__{cache_key_suffix}'
+    variant = safe_redis_get_json(cache_key)
+    if variant:
+        return variant
+
+    variant = lookup_func(user, variant_id, dataset_type, genome_version, **kwargs)
+    safe_redis_set_json(cache_key, variant, expire=timedelta(weeks=2))
+    return variant
+
+
+def _validate_dataset_type_genome_version(dataset_type, genome_version):
+    if genome_version == GENOME_VERSION_GRCh37 and dataset_type != Sample.DATASET_TYPE_VARIANT_CALLS:
+        from seqr.utils.search.utils import InvalidSearchException
+        raise InvalidSearchException(f'{dataset_type} variants are not available for GRCh37')
+
+
+def variant_lookup(user, parsed_variant_id, genome_version, **kwargs):
+    dataset_type = Sample.DATASET_TYPE_MITO_CALLS if parsed_variant_id[0].replace('chr', '').startswith('M') else Sample.DATASET_TYPE_VARIANT_CALLS
+    return _variant_lookup(clickhouse_variant_lookup, user, parsed_variant_id, genome_version, dataset_type, **kwargs)
+
+
+def sv_variant_lookup(user, variant_id, genome_version, families, sample_type, **kwargs):
+    samples = _get_families_search_data(families, dataset_type=Sample.DATASET_TYPE_SV_CALLS)  # TODO
+
+    return _variant_lookup(
+        _sv_variant_lookup, user, variant_id, genome_version, dataset_type=Sample.DATASET_TYPE_SV_CALLS,
+        **kwargs, samples=samples, sample_type=sample_type, cache_key_suffix=user,
+    )
+
+
+def _sv_variant_lookup(user, variant_id, dataset_type, genome_version, samples, sample_type, **kwargs):
+    data_type = f'{dataset_type}_{sample_type}'
+
+    lookup_samples = samples.filter(sample_type=sample_type)
+    variant = clickhouse_variant_lookup(user, variant_id, data_type, samples=lookup_samples, genome_version=genome_version, **kwargs)
+    variants = [variant]
+
+    if variant['svType'] in {'DEL', 'DUP'}:
+        samples = samples.exclude(sample_type=sample_type)
+        search = {
+            'parsed_locus': {
+                'padded_interval': {'chrom': variant['chrom'], 'start': variant['pos'], 'end': variant['end'], 'padding': 0.2},
+            },
+            'annotations': {'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
+            **kwargs,
+        }
+        results = {}
+        _execute_search(samples, search, user, previous_search_results=results, genome_version=genome_version)   # TODO
+        variants += results['all_results']
+
+    return variants
 
 
 def get_clickhouse_genotypes(project_guid, family_guids, genome_version, dataset_type, keys, samples):

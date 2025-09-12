@@ -5,7 +5,7 @@ from django.db.models import Count
 from pyliftover.liftover import LiftOver
 
 from clickhouse_search.search import get_clickhouse_variants, format_clickhouse_results, \
-    get_clickhouse_cache_results, clickhouse_variant_lookup, get_clickhouse_variant_by_id
+    get_clickhouse_cache_results, get_clickhouse_variant_by_id
 from reference_data.models import GENOME_VERSION_GRCh38, GENOME_VERSION_GRCh37
 from seqr.models import Sample, Individual, Project
 from seqr.utils.logging_utils import SeqrLogger
@@ -48,12 +48,6 @@ DATASET_TYPE_SNP_INDEL_ONLY = f'{Sample.DATASET_TYPE_VARIANT_CALLS}_only'
 DATASET_TYPES_LOOKUP[DATASET_TYPE_SNP_INDEL_ONLY] = [Sample.DATASET_TYPE_VARIANT_CALLS]
 DATASET_TYPE_NO_MITO = f'{Sample.DATASET_TYPE_MITO_CALLS}_missing'
 DATASET_TYPES_LOOKUP[DATASET_TYPE_NO_MITO] = [Sample.DATASET_TYPE_VARIANT_CALLS, Sample.DATASET_TYPE_SV_CALLS]
-
-
-def _raise_search_error(error):
-    def _wrapped(*args, **kwargs):
-        raise InvalidSearchException(error)
-    return _wrapped
 
 
 def es_only(func):
@@ -150,67 +144,6 @@ def _get_clickhouse_variant_by_id(parsed_variant_id, variant_id, samples, genome
     return get_clickhouse_variant_by_id(
         parsed_variant_id or variant_id, samples, genome_version, DATASET_TYPES_LOOKUP[dataset_type][0],
     )
-
-
-def _variant_lookup(lookup_func, user, variant_id, dataset_type, genome_version=None, cache_key_suffix='', **kwargs):
-    genome_version = genome_version or GENOME_VERSION_GRCh38
-    _validate_dataset_type_genome_version(dataset_type, genome_version)
-    cache_key = f'variant_lookup_results__{variant_id}__{genome_version}__{cache_key_suffix}'
-    variant = safe_redis_get_json(cache_key)
-    if variant:
-        return variant
-
-    variant = lookup_func(user, variant_id, dataset_type, genome_version=genome_version, **kwargs)
-    safe_redis_set_json(cache_key, variant, expire=timedelta(weeks=2))
-    return variant
-
-
-def _validate_dataset_type_genome_version(dataset_type, genome_version):
-    if genome_version == GENOME_VERSION_GRCh37 and dataset_type != Sample.DATASET_TYPE_VARIANT_CALLS:
-        raise InvalidSearchException(f'{dataset_type} variants are not available for GRCh37')
-
-
-def variant_lookup(user, parsed_variant_id, **kwargs):
-    dataset_type = DATASET_TYPES_LOOKUP[_variant_ids_dataset_type([parsed_variant_id])][0]
-    lookup_func = backend_specific_call(_raise_search_error('Lookup is disabled'), clickhouse_variant_lookup)
-    return _variant_lookup(lookup_func, user, parsed_variant_id, **kwargs, dataset_type=dataset_type)
-
-
-def sv_variant_lookup(user, variant_id, families, **kwargs):
-    _get_search_genome_version(families)
-    samples = _get_families_search_data(families, dataset_type=Sample.DATASET_TYPE_SV_CALLS)
-
-    return _variant_lookup(
-        _sv_variant_lookup, user, variant_id, **kwargs, samples=samples, cache_key_suffix=user,
-        dataset_type=Sample.DATASET_TYPE_SV_CALLS,
-    )
-
-
-def _sv_variant_lookup(user, variant_id, dataset_type, samples, genome_version=None, sample_type=None, **kwargs):
-    if not sample_type:
-        raise InvalidSearchException('Sample type must be specified to look up a structural variant')
-
-    data_type = f'{dataset_type}_{sample_type}'
-
-    lookup_samples = samples.filter(sample_type=sample_type)
-    lookup_func = backend_specific_call(_raise_search_error('Lookup is disabled'), clickhouse_variant_lookup)
-    variant = lookup_func(user, variant_id, data_type, samples=lookup_samples, genome_version=genome_version, **kwargs)
-    variants = [variant]
-
-    if variant['svType'] in {'DEL', 'DUP'}:
-        samples = samples.exclude(sample_type=sample_type)
-        search = {
-            'parsed_locus': {
-                'padded_interval': {'chrom': variant['chrom'], 'start': variant['pos'], 'end': variant['end'], 'padding': 0.2},
-            },
-            'annotations': {'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
-            **kwargs,
-        }
-        results = {}
-        _execute_search(samples, search, user, previous_search_results=results, genome_version=genome_version)
-        variants += results['all_results']
-
-    return variants
 
 
 def _get_search_cache_key(search_model, sort=None):
