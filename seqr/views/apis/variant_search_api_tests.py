@@ -999,36 +999,25 @@ class VariantSearchAPITest(object):
             'liftedFamilyGuids': ['F000014_14'],
             'genotypes': {
                 individual_guid: [
-                    {**sample_genotype, **genotype} for sample_genotype in expected_variant['genotypes'][anon_individual_guid]
+                    {**sample_genotype, **genotype, 'individualGuid': individual_guid} for sample_genotype in expected_variant['genotypes'][anon_individual_guid]
                 ] if isinstance(expected_variant['genotypes'][anon_individual_guid], list) else {
-                    **expected_variant['genotypes'][anon_individual_guid], **genotype,
+                    **expected_variant['genotypes'][anon_individual_guid], **genotype, 'individualGuid': individual_guid,
                 } for individual_guid, anon_individual_guid, genotype in individual_guid_map
             },
             'genomeVersion': '37',
             'variantId': '1-248367227-TC-T',
         })
+        expected_body.update(self._expected_lookup_context(
+            [PROJECT_GUID, 'R0003_test', 'R0004_non_analyst_project'],
+            ['F000002_2', 'F000011_11', 'F000014_14'],
+            [i[0] for i in individual_guid_map] + ['I000019_na21987', 'I000021_na21654']),
+        )
         expected_body.update({
-            **{k: {**EXPECTED_SEARCH_RESPONSE[k]} for k in {
-                'mmeSubmissionsByGuid', 'variantTagsByGuid', 'variantNotesByGuid',
-            }},
-            **EXPECTED_TRANSCRIPTS_RESPONSE,
-            'omimIntervals': {},
-            'savedVariantsByGuid': {k: v for k, v in self.EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'].items() if k in ['SV0000002_1248367227_r0390_100']},
-            'variantFunctionalDataByGuid': {},
-            'locusListsByGuid': EXPECTED_SEARCH_CONTEXT_RESPONSE['locusListsByGuid'],
-            'projectsByGuid': {
-                p: {k: mock.ANY for k in PROJECT_TAG_TYPE_FIELDS}
-                for p in [PROJECT_GUID, 'R0003_test', 'R0004_non_analyst_project']
-            },
-            'familiesByGuid': {
-                f: {k: mock.ANY for k in [*FAMILY_FIELDS, 'individualGuids']}
-                for f in ['F000002_2', 'F000011_11', 'F000014_14']
-            },
-            'individualsByGuid': {
-                i[0]: {k: mock.ANY for k in [*INDIVIDUAL_FIELDS, 'igvSampleGuids']}
-                for i in individual_guid_map + [('I000019_na21987',), (('I000021_na21654',))]
-            },
+            k: {**EXPECTED_SEARCH_RESPONSE[k]} for k in {'mmeSubmissionsByGuid', 'variantTagsByGuid', 'variantNotesByGuid'}
         })
+        expected_body['savedVariantsByGuid']= {
+            k: v for k, v in self.EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'].items() if k in ['SV0000002_1248367227_r0390_100']
+        }
         expected_body['genesById']['ENSG00000227232'] = expected_pa_gene
         expected_body['mmeSubmissionsByGuid']['MS000018_P0004517'] = expected_body['mmeSubmissionsByGuid'].pop('MS000001_na19675')
         expected_body['savedVariantsByGuid']['SV0000006_1248367227_r0004_non'] = mock.ANY
@@ -1057,12 +1046,30 @@ class VariantSearchAPITest(object):
             expected_body['totalSampleCounts'] = self.EXPECTED_SEARCH_RESPONSE['totalSampleCounts']
         return expected_body
 
+    def _expected_lookup_context(self, project_guids, family_guids, individual_guids):
+        return {
+            **EXPECTED_TRANSCRIPTS_RESPONSE,
+            'omimIntervals': {},
+            'variantFunctionalDataByGuid': {},
+            'locusListsByGuid': EXPECTED_SEARCH_CONTEXT_RESPONSE['locusListsByGuid'],
+            'projectsByGuid': {
+                p: {k: mock.ANY for k in PROJECT_TAG_TYPE_FIELDS} for p in project_guids
+            },
+            'familiesByGuid': {
+                f: {k: mock.ANY for k in [*FAMILY_FIELDS, 'individualGuids']} for f in family_guids
+            },
+            'individualsByGuid': {
+                i: {k: mock.ANY for k in [*INDIVIDUAL_FIELDS, 'igvSampleGuids']} for i in individual_guids
+            },
+        }
+
     @mock.patch('seqr.views.apis.variant_search_api.variant_lookup')
     def test_sv_variant_lookup(self, mock_variant_lookup):
-        mock_variant_lookup.return_value = deepcopy([
-            {**GCNV_LOOKUP_VARIANT, 'familyGenotypes': {k: v for k, v in GCNV_LOOKUP_VARIANT['familyGenotypes'].items() if k != 'F000002_2_x'}} ,
+        lookup_variants = [
+            {**GCNV_LOOKUP_VARIANT, 'familyGenotypes': {k: v for k, v in GCNV_LOOKUP_VARIANT['familyGenotypes'].items() if k != 'F000002_2_x'}},
             SV_LOOKUP_VARIANT,
-        ])
+        ]
+        mock_variant_lookup.side_effect = lambda *args, **kwargs: [deepcopy(v) for v in lookup_variants]
 
         url = f'{reverse(variant_lookup_handler)}?variantId=phase2_DEL_chr14_4640&genomeVersion=37&sampleType=WGS'
         self.check_require_login(url)
@@ -1142,13 +1149,26 @@ class VariantSearchAPITest(object):
             self.no_access_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
         )
 
-        self.login_collaborator()
+        self.login_manager()
         response = self.client.get(url)
-        import pdb; pdb.set_trace()
         self.assertEqual(response.status_code, 200)
-        mock_variant_lookup.assert_called_with(
-            self.collaborator_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
-        )
+        expected_gcnv_variant.update({
+            'lookupFamilyGuids': GCNV_VARIANT4['familyGuids'],
+            'genotypes': GCNV_VARIANT4['genotypes'],
+        })
+        expected_sv_variant.update({
+            'lookupFamilyGuids': SV_VARIANT4['familyGuids'],
+            'genotypes': SV_VARIANT4['genotypes'],
+        })
+        expected_body.update(self._expected_lookup_context(
+            [PROJECT_GUID, 'R0004_non_analyst_project'],
+            ['F000002_2', 'F000014_14'],
+            ['I000004_hg00731', 'I000005_hg00732', 'I000006_hg00733', 'I000018_na21234', 'I000019_na21987', 'I000021_na21654'],
+        ))
+        expected_body.update({k: {} for k in {'mmeSubmissionsByGuid', 'variantTagsByGuid', 'variantNotesByGuid'}})
+        del expected_body['transcriptsById']
+        self.assertDictEqual(response.json(), expected_body)
+        mock_variant_lookup.assert_called_with(self.manager_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS')
 
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_SECRET', 'abc123')
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_ID', MOCK_CLIENT_ID)

@@ -590,11 +590,12 @@ def _update_lookup_variant(variant, response, individual_guid_map):
     add_individual_hpo_details([i for _, i in individual_summary_map.values()])
 
     variant['genotypes'] = {}
-    variant['lookupFamilyGuids'] = sorted(variant.pop('familyGuids'))
+    variant['lookupFamilyGuids'] = sorted([guid for guid in variant.pop('familyGuids') if guid in variant['familyGenotypes']])
     variant['familyGuids'] = []
     for family_guid in variant['lookupFamilyGuids']:
         for genotype in variant['familyGenotypes'].pop(family_guid):
             individual_guid = individual_guid_map[(family_guid, genotype['sampleId'])]
+            genotype = {**genotype, 'individualGuid': individual_guid}
             if individual_guid in variant['genotypes']:
                 genotype = [variant['genotypes'][individual_guid], genotype]
             variant['genotypes'][individual_guid] = genotype
