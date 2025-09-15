@@ -696,7 +696,6 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         }])
 
         variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
-        self.maxDiff = None
         self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
 
         # reciprocal overlap does not meet the threshold for smaller events

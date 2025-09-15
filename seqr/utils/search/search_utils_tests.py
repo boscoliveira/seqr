@@ -65,17 +65,17 @@ class SearchUtilsTests(SearchTestHelper):
         self.search_samples = list(self.affected_search_samples) + list(self.non_affected_search_samples)
 
     def test_variant_lookup(self, mock_variant_lookup):
-        mock_variant_lookup.return_value = VARIANT_LOOKUP_VARIANT
-        variant = variant_lookup(self.user, ('1', 10439, 'AC', 'A'), genome_version='38')
-        self.assertDictEqual(variant, VARIANT_LOOKUP_VARIANT)
-        mock_variant_lookup.assert_called_with(self.user, ('1', 10439, 'AC', 'A'), 'SNV_INDEL', genome_version='38')
-        cache_key = "variant_lookup_results__('1', 10439, 'AC', 'A')__38__"
-        self.assert_cached_results(variant, cache_key=cache_key)
+        mock_variant_lookup.return_value = [VARIANT_LOOKUP_VARIANT]
+        variants = variant_lookup(self.user, '1-10439-AC-A', '38')
+        self.assertListEqual(variants, [VARIANT_LOOKUP_VARIANT])
+        mock_variant_lookup.assert_called_with(self.user, ('1', 10439, 'AC', 'A'), 'SNV_INDEL', None, '38')
+        cache_key = "variant_lookup_results__1-10439-AC-A__38"
+        self.assert_cached_results(variants, cache_key=cache_key)
 
         mock_variant_lookup.reset_mock()
-        self.set_cache(variant)
-        cached_variant = variant_lookup(self.user, ('1', 10439, 'AC', 'A'), genome_version='38')
-        self.assertDictEqual(variant, cached_variant)
+        self.set_cache(variants)
+        cached_variant = variant_lookup(self.user, '1-10439-AC-A', '38')
+        self.assertListEqual(variants, cached_variant)
         mock_variant_lookup.assert_not_called()
         self.mock_redis.get.assert_called_with(cache_key)
 
@@ -84,7 +84,7 @@ class SearchUtilsTests(SearchTestHelper):
         def _mock_get_variants(samples, search, user, previous_search_results, genome_version, **kwargs):
             previous_search_results['all_results'] = [SV_VARIANT1]
         mock_get_variants.side_effect = _mock_get_variants
-        variants = sv_variant_lookup(self.user, 'phase2_DEL_chr14_4640', self.families, genome_version='38', sample_type='WGS')
+        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
         self.assertListEqual(variants, [SV_VARIANT4, SV_VARIANT1])
         mock_sv_variant_lookup.assert_called_with(
             self.user, 'phase2_DEL_chr14_4640', 'SV_WGS', genome_version='38', samples=mock.ANY)
