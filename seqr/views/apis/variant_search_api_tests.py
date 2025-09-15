@@ -7,7 +7,8 @@ from django.db import transaction
 from django.urls.base import reverse
 from elasticsearch.exceptions import ConnectionTimeout, TransportError
 
-from clickhouse_search.test_utils import VARIANT2, VARIANT3, VARIANT_LOOKUP_VARIANT, GCNV_VARIANT1, SV_VARIANT1
+from clickhouse_search.test_utils import VARIANT2, VARIANT3, VARIANT_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT, \
+    SV_LOOKUP_VARIANT, SV_VARIANT4, GCNV_VARIANT4
 from seqr.models import VariantSearchResults, LocusList, Project, VariantSearch
 from seqr.utils.search.utils import InvalidSearchException
 from seqr.utils.search.elasticsearch.es_utils import InvalidIndexException
@@ -903,7 +904,7 @@ class VariantSearchAPITest(object):
     @mock.patch('seqr.views.apis.variant_search_api.variant_lookup')
     def test_variant_lookup(self, mock_variant_lookup):
         response_variant = deepcopy(VARIANT_LOOKUP_VARIANT)
-        mock_variant_lookup.side_effect = lambda *args, **kwargs: deepcopy(response_variant)
+        mock_variant_lookup.side_effect = lambda *args, **kwargs: [deepcopy(response_variant)]
 
         url = f'{reverse(variant_lookup_handler)}?variantId=1-10439-AC-A&genomeVersion=38'
         self.check_require_login(url)
@@ -936,13 +937,7 @@ class VariantSearchAPITest(object):
             },
         }
         del expected_variant['familyGenotypes']
-        expected_body = {
-            **{k: {} for k in self.EXPECTED_SEARCH_RESPONSE if k not in {
-                'searchedVariants', 'search', 'variantNotesByGuid', 'variantTagsByGuid', 'variantFunctionalDataByGuid', 'transcriptsById',
-            }},
-            **{k: {} for k in EXPECTED_SEARCH_FAMILY_CONTEXT},
-            'projectsByGuid': {},
-            'individualsByGuid': {
+        expected_body = self._expected_lookup_body({
                 'I0_F0_1-10439-AC-A': {
                     'affected': 'N', 'familyGuid': 'F0_1-10439-AC-A', 'features': [],
                     'individualGuid': 'I0_F0_1-10439-AC-A', 'sex': 'F',
@@ -969,12 +964,10 @@ class VariantSearchAPITest(object):
                     'vlmContactEmail': 'test@broadinstitute.org,vlm@broadinstitute.org',
                 },
             },
-            'variants': [expected_variant],
-        }
-        if 'totalSampleCounts' in self.EXPECTED_SEARCH_RESPONSE:
-            expected_body['totalSampleCounts'] = self.EXPECTED_SEARCH_RESPONSE['totalSampleCounts']
+            [expected_variant],
+        )
         self.assertDictEqual(response.json(), expected_body)
-        mock_variant_lookup.assert_called_with(self.no_access_user,  ('1', 10439, 'AC', 'A'), genome_version='38')
+        mock_variant_lookup.assert_called_with(self.no_access_user, '1-10439-AC-A', '38', sample_type=None)
 
         response_variant['transcripts'] = VARIANTS[0]['transcripts']
         expected_variant['transcripts'] = VARIANTS[0]['transcripts']
@@ -1046,29 +1039,115 @@ class VariantSearchAPITest(object):
 
         self.assertDictEqual(response.json(), expected_body)
         mock_variant_lookup.assert_called_with(
-            self.manager_user, ('1', 10439, 'AC', 'A'), genome_version='37',
+            self.manager_user, '1-10439-AC-A', '37', sample_type=None,
         )
 
-    @mock.patch('seqr.views.apis.variant_search_api.sv_variant_lookup')
+    def _expected_lookup_body(self, individuals_by_guid, variants):
+        expected_body = {
+            **{k: {} for k in self.EXPECTED_SEARCH_RESPONSE if k not in {
+                'searchedVariants', 'search', 'variantNotesByGuid', 'variantTagsByGuid', 'variantFunctionalDataByGuid',
+                'transcriptsById',
+            }},
+            **{k: {} for k in EXPECTED_SEARCH_FAMILY_CONTEXT},
+            'projectsByGuid': {},
+            'individualsByGuid': individuals_by_guid,
+            'variants': variants,
+        }
+        if 'totalSampleCounts' in self.EXPECTED_SEARCH_RESPONSE:
+            expected_body['totalSampleCounts'] = self.EXPECTED_SEARCH_RESPONSE['totalSampleCounts']
+        return expected_body
+
+    @mock.patch('seqr.views.apis.variant_search_api.variant_lookup')
     def test_sv_variant_lookup(self, mock_variant_lookup):
-        variants = [{**variant, 'familyGuids': ['F000001_1']} for variant in [SV_VARIANT1, GCNV_VARIANT1]]
-        mock_variant_lookup.return_value = variants
+        mock_variant_lookup.return_value = deepcopy([
+            {**GCNV_LOOKUP_VARIANT, 'familyGenotypes': {k: v for k, v in GCNV_LOOKUP_VARIANT['familyGenotypes'].items() if k != 'F000002_2_x'}} ,
+            SV_LOOKUP_VARIANT,
+        ])
 
         url = f'{reverse(variant_lookup_handler)}?variantId=phase2_DEL_chr14_4640&genomeVersion=37&sampleType=WGS'
-        self.check_collaborator_login(url)
+        self.check_require_login(url)
 
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
-        self._assert_expected_single_variant_results_context(
-            response.json(), variants=variants, omit_fields={'searchedVariants'}, no_metadata=True,
-        )
+        expected_gcnv_variant = {
+            **GCNV_VARIANT4,
+            'familyGuids': [],
+            'lookupFamilyGuids': ['F0_suffix_140608_DUP'],
+            'genotypes': {
+                'I0_F0_suffix_140608_DUP': {
+                    k: v for k, v in GCNV_VARIANT4['genotypes']['I000004_hg00731'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+                'I1_F0_suffix_140608_DUP': {
+                    k: v for k, v in GCNV_VARIANT4['genotypes']['I000005_hg00732'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+                'I2_F0_suffix_140608_DUP': {
+                    k: v for k, v in GCNV_VARIANT4['genotypes']['I000006_hg00733'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+            },
+        }
+        expected_sv_variant = {
+            **SV_VARIANT4,
+            'familyGuids': [],
+            'lookupFamilyGuids': ['F0_phase2_DEL_chr14_4640'],
+            'genotypes': {
+                'I0_F0_phase2_DEL_chr14_4640': {
+                    k: v for k, v in SV_VARIANT4['genotypes']['I000018_na21234'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+                'I1_F0_phase2_DEL_chr14_4640': {
+                    k: v for k, v in SV_VARIANT4['genotypes']['I000019_na21987'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+                'I2_F0_phase2_DEL_chr14_4640': {
+                    k: v for k, v in SV_VARIANT4['genotypes']['I000021_na21654'].items()
+                    if k not in {'familyGuid', 'individualGuid', 'sampleId'}
+                },
+            },
+        }
+        expected_body = self._expected_lookup_body({
+            'I0_F0_phase2_DEL_chr14_4640': {
+                'affected': 'A', 'familyGuid': 'F0_phase2_DEL_chr14_4640', 'features': [],
+                'individualGuid': 'I0_F0_phase2_DEL_chr14_4640', 'sex': 'F',
+                'vlmContactEmail': 'vlm@broadinstitute.org',
+            },
+            'I0_F0_suffix_140608_DUP': {
+                'affected': 'A', 'familyGuid': 'F0_suffix_140608_DUP', 'individualGuid': 'I0_F0_suffix_140608_DUP',
+                'features': [{'category': 'HP:0000707', 'label': '1 terms'}, {'category': 'HP:0001626', 'label': '1 terms'}],
+                'sex': 'X0', 'vlmContactEmail': 'test@broadinstitute.org,vlm@broadinstitute.org',
+            },
+            'I1_F0_phase2_DEL_chr14_4640': {
+                'affected': 'A', 'familyGuid': 'F0_phase2_DEL_chr14_4640', 'features': [],
+                'individualGuid': 'I1_F0_phase2_DEL_chr14_4640', 'sex': 'M',
+                'vlmContactEmail': 'vlm@broadinstitute.org',
+            },
+            'I1_F0_suffix_140608_DUP': {
+                'affected': 'N', 'familyGuid': 'F0_suffix_140608_DUP', 'individualGuid': 'I1_F0_suffix_140608_DUP',
+                'sex': 'M','features': [], 'vlmContactEmail': 'test@broadinstitute.org,vlm@broadinstitute.org',
+            },
+            'I2_F0_phase2_DEL_chr14_4640': {
+                'affected': 'N', 'familyGuid': 'F0_phase2_DEL_chr14_4640', 'features': [],
+                'individualGuid': 'I2_F0_phase2_DEL_chr14_4640', 'sex': 'F',
+                'vlmContactEmail': 'vlm@broadinstitute.org',
+            },
+            'I2_F0_suffix_140608_DUP': {
+                'affected': 'N', 'familyGuid': 'F0_suffix_140608_DUP', 'individualGuid': 'I2_F0_suffix_140608_DUP',
+                'sex': 'F', 'features': [], 'vlmContactEmail': 'test@broadinstitute.org,vlm@broadinstitute.org',
+            },
+        },[expected_gcnv_variant, expected_sv_variant])
+        self.assertDictEqual(response.json(), expected_body)
         mock_variant_lookup.assert_called_with(
-            self.collaborator_user, 'phase2_DEL_chr14_4640', mock.ANY, genome_version='37', sample_type='WGS',
+            self.no_access_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
         )
-        self.assertSetEqual({
-            'F000001_1', 'F000002_2', 'F000003_3', 'F000004_4', 'F000005_5', 'F000006_6', 'F000007_7', 'F000008_8',
-            'F000009_9', 'F000010_10', 'F000013_13',
-        }, {f.guid for f in mock_variant_lookup.call_args.args[2]})
+
+        self.login_collaborator()
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, 200)
+        mock_variant_lookup.assert_called_with(
+            self.collaborator_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
+        )
 
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_SECRET', 'abc123')
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_ID', MOCK_CLIENT_ID)

@@ -569,17 +569,16 @@ def variant_lookup_handler(request):
     )
     response['variants'] = variants
 
+    individual_guid_map = {
+        (i['familyGuid'], i['individualId']): i['individualGuid'] for i in response['individualsByGuid'].values()
+    }
     for variant in variants:
-        _update_lookup_variant(variant, response)
+        _update_lookup_variant(variant, response, individual_guid_map)
 
     return create_json_response(response)
 
 
-def _update_lookup_variant(variant, response):
-    individual_guid_map = {
-        (i['familyGuid'], i['individualId']): i['individualGuid'] for i in response['individualsByGuid'].values()
-    }
-
+def _update_lookup_variant(variant, response, individual_guid_map):
     no_access_families = set(variant['familyGenotypes']) - set(variant['familyGuids'])
     individual_summary_map = {
         (i.pop('family__guid'), i.pop('individual_id')): (i.pop('guid'), i)
