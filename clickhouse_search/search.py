@@ -526,7 +526,7 @@ def _get_sort_key(sort, gene_metadata):
     return lambda x: tuple(expr(x[0] if isinstance(x, list) else x) for expr in [*sort_expressions, lambda x: x[XPOS_SORT_KEY]])
 
 
-def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples):
+def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None):
     entry_cls = ENTRY_CLASS_MAP[genome_version][data_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][data_type]
 
@@ -552,10 +552,12 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples):
         variant = format_clickhouse_results([variant], genome_version)[0]
     return variant
 
-def clickhouse_variant_lookup(user, variant_id, data_type, genome_version=None, samples=None, **kwargs):
+def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version):
+    is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
+    data_type = f'{dataset_type}_{sample_type}' if is_sv else dataset_type
     logger.info(f'Looking up variant {variant_id} with data type {data_type}', user)
 
-    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples)
+    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type)
     if variant:
         _add_liftover_genotypes(variant, data_type, variant_id)
     else:
@@ -565,12 +567,29 @@ def clickhouse_variant_lookup(user, variant_id, data_type, genome_version=None, 
             liftover_results = run_liftover(lifted_genome_version, variant_id[0], variant_id[1])
             if liftover_results:
                 lifted_id = (liftover_results[0], liftover_results[1], *variant_id[2:])
-                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type, samples)
+                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type)
 
     if not variant:
         raise ObjectDoesNotExist('Variant not present in seqr')
 
-    return variant
+    variants = [variant]
+
+    if is_sv and variant['svType'] in {'DEL', 'DUP'}:
+        other_sample_type, other_entry_class = next((dt, cls) for dt, cls in ENTRY_CLASS_MAP[genome_version].items() if dt != data_type and dt.startswith(Sample.DATASET_TYPE_SV_CALLS))
+        other_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][other_sample_type]
+
+        padded_interval = {'chrom': variant['chrom'], 'start': variant['pos'], 'end': variant['end'], 'padding': 0.2}
+        entries = other_entry_class.objects.filter_locus(padded_interval=padded_interval)
+        entries = entries.result_values(sample_data=None)
+        results = other_annotations_cls.objects.subquery_join(entries)
+        results = results.filter_annotations(
+            results,
+            padded_interval=padded_interval,
+            annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
+        )
+        variants += list(results.result_values())
+
+    return variants
 
 
 def _add_liftover_genotypes(variant, data_type, variant_id):
