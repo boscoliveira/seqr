@@ -1144,6 +1144,7 @@ class VariantSearchAPITest(object):
 
         self.login_collaborator()
         response = self.client.get(url)
+        import pdb; pdb.set_trace()
         self.assertEqual(response.status_code, 200)
         mock_variant_lookup.assert_called_with(
             self.collaborator_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
