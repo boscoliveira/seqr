@@ -579,11 +579,8 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
         other_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][other_sample_type]
 
         padded_interval = {'chrom': variant['chrom'], 'start': variant['pos'], 'end': variant['end'], 'padding': 0.2}
-        entries = other_entry_class.objects.filter_locus(padded_interval=padded_interval)
-        entries = entries.result_values(sample_data=None)
-        results = other_annotations_cls.objects.subquery_join(entries)
-        results = results.filter_annotations(
-            results,
+        entries = other_entry_class.objects.filter_locus(padded_interval=padded_interval).result_values()
+        results = other_annotations_cls.objects.subquery_join(entries).search(
             padded_interval=padded_interval,
             annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
         )

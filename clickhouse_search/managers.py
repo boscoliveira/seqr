@@ -724,7 +724,7 @@ class EntriesManager(SearchQuerySet):
 
         return entries
 
-    def result_values(self, sample_data):
+    def result_values(self, sample_data=None):
         entries = self._join_annotations(self)
         if sample_data:
             return self._search_call_data(entries, sample_data)
