@@ -81,6 +81,14 @@ class SearchUtilsTests(SearchTestHelper):
 
         self.set_cache(None)
         mock_variant_lookup.reset_mock()
+        with self.assertRaises(InvalidSearchException) as cm:
+            variant_lookup(self.user, 'phase2_DEL_chr14_4640', '37')
+        self.assertEqual(str(cm.exception), 'SV variants are not available for GRCh37')
+
+        with self.assertRaises(InvalidSearchException) as cm:
+            variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38')
+        self.assertEqual(str(cm.exception), 'Sample type must be specified to look up a structural variant')
+
         mock_variant_lookup.return_value = [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT]
         variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
         self.assertListEqual(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
