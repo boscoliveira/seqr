@@ -15,7 +15,7 @@ import re
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
-    variant_lookup, sv_variant_lookup, parse_variant_id
+    variant_lookup, parse_variant_id
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
 from seqr.utils.search.utils import InvalidSearchException
 from seqr.utils.xpos_utils import get_xpos

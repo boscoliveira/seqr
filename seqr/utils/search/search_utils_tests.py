@@ -9,7 +9,7 @@ from clickhouse_search.test_utils import VARIANT1, VARIANT2, VARIANT3, VARIANT4,
 from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchResults
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 from seqr.utils.search.utils import get_single_variant, get_variants_for_variant_ids, get_variant_query_gene_counts, \
-    query_variants, variant_lookup, sv_variant_lookup, InvalidSearchException
+    query_variants, variant_lookup, InvalidSearchException
 from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin, PARSED_VARIANTS, PARSED_COMPOUND_HET_VARIANTS_MULTI_PROJECT, GENE_FIELDS
 
 
