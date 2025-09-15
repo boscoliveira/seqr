@@ -575,13 +575,16 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
     variants = [variant]
 
     if is_sv and variant['svType'] in {'DEL', 'DUP'}:
-        other_sample_type, other_entry_class = next((dt, cls) for dt, cls in ENTRY_CLASS_MAP[genome_version].items() if dt != data_type and dt.startswith(Sample.DATASET_TYPE_SV_CALLS))
+        other_sample_type, other_entry_class = next(
+            (dt, cls) for dt, cls in ENTRY_CLASS_MAP[genome_version].items()
+            if dt != data_type and dt.startswith(Sample.DATASET_TYPE_SV_CALLS)
+        )
         other_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][other_sample_type]
 
-        padded_interval = {'chrom': variant['chrom'], 'start': variant['pos'], 'end': variant['end'], 'padding': 0.2}
-        entries = other_entry_class.objects.filter_locus(padded_interval=padded_interval).result_values()
+        padding = int((variant['end'] - variant['pos']) * 0.2)
+        entries = other_entry_class.objects.search_padded_interval(variant['chrom'], variant['pos'], padding)
         results = other_annotations_cls.objects.subquery_join(entries).search(
-            padded_interval=padded_interval,
+            padded_interval_end=(variant['end'], padding),
             annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
         )
         variants += list(results.result_values())
