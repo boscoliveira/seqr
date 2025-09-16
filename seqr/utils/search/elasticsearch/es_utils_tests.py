@@ -3018,13 +3018,14 @@ class EsUtilsTest(TestCase):
         expected_transcript_variant['selectedMainTranscriptId'] = PARSED_VARIANTS[1]['selectedMainTranscriptId']
         self.assertListEqual(variants, [expected_transcript_variant, PARSED_MULTI_INDEX_VARIANT])
         self.assertExecutedSearch(
-            index=','.join([INDEX_NAME, MITO_WGS_INDEX_NAME, SECOND_INDEX_NAME]),
+            index=','.join([INDEX_NAME, SECOND_INDEX_NAME]),
             filters=[{'terms': {'geneIds': ['ENSG00000228198']}}, ANNOTATION_QUERY],
             size=3,
         )
 
         # test with inheritance override
         search_model.search['inheritance'] = {'mode': 'any_affected'}
+        search_model.search['locus'] = None
         search_model.save()
         _set_cache('search_results__{}__xpos'.format(results_model.guid), None)
         query_variants(results_model, num_results=2, skip_genotype_filter=True)
@@ -3032,7 +3033,6 @@ class EsUtilsTest(TestCase):
         self.assertExecutedSearches([
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [
@@ -3044,7 +3044,6 @@ class EsUtilsTest(TestCase):
                 ], start_index=0, size=2, index=SECOND_INDEX_NAME),
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [
@@ -3056,7 +3055,6 @@ class EsUtilsTest(TestCase):
                 ], start_index=0, size=2, index=MITO_WGS_INDEX_NAME),
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [
