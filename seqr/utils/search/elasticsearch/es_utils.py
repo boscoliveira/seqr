@@ -290,8 +290,8 @@ def get_es_variants(samples, search, user, previous_search_results, genome_versi
         in_silico=search.get('in_silico'), quality_filter=search.get('qualityFilter'),
         custom_query=search.get('customQuery'), locus=search.get('locus'), skip_genotype_filter=skip_genotype_filter,
         dataset_type=search.get('dataset_type'), secondary_dataset_type=search.get('secondary_dataset_type'),
-        **search.get('parsed_locus')
-
+        genes=search.get('genes'), intervals=search.get('intervals'), rs_ids=search.get('rs_ids'),
+        variant_ids=search.get('variant_ids'), exclude_locations=search.get('exclude_locations'),
     )
 
     return es_search.search(page=page, num_results=num_results)

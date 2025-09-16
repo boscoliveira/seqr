@@ -49,7 +49,7 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
             dataset_results += _evaluate_results(result_q)
         if has_comp_het:
             comp_het_sample_data = sample_data
-            if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(**search):
+            if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(genome_version, **search):
                 comp_het_sample_data = _no_affected_male_families(sample_data, user)
             result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, skip_individual_guid=is_multi_project, **search)
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
@@ -386,10 +386,10 @@ def _no_affected_male_families(sample_data, user):
     }
 
 
-def _is_x_chrom_only(parsed_locus=None, **kwargs):
-    parsed_locus = parsed_locus or {}
-    all_intervals = list((parsed_locus.get('gene_intervals') or {}).values()) + (parsed_locus.get('intervals') or [])
-    return bool(all_intervals) and all('X' in interval[0] for interval in all_intervals)
+def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
+    if not (genes or intervals):
+        return False
+    return bool('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
 
 
 OMIM_SORT = 'in_omim'
@@ -537,7 +537,7 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
         keys = KEY_LOOKUP_CLASS_MAP[genome_version][data_type].objects.filter(variant_id=variant_id).values_list('key', flat=True)
         entries = entry_cls.objects.filter(key__in=keys)
     else:
-        entries = entry_cls.objects.filter_locus(variant_ids=[variant_id])
+        entries = entry_cls.objects.filter_locus(parsed_variant_ids=[variant_id])
 
     entries = entries.result_values(sample_data)
     results = annotations_cls.objects.subquery_join(entries)
@@ -545,7 +545,7 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
         # Handles annotation for genotype overrides
         results = results.filter_annotations(results)
     else:
-        results = results.filter_variant_ids(variant_ids=[variant_id])
+        results = results.filter_variant_ids(parsed_variant_ids=[variant_id])
 
     variant = results.result_values().first()
     if variant:
@@ -602,7 +602,7 @@ def _add_liftover_genotypes(variant, data_type, variant_id):
     ).values_list('key', flat=True)
     if not keys:
         return
-    lifted_entries = lifted_entry_cls.objects.filter_locus(variant_ids=[lifted_id]).filter(key=keys[0])
+    lifted_entries = lifted_entry_cls.objects.filter_locus(parsed_variant_ids=[lifted_id]).filter(key=keys[0])
     lifted_entry_data = lifted_entries.values('key').annotate(
         familyGenotypes=GroupArrayArray(lifted_entry_cls.objects.genotype_expression())
     )
@@ -664,8 +664,9 @@ def get_clickhouse_keys_for_gene(gene_id, genome_version, dataset_type, keys):
 
 def get_all_clickhouse_keys_for_gene(gene_model, genome_version):
     entry_cls = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
-    return list(entry_cls.objects.filter_locus(require_gene_filter=True, gene_intervals={
-        gene_model.id: [getattr(gene_model, f'{field}_grch{genome_version}') for field in ['chrom', 'start', 'end']]
+    return list(entry_cls.objects.filter_locus(require_gene_filter=True, genes={gene_model.gene_id: {
+        'id': gene_model.id,
+        **{f'{field}Grch{genome_version}': getattr(gene_model, f'{field}_grch{genome_version}') for field in ['chrom', 'start', 'end']}},
     }).values_list('key', flat=True).distinct())
 
 

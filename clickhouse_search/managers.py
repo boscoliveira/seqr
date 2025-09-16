@@ -205,12 +205,11 @@ class AnnotationsQuerySet(SearchQuerySet):
             **{f'{alias}_{field}': value for field, value in query_select.items()},
         )
 
-    def search(self, parsed_locus=None, **kwargs):
-        parsed_locus = parsed_locus or {}
-        results = self.filter_variant_ids(**parsed_locus)
+    def search(self, **kwargs):
+        results = self.filter_variant_ids(**kwargs)
         results = self._filter_frequency(results, **kwargs)
         results = self._filter_in_silico(results, **kwargs)
-        results = self.filter_annotations(results, **parsed_locus, **kwargs)
+        results = self.filter_annotations(results, **kwargs, **kwargs)
         return results
 
     def result_values(self, skip_entry_fields=False):
@@ -323,11 +322,11 @@ class AnnotationsQuerySet(SearchQuerySet):
             **{primary_gene_field: F(secondary_gene_field)}
         ).exclude(primary_variantId=F('secondary_variantId'))
 
-    def filter_variant_ids(self, variant_ids=None, rs_ids=None, **kwargs):
+    def filter_variant_ids(self, parsed_variant_ids=None, rs_ids=None, **kwargs):
         results = self
-        if variant_ids:
+        if parsed_variant_ids:
             results = results.filter(
-                variant_id__in=[f'{chrom}-{pos}-{ref}-{alt}' for chrom, pos, ref, alt in variant_ids]
+                variant_id__in=[f'{chrom}-{pos}-{ref}-{alt}' for chrom, pos, ref, alt in parsed_variant_ids]
             )
 
         if rs_ids:
@@ -413,7 +412,7 @@ class AnnotationsQuerySet(SearchQuerySet):
         except ValueError:
             return Q(**{score_column: value})
 
-    def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, gene_ids=None, intervals=None, exclude_intervals=False, padded_interval_end=None,  **kwargs):
+    def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, genes=None, intervals=None, exclude_locations=False, padded_interval_end=None,  **kwargs):
         transcript_field = self.transcript_field
         if self.model.GENOTYPE_OVERRIDE_FIELDS:
             results = results.annotate(**{
@@ -422,11 +421,11 @@ class AnnotationsQuerySet(SearchQuerySet):
                 }]),
             })
             transcript_field = self.GENOTYPE_GENE_CONSEQUENCE_FIELD
-        interval_qs = [self._interval_query(*interval) for interval in intervals or []]
-        if gene_ids:
+        interval_qs = [self._interval_query(**interval) for interval in intervals or []]
+        if genes:
             results = results.annotate(**{
                 self.GENE_CONSEQUENCE_FIELD: ArrayFilter(transcript_field, conditions=[{
-                    'geneId': (gene_ids, 'has({value}, {field})'),
+                    'geneId': (sorted(genes.keys()), 'has({value}, {field})'),
                 }]),
             })
             gene_q = Q(gene_consequences__not_empty=True)
@@ -440,7 +439,7 @@ class AnnotationsQuerySet(SearchQuerySet):
             interval_q = interval_qs[0]
             for q in interval_qs[1:]:
                 interval_q |= q
-            filter_func = results.exclude if exclude_intervals else results.filter
+            filter_func = results.exclude if exclude_locations else results.filter
             results = filter_func(interval_q)
 
         filter_qs, transcript_filters = self._parse_annotation_filters(annotations, pathogenicity) if (annotations or pathogenicity) else ([], [])
@@ -463,7 +462,7 @@ class AnnotationsQuerySet(SearchQuerySet):
             filter_q = Q(passes_annotation=True)
 
         if transcript_filters:
-            consequence_field = self.GENE_CONSEQUENCE_FIELD if gene_ids else transcript_field
+            consequence_field = self.GENE_CONSEQUENCE_FIELD if genes else transcript_field
             results = results.annotate(**{
                 self.FILTERED_CONSEQUENCE_FIELD: ArrayFilter(consequence_field, conditions=transcript_filters),
             })
@@ -475,7 +474,11 @@ class AnnotationsQuerySet(SearchQuerySet):
 
         return results.filter(filter_q)
 
-    def _interval_query(self, chrom, start, end):
+    def _interval_query(self, chrom, start, end, offset=None, **kwargs):
+        if offset:
+            offset_pos = int((end - start) * offset)
+            start = max(start - offset_pos, MIN_POS)
+            end = min(end + offset_pos, MAX_POS)
         q = Q(xpos__range=(get_xpos(chrom, start), get_xpos(chrom, end)))
         if hasattr(self.model, 'end_chrom'):
             q |= Q(end_chrom__isnull=True, chrom=chrom, end__range=(start, end))
@@ -683,8 +686,8 @@ class EntriesManager(SearchQuerySet):
     def clinvar_model(self):
         return self.model.clinvar_join.rel.related_model
 
-    def search(self, sample_data, parsed_locus=None, freqs=None, annotations=None, **kwargs):
-        entries = self.filter_locus(**(parsed_locus or {}))
+    def search(self, sample_data, freqs=None, annotations=None, **kwargs):
+        entries = self.filter_locus(**kwargs)
 
         entries = self._join_annotations(entries)
 
@@ -1043,45 +1046,45 @@ class EntriesManager(SearchQuerySet):
             mapped_expression='x.1', output_field=models.ArrayField(models.StringField()),
         )
 
-    def filter_locus(self, exclude_intervals=False, intervals=None, gene_intervals=None, gene_ids=None, variant_ids=None, require_gene_filter=False, **kwargs):
+    def filter_locus(self, exclude_locations=False, intervals=None, genes=None, parsed_variant_ids=None, require_gene_filter=False, **kwargs):
         entries = self
-        if variant_ids:
+        if parsed_variant_ids:
             # although technically redundant, the interval query is applied to the entries table before join and reduces the join size,
             # while the full variant_id filter is applied to the annotation table after the join
-            intervals = [(chrom, pos, pos) for chrom, pos, _, _ in variant_ids]
+            intervals = [{'chrom': chrom, 'start': pos, 'end': pos} for chrom, pos, _, _ in parsed_variant_ids]
 
+        should_filter_interval = False
         if 'cn' in self.call_fields:
             # SV interval filtering occurs after joining on annotations to correctly incorporate end position
-            if exclude_intervals:
+            if exclude_locations:
                 intervals = None
             else:
-                if gene_ids and 'geneIds' in self.call_fields:
+                if genes and 'geneIds' in self.call_fields:
                     entries = entries.filter(calls__array_all={'OR': [
-                        {'geneIds': (gene_ids, 'hasAny({value}, {field})')},
+                        {'geneIds': (list(genes.keys()), 'hasAny({value}, {field})')},
                         {'gt': (None, 'isNull({field})')},
                     ]})
-                    intervals = list((gene_intervals or {}).values()) + (intervals or [])
-                    gene_intervals = None
-                chromosomes = {chrom for chrom, _, _ in (intervals or [])}
-                intervals = [(chrom, MIN_POS, MAX_POS) for chrom in chromosomes]
+                    should_filter_interval = True
+                chromosomes = {i['chrom'] for i in (intervals or [])}
+                intervals = [{'chrom': chrom, 'start': MIN_POS, 'end': MAX_POS} for chrom in chromosomes]
 
-        if not (gene_intervals or intervals):
+        if not (genes or intervals):
             return entries
 
         locus_q = None
-        if gene_intervals:
+        if genes:
             if hasattr(self.model, 'is_annotated_in_any_gene') and not intervals:
                 entries = entries.filter(is_annotated_in_any_gene=Value(True))
-            should_filter_interval = (not hasattr(self.model, 'geneId_ids')) or exclude_intervals or len(gene_intervals) < self.model.MAX_XPOS_FILTER_INTERVALS
+            should_filter_interval |= (not hasattr(self.model, 'geneId_ids')) or exclude_locations or len(genes) < self.model.MAX_XPOS_FILTER_INTERVALS
             if should_filter_interval:
-                intervals = list((gene_intervals or {}).values()) + (intervals or [])
+                intervals = self._format_gene_intervals(genes) + (intervals or [])
             if require_gene_filter or (not should_filter_interval):
-                locus_q = Q(geneId_ids__bitmap_has_any=list(gene_intervals.keys()))
+                locus_q = Q(geneId_ids__bitmap_has_any=[gene['id'] for gene in genes.values()])
 
         if intervals:
-            interval_q = self._interval_query(*intervals[0])
+            interval_q = self._interval_query(**intervals[0])
             for interval in intervals[1:]:
-                interval_q |= self._interval_query(*interval)
+                interval_q |= self._interval_query(**interval)
             if locus_q is None:
                 locus_q = interval_q
             elif require_gene_filter:
@@ -1089,15 +1092,25 @@ class EntriesManager(SearchQuerySet):
             else:
                 locus_q |= interval_q
 
-        filter_func = entries.exclude if exclude_intervals else entries.filter
+        filter_func = entries.exclude if exclude_locations else entries.filter
         return filter_func(locus_q)
 
+    def _format_gene_intervals(self, genes):
+        genome_version = self.annotations_model.ANNOTATION_CONSTANTS['genomeVersion']
+        return [
+            {field: gene[f'{field}Grch{genome_version}'] for field in ['chrom', 'start', 'end']} for gene in genes.values()
+        ]
+
     def search_padded_interval(self, chrom, pos, padding):
-        interval_q = self._interval_query(chrom, max(pos - padding, MIN_POS), min(pos + padding, MAX_POS))
+        interval_q = self._interval_query(chrom, start=max(pos - padding, MIN_POS), end=min(pos + padding, MAX_POS))
         return self.filter(interval_q).result_values()
 
     @staticmethod
-    def _interval_query(chrom, start, end):
+    def _interval_query(chrom, start, end, offset=None, **kwargs):
+        if offset:
+            offset_pos = int((end - start) * offset)
+            start = max(start - offset_pos, MIN_POS)
+            end = min(end + offset_pos, MAX_POS)
         return Q(xpos__range=(get_xpos(chrom, start), get_xpos(chrom, end)))
 
     def _filter_seqr_frequency(self, entries, ac=None, hh=None, **kwargs):
