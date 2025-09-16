@@ -329,7 +329,7 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
 
     _validate_search(parsed_search, samples, previous_search_results)
 
-    variant_results = _execute_search(
+    variant_results = backend_specific_call(get_es_variants, get_clickhouse_variants)(
         samples, parsed_search, user, previous_search_results, genome_version,
         sort=sort, num_results=num_results, **kwargs,
     )
@@ -338,12 +338,6 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
     safe_redis_set_json(cache_key, previous_search_results, expire=timedelta(weeks=2))
 
     return variant_results, previous_search_results.get('total_results')
-
-
-def _execute_search(samples, parsed_search, user, previous_search_results, genome_version, **kwargs):
-    return backend_specific_call(get_es_variants, get_clickhouse_variants)(
-        samples, parsed_search, user, previous_search_results, genome_version, **kwargs,
-    )
 
 
 def get_variant_query_gene_counts(search_model, user):
