@@ -50,12 +50,6 @@ DATASET_TYPE_NO_MITO = f'{Sample.DATASET_TYPE_MITO_CALLS}_missing'
 DATASET_TYPES_LOOKUP[DATASET_TYPE_NO_MITO] = [Sample.DATASET_TYPE_VARIANT_CALLS, Sample.DATASET_TYPE_SV_CALLS]
 
 
-def _raise_search_error(error):
-    def _wrapped(*args, **kwargs):
-        raise InvalidSearchException(error)
-    return _wrapped
-
-
 def es_only(func):
     def _wrapped(*args, **kwargs):
         if not es_backend_enabled():
@@ -152,9 +146,8 @@ def _get_clickhouse_variant_by_id(parsed_variant_id, variant_id, samples, genome
     )
 
 
+@clickhouse_only
 def variant_lookup(user, variant_id, genome_version, sample_type=None):
-    backend_specific_call(_raise_search_error('Lookup is disabled'), lambda: None)()
-
     cache_key = f'variant_lookup_results__{variant_id}__{genome_version}'
     variants = safe_redis_get_json(cache_key)
     if variants:

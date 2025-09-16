@@ -540,9 +540,9 @@ class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
         return super()._assert_expected_search_samples(mock_get_variants, omitted_sample_guids, False)
 
     def test_variant_lookup(self, *args, **kwargs):
-        with self.assertRaises(InvalidSearchException) as cm:
+        with self.assertRaises(ValueError) as cm:
             super().test_variant_lookup(mock.MagicMock())
-        self.assertEqual(str(cm.exception), 'Lookup is disabled')
+        self.assertEqual(str(cm.exception), 'variant_lookup is disabled without the clickhouse backend')
 
     @mock.patch('seqr.utils.search.utils.get_es_variants_for_variant_ids')
     def test_get_single_variant(self, mock_get_variants_for_ids):
