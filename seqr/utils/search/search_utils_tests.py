@@ -316,14 +316,31 @@ class SearchUtilsTests(SearchTestHelper):
                                    rs_ids=None, variant_ids=None, parsed_variant_ids=None, inheritance_mode='de_novo',
                                    dataset_type=None, secondary_dataset_type=None, omitted_sample_guids=None,
                                    exclude_locations=False, exclude=None, annotations=None, annotations_secondary=None, single_gene_search=False, **kwargs):
+        genes = intervals = None
+        has_included_gene_search = has_gene_search and not exclude_locations
+        if has_gene_search:
+            genes = {'ENSG00000186092': mock.ANY, 'ENSG00000227232': mock.ANY}
+            intervals = [{'chrom': '2', 'start': 1234, 'end': 5678, 'offset': None}, {'chrom': '7', 'start': 100, 'end': 10100, 'offset': 0.1}]
+        if single_gene_search:
+            genes = {'ENSG00000227232': mock.ANY}
+            intervals = intervals[2:3]
+
         expected_search = {
             'inheritance_mode': inheritance_mode,
             'inheritance_filter': {},
-            'parsed_locus': mock.ANY,
             'skipped_samples': mock.ANY,
-            'dataset_type': mock.ANY,
+            'dataset_type': 'MITO_missing' if has_included_gene_search else dataset_type,
             'secondary_dataset_type': secondary_dataset_type,
+            'exclude_locations': exclude_locations,
+            'genes': genes,
+            'intervals': intervals,
         }
+        if not genes:
+            expected_search.update({
+                'parsed_variant_ids': parsed_variant_ids,
+                'rs_ids': rs_ids,
+                'variant_ids': variant_ids,
+            })
         expected_search.update({field: self.search_model.search[field] for field in search_fields or []})
         if exclude:
             expected_search['exclude'] = exclude
@@ -335,19 +352,14 @@ class SearchUtilsTests(SearchTestHelper):
         mock_get_variants.assert_called_with(mock.ANY, expected_search, self.user, results_cache, '37', **kwargs)
         self._assert_expected_search_samples(mock_get_variants, omitted_sample_guids, has_gene_search and not exclude_locations)
 
-        gene_ids = intervals = None
-        has_included_gene_search = has_gene_search and not exclude_locations
-        if has_gene_search:
-            gene_ids = ['ENSG00000186092', 'ENSG00000227232']
-            intervals = [['2', 1234, 5678], ['7', 1, 11100], ['1', 14404, 29570], ['1', 65419, 71585]]
-        if single_gene_search:
-            gene_ids = gene_ids[1:]
-            intervals = intervals[2:3]
-        self._assert_expected_search_locus(
-            mock_get_variants.call_args.args[1], dataset_type='MITO_missing' if has_included_gene_search else dataset_type,
-            gene_ids=gene_ids, intervals=intervals, rs_ids=rs_ids, variant_ids=variant_ids,
-            parsed_variant_ids=parsed_variant_ids, exclude_locations=exclude_locations,
-        )
+        if genes:
+            parsed_genes = mock_get_variants.call_args.args[1]['genes']
+            for gene in parsed_genes.values():
+                self.assertSetEqual(set(gene.keys()), {'id', *GENE_FIELDS})
+            self.assertEqual(parsed_genes['ENSG00000227232']['geneSymbol'], 'WASH7P')
+            if len(genes) > 1:
+                self.assertEqual(parsed_genes['ENSG00000186092']['geneSymbol'], 'OR4F5')
+
 
     def _assert_expected_search_samples(self, mock_get_variants, omitted_sample_guids, has_gene_search):
         searched_samples = self.affected_search_samples
@@ -359,12 +371,6 @@ class SearchUtilsTests(SearchTestHelper):
             searched_samples = searched_samples.exclude(guid__in=MITO_SAMPLES)
         self.assertSetEqual(set(mock_get_variants.call_args.args[0]), set(searched_samples))
         self.assertSetEqual(set(mock_get_variants.call_args.args[1]['skipped_samples']), set(non_affected_search_samples))
-
-
-    def _assert_expected_search_locus(self, search_body, dataset_type, **parsed_locus):
-        self.maxDiff = None
-        self.assertDictEqual(search_body['parsed_locus'], parsed_locus)
-        self.assertEqual(search_body['dataset_type'], dataset_type)
 
 
     def test_query_variants(self, mock_get_variants):
@@ -430,14 +436,14 @@ class SearchUtilsTests(SearchTestHelper):
         query_variants(self.results_model, user=self.user)
         self._test_expected_search_call(
             mock_get_variants, results_cache, sort='xpos', page=1, num_results=100, skip_genotype_filter=False,
-            has_gene_search=True,
+            has_gene_search=True, omitted_sample_guids=MITO_SAMPLES,
         )
 
         self.search_model.search['locus']['rawItems'] = 'WASH7P'
         query_variants(self.results_model, user=self.user)
         self._test_expected_search_call(
             mock_get_variants, results_cache, sort='xpos', page=1, num_results=100, skip_genotype_filter=False,
-            has_gene_search=True, single_gene_search=True,
+            has_gene_search=True, single_gene_search=True, omitted_sample_guids=MITO_SAMPLES,
         )
 
         del self.search_model.search['locus']
@@ -546,30 +552,6 @@ class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
     def setUp(self):
         self.set_up()
 
-    def _assert_expected_search_locus(self, search_body, dataset_type, gene_ids=None, intervals=None, **kwargs):
-        genes = None
-        if gene_ids:
-            genes = {
-                gene_id: mock.ANY for gene_id in gene_ids
-            }
-            intervals = [
-                {'chrom': '2', 'start': 1234, 'end': 5678, 'offset': None},
-                {'chrom': '7', 'start': 100, 'end': 10100, 'offset': 0.1},
-            ] if len(gene_ids) > 1 else []
-
-        dataset_type = None if dataset_type == 'MITO_missing' else dataset_type
-        super()._assert_expected_search_locus(
-            search_body, dataset_type, genes=genes, intervals=intervals, **kwargs,
-        )
-
-        if gene_ids:
-            parsed_genes = search_body['parsed_locus']['genes']
-            for gene in parsed_genes.values():
-                self.assertSetEqual(set(gene.keys()), {'id', *GENE_FIELDS})
-            self.assertEqual(parsed_genes['ENSG00000227232']['geneSymbol'], 'WASH7P')
-            if len(gene_ids) > 1:
-                self.assertEqual(parsed_genes['ENSG00000186092']['geneSymbol'], 'OR4F5')
-
     def _assert_expected_search_samples(self, mock_get_variants, omitted_sample_guids, has_gene_search):
         return super()._assert_expected_search_samples(mock_get_variants, omitted_sample_guids, False)
 
@@ -664,20 +646,6 @@ class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, S
         self.assertListEqual(
             json.loads(json.dumps(variants, cls=DjangoJSONEncoderWithSets)),
             self.PARSED_CACHED_VARIANTS[:num_results],
-        )
-
-    def _assert_expected_search_locus(self, *args, gene_ids=None, intervals=None, exclude_locations=None, parsed_variant_ids=None, variant_ids=None, **kwargs):
-        gene_ids = None if exclude_locations else gene_ids
-        gene_intervals = None
-        if gene_ids:
-            if len(gene_ids) > 1:
-                gene_intervals = {2: intervals[2], 7: intervals[3]}
-            else:
-                gene_intervals = {2: intervals[0]}
-            intervals = intervals[:2] if len(gene_ids) > 1 else None
-        super()._assert_expected_search_locus(
-            *args, gene_ids=gene_ids, gene_intervals=gene_intervals, intervals=intervals,
-            variant_ids=parsed_variant_ids, exclude_intervals=exclude_locations, **kwargs,
         )
 
     @mock.patch('seqr.utils.search.utils.get_clickhouse_variant_by_id')
