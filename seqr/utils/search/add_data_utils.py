@@ -8,10 +8,7 @@ from seqr.models import Sample, Individual, Project
 from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.file_utils import does_file_exist
 from seqr.utils.logging_utils import SeqrLogger
-from seqr.utils.search.utils import backend_specific_call
-from seqr.utils.search.elasticsearch.es_utils import validate_es_index_metadata_and_get_samples
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
-from seqr.views.utils.dataset_utils import match_and_update_search_samples, load_mapping_file
 from seqr.views.utils.export_utils import write_multiple_files
 from seqr.views.utils.pedigree_info_utils import JsonConstants
 from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, \
@@ -20,45 +17,7 @@ from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVI
 logger = SeqrLogger(__name__)
 
 
-def _no_es_backend_error(*args, **kwargs):
-    raise ValueError('Adding samples is disabled without the elasticsearch backend')
-
-
-def add_new_es_search_samples(request_json, project, user, notify=False, expected_families=None):
-    dataset_type = request_json.get('datasetType')
-    if dataset_type not in Sample.DATASET_TYPE_LOOKUP:
-        raise ValueError(f'Invalid dataset type "{dataset_type}"')
-
-    sample_ids, sample_type, sample_data = backend_specific_call(
-        validate_es_index_metadata_and_get_samples,
-        _no_es_backend_error,
-    )(request_json, project)
-    if not sample_ids:
-        raise ValueError('No samples found. Make sure the specified caller type is correct')
-
-    sample_id_to_individual_id_mapping = load_mapping_file(
-        request_json['mappingFilePath'], user) if request_json.get('mappingFilePath') else {}
-    ignore_extra_samples = request_json.get('ignoreExtraSamplesInCallset')
-    sample_project_tuples = [(sample_id, project.name) for sample_id in sample_ids]
-    new_samples, updated_samples, inactivated_sample_guids, updated_family_guids = match_and_update_search_samples(
-        projects=[project],
-        user=user,
-        sample_project_tuples=sample_project_tuples,
-        sample_data=sample_data,
-        sample_type=sample_type,
-        dataset_type=dataset_type,
-        expected_families=expected_families,
-        sample_id_to_individual_id_mapping=sample_id_to_individual_id_mapping,
-        raise_unmatched_error_template=None if ignore_extra_samples else 'Matches not found for sample ids: {sample_ids}. Uploading a mapping file for these samples, or select the "Ignore extra samples in callset" checkbox to ignore.'
-    )
-
-    if notify:
-        _basic_notify_search_data_loaded(project, dataset_type, sample_type, new_samples.values_list('sample_id'))
-
-    return inactivated_sample_guids, updated_family_guids, updated_samples
-
-
-def _basic_notify_search_data_loaded(project, dataset_type, sample_type, new_samples, email_template=None, slack_channel=None, include_slack_detail=False):
+def basic_notify_search_data_loaded(project, dataset_type, sample_type, new_samples, email_template=None, slack_channel=None, include_slack_detail=False):
     msg_dataset_type = '' if dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS else f' {dataset_type}'
     num_new_samples = len(new_samples)
     sample_summary = f'{num_new_samples} new {sample_type}{msg_dataset_type} samples'
@@ -86,7 +45,7 @@ def notify_search_data_loaded(project, is_internal, dataset_type, sample_type, n
             'Let us know if you have any questions.',
         ])
 
-    _basic_notify_search_data_loaded(
+    basic_notify_search_data_loaded(
         project, dataset_type, sample_type, new_samples, email_template=email_template,
         slack_channel=SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL if is_internal else SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL,
         include_slack_detail=is_internal,
