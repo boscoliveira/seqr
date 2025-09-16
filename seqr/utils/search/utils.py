@@ -254,7 +254,7 @@ def _get_cached_search_results(search_model, sort=None, family_guid=None):
     cache_key = _get_search_cache_key(search_model, sort=sort)
     results = safe_redis_get_json(cache_key)
     if not results:
-        results = backend_specific_call(
+        results = backend_specific_call(  # TODO
             lambda *args: None, _process_clickhouse_unsorted_cached_results,
         )(cache_key, sort, family_guid)
     return results or {}
@@ -280,12 +280,12 @@ def query_variants(search_model, sort=XPOS_SORT_KEY, skip_genotype_filter=False,
     genome_version = _get_search_genome_version(search_model.families.all())
     loaded_results = previous_search_results.get('all_results') or []
     if len(loaded_results) >= end_index:
-        results_page = backend_specific_call(
+        results_page = backend_specific_call( # TODO
             lambda results, genome_version: results, format_clickhouse_results,
         )(loaded_results[start_index:end_index], genome_version)
         return results_page, total_results
 
-    previously_loaded_results = backend_specific_call(
+    previously_loaded_results = backend_specific_call(  # TODO
         process_es_previously_loaded_results,
         lambda *args: None,  # Other backends need no additional parsing
     )(previous_search_results, start_index, end_index)
@@ -390,7 +390,7 @@ def get_variant_query_gene_counts(search_model, user):
     if len(previous_search_results.get('all_results', [])) == previous_search_results.get('total_results'):
         return _get_gene_aggs_for_cached_variants(previous_search_results)
 
-    previously_loaded_results = backend_specific_call(
+    previously_loaded_results = backend_specific_call(  # TODO
         process_es_previously_loaded_gene_aggs,
         lambda *args: None,  # Other backends need no additional parsing
     )(previous_search_results)
@@ -399,7 +399,7 @@ def get_variant_query_gene_counts(search_model, user):
 
     genome_version = _get_search_genome_version(search_model.families.all())
     gene_counts, _ = _query_variants(search_model, user, previous_search_results, genome_version, gene_agg=True)
-    gene_counts = backend_specific_call(
+    gene_counts = backend_specific_call( # TODO
         lambda *args: None, _get_gene_aggs_for_cached_variants,
     )(previous_search_results) or gene_counts
     return gene_counts
@@ -408,13 +408,13 @@ def get_variant_query_gene_counts(search_model, user):
 def _get_gene_aggs_for_cached_variants(previous_search_results):
     gene_aggs = defaultdict(lambda: {'total': 0, 'families': defaultdict(int)})
     # ES caches compound hets separately from main results, other backends cache everything together
-    flattened_variants = backend_specific_call(
+    flattened_variants = backend_specific_call( # TODO
         lambda results: results,
         lambda results: [v for variants in results for v in (variants if isinstance(variants, list) else [variants])],
     )(previous_search_results['all_results'])
     for var in flattened_variants:
         # ES only reports breakdown for main transcript gene only, other backends report for all genes
-        gene_ids = backend_specific_call(
+        gene_ids = backend_specific_call( # TODO
             lambda variant: next((
                 [gene_id] for gene_id, transcripts in variant['transcripts'].items()
                 if any(t['transcriptId'] == var['mainTranscriptId'] for t in transcripts)
