@@ -54,6 +54,11 @@ class SearchQuerySet(QuerySet):
                 seqr_pop_fields += [f"'{sub_fields['hom']}_{sample_type}'" for sample_type in sample_types]
         return seqr_pop_fields
 
+    def _format_gene_intervals(self, genes):
+        return [
+            {field: gene[f'{field}Grch{self.genome_version}'] for field in ['chrom', 'start', 'end']} for gene in genes.values()
+        ]
+
 
 class AnnotationsQuerySet(SearchQuerySet):
 
@@ -154,6 +159,10 @@ class AnnotationsQuerySet(SearchQuerySet):
     def clinvar_field_prefix(self):
         return f'{self.entry_field}__clinvar_join'
 
+    @property
+    def genome_version(self):
+        return self.model.ANNOTATION_CONSTANTS['genomeVersion']
+
 
     def subquery_join(self, subquery, join_key='key'):
         join_field = next(field for field in subquery.model._meta.fields if field.name == join_key)
@@ -209,7 +218,7 @@ class AnnotationsQuerySet(SearchQuerySet):
         results = self.filter_variant_ids(**kwargs)
         results = self._filter_frequency(results, **kwargs)
         results = self._filter_in_silico(results, **kwargs)
-        results = self.filter_annotations(results, **kwargs, **kwargs)
+        results = self.filter_annotations(results, **kwargs)
         return results
 
     def result_values(self, skip_entry_fields=False):
@@ -422,6 +431,9 @@ class AnnotationsQuerySet(SearchQuerySet):
             })
             transcript_field = self.GENOTYPE_GENE_CONSEQUENCE_FIELD
         interval_qs = [self._interval_query(**interval) for interval in intervals or []]
+        if exclude_locations and genes:
+            interval_qs += [self._interval_query(**interval) for interval in self._format_gene_intervals(genes)]
+            genes = None
         if genes:
             results = results.annotate(**{
                 self.GENE_CONSEQUENCE_FIELD: ArrayFilter(transcript_field, conditions=[{
@@ -685,6 +697,10 @@ class EntriesManager(SearchQuerySet):
     @property
     def clinvar_model(self):
         return self.model.clinvar_join.rel.related_model
+
+    @property
+    def genome_version(self):
+        return self.annotations_model.ANNOTATION_CONSTANTS['genomeVersion']
 
     def search(self, sample_data, freqs=None, annotations=None, **kwargs):
         entries = self.filter_locus(**kwargs)
@@ -1059,13 +1075,14 @@ class EntriesManager(SearchQuerySet):
             if exclude_locations:
                 intervals = None
             else:
+                chromosomes = {i['chrom'] for i in (intervals or [])}
                 if genes and 'geneIds' in self.call_fields:
                     entries = entries.filter(calls__array_all={'OR': [
                         {'geneIds': (list(genes.keys()), 'hasAny({value}, {field})')},
                         {'gt': (None, 'isNull({field})')},
                     ]})
+                    chromosomes.update({gene[f'chromGrch{self.genome_version}'] for gene in genes.values()})
                     should_filter_interval = True
-                chromosomes = {i['chrom'] for i in (intervals or [])}
                 intervals = [{'chrom': chrom, 'start': MIN_POS, 'end': MAX_POS} for chrom in chromosomes]
 
         if not (genes or intervals):
@@ -1094,12 +1111,6 @@ class EntriesManager(SearchQuerySet):
 
         filter_func = entries.exclude if exclude_locations else entries.filter
         return filter_func(locus_q)
-
-    def _format_gene_intervals(self, genes):
-        genome_version = self.annotations_model.ANNOTATION_CONSTANTS['genomeVersion']
-        return [
-            {field: gene[f'{field}Grch{genome_version}'] for field in ['chrom', 'start', 'end']} for gene in genes.values()
-        ]
 
     def search_padded_interval(self, chrom, pos, padding):
         interval_q = self._interval_query(chrom, start=max(pos - padding, MIN_POS), end=min(pos + padding, MAX_POS))
