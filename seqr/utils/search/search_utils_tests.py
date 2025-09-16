@@ -329,7 +329,7 @@ class SearchUtilsTests(SearchTestHelper):
             'inheritance_mode': inheritance_mode,
             'inheritance_filter': {},
             'skipped_samples': mock.ANY,
-            'dataset_type': 'MITO_missing' if has_included_gene_search else dataset_type,
+            'dataset_type': None if has_included_gene_search else dataset_type,
             'secondary_dataset_type': secondary_dataset_type,
             'exclude_locations': exclude_locations,
             'genes': genes,

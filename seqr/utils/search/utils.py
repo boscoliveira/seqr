@@ -309,7 +309,7 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
             parsed_search[annotation_key] = {k: v for k, v in parsed_search[annotation_key].items() if v}
 
     dataset_type, secondary_dataset_type, lookup_dataset_type = _search_dataset_type(parsed_search, genome_version)
-    parsed_search.update({'dataset_type': dataset_type, 'secondary_dataset_type': secondary_dataset_type})
+    parsed_search.update({'dataset_type': None if dataset_type == DATASET_TYPE_NO_MITO else dataset_type, 'secondary_dataset_type': secondary_dataset_type})
     search_dataset_type = None
     if dataset_type and dataset_type != ALL_DATA_TYPES:
         if secondary_dataset_type is None or secondary_dataset_type == dataset_type:
