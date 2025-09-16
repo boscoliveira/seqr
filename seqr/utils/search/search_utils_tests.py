@@ -5,11 +5,11 @@ import json
 import mock
 
 from clickhouse_search.test_utils import VARIANT1, VARIANT2, VARIANT3, VARIANT4, PROJECT_2_VARIANT2, format_cached_variant, \
-    GENE_COUNTS, VARIANT_LOOKUP_VARIANT, SV_VARIANT4, SV_VARIANT1
+    GENE_COUNTS, VARIANT_LOOKUP_VARIANT, SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT, SV_VARIANT1
 from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchResults
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 from seqr.utils.search.utils import get_single_variant, get_variant_query_gene_counts, \
-    query_variants, variant_lookup, sv_variant_lookup, InvalidSearchException
+    query_variants, variant_lookup, InvalidSearchException
 from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin, PARSED_VARIANTS, PARSED_COMPOUND_HET_VARIANTS_MULTI_PROJECT, GENE_FIELDS
 
 
@@ -65,44 +65,43 @@ class SearchUtilsTests(SearchTestHelper):
         self.search_samples = list(self.affected_search_samples) + list(self.non_affected_search_samples)
 
     def test_variant_lookup(self, mock_variant_lookup):
-        mock_variant_lookup.return_value = VARIANT_LOOKUP_VARIANT
-        variant = variant_lookup(self.user, ('1', 10439, 'AC', 'A'), genome_version='38')
-        self.assertDictEqual(variant, VARIANT_LOOKUP_VARIANT)
-        mock_variant_lookup.assert_called_with(self.user, ('1', 10439, 'AC', 'A'), 'SNV_INDEL', genome_version='38')
-        cache_key = "variant_lookup_results__('1', 10439, 'AC', 'A')__38__"
-        self.assert_cached_results(variant, cache_key=cache_key)
+        mock_variant_lookup.return_value = [VARIANT_LOOKUP_VARIANT]
+        variants = variant_lookup(self.user, '1-10439-AC-A', '38')
+        self.assertListEqual(variants, [VARIANT_LOOKUP_VARIANT])
+        mock_variant_lookup.assert_called_with(self.user, ('1', 10439, 'AC', 'A'), 'SNV_INDEL', None, '38')
+        cache_key = "variant_lookup_results__1-10439-AC-A__38"
+        self.assert_cached_results(variants, cache_key=cache_key)
 
         mock_variant_lookup.reset_mock()
-        self.set_cache(variant)
-        cached_variant = variant_lookup(self.user, ('1', 10439, 'AC', 'A'), genome_version='38')
-        self.assertDictEqual(variant, cached_variant)
+        self.set_cache(variants)
+        cached_variant = variant_lookup(self.user, '1-10439-AC-A', '38')
+        self.assertListEqual(variants, cached_variant)
         mock_variant_lookup.assert_not_called()
         self.mock_redis.get.assert_called_with(cache_key)
 
-    def test_sv_variant_lookup(self, mock_sv_variant_lookup, mock_get_variants):
-        mock_sv_variant_lookup.return_value = SV_VARIANT4
-        def _mock_get_variants(samples, search, user, previous_search_results, genome_version, **kwargs):
-            previous_search_results['all_results'] = [SV_VARIANT1]
-        mock_get_variants.side_effect = _mock_get_variants
-        variants = sv_variant_lookup(self.user, 'phase2_DEL_chr14_4640', self.families, genome_version='38', sample_type='WGS')
-        self.assertListEqual(variants, [SV_VARIANT4, SV_VARIANT1])
-        mock_sv_variant_lookup.assert_called_with(
-            self.user, 'phase2_DEL_chr14_4640', 'SV_WGS', genome_version='38', samples=mock.ANY)
-        mock_get_variants.assert_called_with(mock.ANY, {
-            'parsed_locus': {'padded_interval': {'chrom': '17', 'start': 38719997, 'end': 38737237, 'padding': 0.2}},
-            'annotations': {'structural': ['DEL', 'gCNV_DEL']},
-        }, self.user, mock.ANY, '38')
-        cache_key = 'variant_lookup_results__phase2_DEL_chr14_4640__38__test_user'
-        self.assert_cached_results(variants, cache_key=cache_key)
-        expected_samples = {s for s in self.search_samples if s.guid in SV_SAMPLES}
-        self.assertSetEqual(set(mock_get_variants.call_args.args[0]), expected_samples)
-        self.assertListEqual(list(mock_sv_variant_lookup.call_args.kwargs['samples']), [])
+        self.set_cache(None)
+        mock_variant_lookup.reset_mock()
+        with self.assertRaises(InvalidSearchException) as cm:
+            variant_lookup(self.user, 'phase2_DEL_chr14_4640', '37')
+        self.assertEqual(str(cm.exception), 'SV variants are not available for GRCh37')
 
-        mock_sv_variant_lookup.reset_mock()
+        with self.assertRaises(InvalidSearchException) as cm:
+            variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38')
+        self.assertEqual(str(cm.exception), 'Sample type must be specified to look up a structural variant')
+
+        mock_variant_lookup.return_value = [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT]
+        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
+        self.assertListEqual(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
+        mock_variant_lookup.assert_called_with(
+            self.user, 'phase2_DEL_chr14_4640', 'SV', 'WGS', '38')
+        cache_key = 'variant_lookup_results__phase2_DEL_chr14_4640__38'
+        self.assert_cached_results(variants, cache_key=cache_key)
+
+        mock_variant_lookup.reset_mock()
         self.set_cache(variants)
-        cached_variant = sv_variant_lookup(self.user, 'phase2_DEL_chr14_4640', self.families, genome_version='38')
+        cached_variant = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
         self.assertListEqual(variants, cached_variant)
-        mock_sv_variant_lookup.assert_not_called()
+        mock_variant_lookup.assert_not_called()
         self.mock_redis.get.assert_called_with(cache_key)
 
     def test_get_single_variant(self, mock_get_variants_for_ids):
@@ -545,11 +544,6 @@ class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
             super().test_variant_lookup(mock.MagicMock())
         self.assertEqual(str(cm.exception), 'Lookup is disabled')
 
-    def test_sv_variant_lookup(self, *args, **kwargs):
-        with self.assertRaises(InvalidSearchException) as cm:
-            super().test_sv_variant_lookup(mock.MagicMock(), mock.MagicMock())
-        self.assertEqual(str(cm.exception), 'Lookup is disabled')
-
     @mock.patch('seqr.utils.search.utils.get_es_variants_for_variant_ids')
     def test_get_single_variant(self, mock_get_variants_for_ids):
         mock_get_variants_for_ids.return_value = [PARSED_VARIANTS[0]]
@@ -704,8 +698,3 @@ class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, S
     @mock.patch('seqr.utils.search.utils.clickhouse_variant_lookup')
     def test_variant_lookup(self, mock_call):
         super().test_variant_lookup(mock_call)
-
-    @mock.patch('seqr.utils.search.utils.get_clickhouse_variants')
-    @mock.patch('seqr.utils.search.utils.clickhouse_variant_lookup')
-    def test_sv_variant_lookup(self, mock_sv_variant_lookup, mock_get_variants):
-        super().test_sv_variant_lookup(mock_sv_variant_lookup, mock_get_variants)

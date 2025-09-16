@@ -15,7 +15,7 @@ import re
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
-    variant_lookup, sv_variant_lookup, parse_variant_id
+    variant_lookup, parse_variant_id
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
 from seqr.utils.search.utils import InvalidSearchException
 from seqr.utils.xpos_utils import get_xpos
@@ -544,32 +544,22 @@ def _flatten_variants(variants):
             flattened_variants.append(variant)
     return flattened_variants
 
-def _parse_lookup_request(request):
-    kwargs = {_to_snake_case(k): v for k, v in request.GET.items()}
-
-    variant_id = kwargs.pop('variant_id')
-    parsed_variant_id = parse_variant_id(variant_id)
-    return parsed_variant_id, variant_id, kwargs
 
 @login_and_policies_required
 def variant_lookup_handler(request):
-    parsed_variant_id, variant_id, kwargs = _parse_lookup_request(request)
-    is_sv = not parsed_variant_id
-    genome_version = kwargs.get('genome_version', GENOME_VERSION_GRCh38)
-    if is_sv:
-        families = _all_genome_version_families(
-            genome_version, request.user,
-        )
-        if not families:
-            raise PermissionDenied()
-        variants = sv_variant_lookup(request.user, variant_id, families, **kwargs)
-    else:
-        variant = variant_lookup(request.user, parsed_variant_id, **kwargs)
-        variants = [variant]
-        families = Family.objects.filter(
-            guid__in=variant['familyGenotypes'],
-            project__guid__in=get_project_guids_user_can_view(request.user, limit_data_manager=True),
-        )
+    variant_id = request.GET.get('variantId')
+    genome_version = request.GET.get('genomeVersion') or GENOME_VERSION_GRCh38
+    variants = variant_lookup(request.user, variant_id, genome_version, sample_type=request.GET.get('sampleType'))
+
+    family_guids = set()
+    for variant in variants:
+        family_guids.update(variant['familyGenotypes'].keys())
+
+    families = Family.objects.filter(
+        guid__in=family_guids,
+        project__guid__in=get_project_guids_user_can_view(request.user, limit_data_manager=True),
+    )
+    for variant in variants:
         variant['familyGuids'] = list(families.values_list('guid', flat=True))
 
     saved_variants, _ = _get_saved_variant_models(variants, None) if families else (None, None)
@@ -579,17 +569,16 @@ def variant_lookup_handler(request):
     )
     response['variants'] = variants
 
-    if not is_sv:
-        _update_lookup_variant(variant, response)
+    individual_guid_map = {
+        (i['familyGuid'], i['individualId']): i['individualGuid'] for i in response['individualsByGuid'].values()
+    }
+    for variant in variants:
+        _update_lookup_variant(variant, response, individual_guid_map)
 
     return create_json_response(response)
 
 
-def _update_lookup_variant(variant, response):
-    individual_guid_map = {
-        (i['familyGuid'], i['individualId']): i['individualGuid'] for i in response['individualsByGuid'].values()
-    }
-
+def _update_lookup_variant(variant, response, individual_guid_map):
     no_access_families = set(variant['familyGenotypes']) - set(variant['familyGuids'])
     individual_summary_map = {
         (i.pop('family__guid'), i.pop('individual_id')): (i.pop('guid'), i)
@@ -601,11 +590,12 @@ def _update_lookup_variant(variant, response):
     add_individual_hpo_details([i for _, i in individual_summary_map.values()])
 
     variant['genotypes'] = {}
-    variant['lookupFamilyGuids'] = sorted(variant.pop('familyGuids'))
+    variant['lookupFamilyGuids'] = sorted([guid for guid in variant.pop('familyGuids') if guid in variant['familyGenotypes']])
     variant['familyGuids'] = []
     for family_guid in variant['lookupFamilyGuids']:
         for genotype in variant['familyGenotypes'].pop(family_guid):
             individual_guid = individual_guid_map[(family_guid, genotype['sampleId'])]
+            genotype = {**genotype, 'individualGuid': individual_guid}
             if individual_guid in variant['genotypes']:
                 genotype = [variant['genotypes'][individual_guid], genotype]
             variant['genotypes'][individual_guid] = genotype
@@ -641,7 +631,9 @@ def _update_lookup_variant(variant, response):
 
 @login_and_policies_required
 def vlm_lookup_handler(request):
-    parsed_variant_id, _, kwargs = _parse_lookup_request(request)
+    kwargs = {_to_snake_case(k): v for k, v in request.GET.items()}
+    variant_id = kwargs.pop('variant_id')
+    parsed_variant_id = parse_variant_id(variant_id)
     if parsed_variant_id:
         invalid_alleles = [f'"{allele}"' for allele in parsed_variant_id[2:] if not re.fullmatch(r'[ATCG]+', allele)]
         if invalid_alleles:
