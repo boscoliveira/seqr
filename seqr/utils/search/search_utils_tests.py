@@ -51,6 +51,7 @@ class SearchTestHelper(object):
 class SearchUtilsTests(SearchTestHelper):
 
     CACHED_VARIANTS = PARSED_VARIANTS + PARSED_VARIANTS
+    HAS_GENE_AGG = False
 
     def set_up(self):
         super(SearchUtilsTests, self).set_up()
@@ -524,18 +525,12 @@ class SearchUtilsTests(SearchTestHelper):
         self.assertDictEqual(gene_counts, GENE_COUNTS)
         results_cache = {'all_results': self.GENE_AGG_ALL_RESULTS} if hasattr(self, 'GENE_AGG_ALL_RESULTS') else  {'gene_aggs': gene_counts}
         self.assert_cached_results(results_cache)
+        kwargs = dict(sort=None, num_results=100)
+        if self.HAS_GENE_AGG:
+            kwargs['gene_agg'] = True
         self._test_expected_search_call(
-            mock_get_variants, results_cache, sort=None, num_results=100, gene_agg=True,
+            mock_get_variants, results_cache, **kwargs,
         )
-
-    def test_cached_get_variant_query_gene_counts(self):
-        cached_gene_counts = {
-            'ENSG00000135953': {'total': 5, 'families': {'F000003_3': 2, 'F000002_2': 1, 'F000011_11': 4}},
-            'ENSG00000228198': {'total': 5, 'families': {'F000003_3': 4, 'F000002_2': 1, 'F000011_11': 4}}
-        }
-        self.set_cache({'total_results': 5, 'gene_aggs': cached_gene_counts})
-        gene_counts = get_variant_query_gene_counts(self.results_model, self.user)
-        self.assertDictEqual(gene_counts, cached_gene_counts)
 
 
 @mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', '')
@@ -543,6 +538,8 @@ class SearchUtilsTests(SearchTestHelper):
 class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
     databases = ['default', 'reference_data']
     fixtures = ['users', '1kg_project', 'reference_data']
+
+    HAS_GENE_AGG = True
 
     def setUp(self):
         self.set_up()
@@ -621,7 +618,13 @@ class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
         super(ElasticsearchSearchUtilsTests, self).test_get_variant_query_gene_counts(mock_get_variants)
 
     def test_cached_get_variant_query_gene_counts(self):
-        super(ElasticsearchSearchUtilsTests, self).test_cached_get_variant_query_gene_counts()
+        cached_gene_counts = {
+            'ENSG00000135953': {'total': 5, 'families': {'F000003_3': 2, 'F000002_2': 1, 'F000011_11': 4}},
+            'ENSG00000228198': {'total': 5, 'families': {'F000003_3': 4, 'F000002_2': 1, 'F000011_11': 4}}
+        }
+        self.set_cache({'total_results': 5, 'gene_aggs': cached_gene_counts})
+        gene_counts = get_variant_query_gene_counts(self.results_model, self.user)
+        self.assertDictEqual(gene_counts, cached_gene_counts)
 
         self.set_cache({'all_results': PARSED_COMPOUND_HET_VARIANTS_MULTI_PROJECT, 'total_results': 2})
         gene_counts = get_variant_query_gene_counts(self.results_model, self.user)
@@ -733,8 +736,6 @@ class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, S
         super().test_get_variant_query_gene_counts(mock_call)
 
     def test_cached_get_variant_query_gene_counts(self):
-        super().test_cached_get_variant_query_gene_counts()
-
         self.set_cache({'all_results': self.CACHED_VARIANTS + [SV_VARIANT1], 'total_results': 5})
         gene_counts = get_variant_query_gene_counts(self.results_model, self.user)
         self.assertDictEqual(gene_counts, {

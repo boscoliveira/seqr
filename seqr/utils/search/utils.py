@@ -241,23 +241,14 @@ def _get_search_cache_key(search_model, sort=None):
     return 'search_results__{}__{}'.format(search_model.guid, sort or XPOS_SORT_KEY)
 
 
-def _process_clickhouse_unsorted_cached_results(cache_key, sort, family_guid):
-    unsorted_results = safe_redis_get_wildcard_json(cache_key.replace(sort or 'xpos', '*'))
-    if not unsorted_results:
-        return None
-    results = get_clickhouse_cache_results(unsorted_results['all_results'], sort, family_guid)
-    safe_redis_set_json(cache_key, results, expire=timedelta(weeks=2))
-    return results
+def _get_any_sort_cached_results(search_model):
+    cache_key = _get_search_cache_key(search_model, sort='*')
+    return safe_redis_get_wildcard_json(cache_key)
 
 
-def _get_cached_search_results(search_model, sort=None, family_guid=None):
+def _get_cached_search_results(search_model, sort=None):
     cache_key = _get_search_cache_key(search_model, sort=sort)
-    results = safe_redis_get_json(cache_key)
-    if not results:
-        results = backend_specific_call(  # TODO
-            lambda *args: None, _process_clickhouse_unsorted_cached_results,
-        )(cache_key, sort, family_guid)
-    return results or {}
+    return safe_redis_get_json(cache_key) or {}
 
 
 def _validate_export_variant_count(total_variants):
@@ -265,10 +256,42 @@ def _validate_export_variant_count(total_variants):
         raise InvalidSearchException(f'Unable to export more than {MAX_EXPORT_VARIANTS} variants ({total_variants} requested)')
 
 
-def query_variants(search_model, sort=XPOS_SORT_KEY, skip_genotype_filter=False, load_all=False, user=None, page=1, num_results=100):
-    previous_search_results = _get_cached_search_results(search_model, sort=sort, family_guid=search_model.families.first().guid)
-    total_results = previous_search_results.get('total_results')
+def _get_elasticsearch_previous_search_results(search_model, sort, page, num_results, load_all, **kwargs):
+    previous_search_results = _get_cached_search_results(search_model, sort=sort)
+    start_index, end_index, num_results = _get_result_range(page, num_results, previous_search_results.get('total_results'), load_all)
 
+    cached_page = None
+    loaded_results = previous_search_results.get('all_results') or []
+    if len(loaded_results) >= end_index:
+        cached_page = loaded_results[start_index:end_index]
+
+    if not cached_page:
+        cached_page = process_es_previously_loaded_results(previous_search_results, start_index, end_index)
+
+    return previous_search_results, cached_page, num_results
+
+
+def _get_clickhouse_previous_search_results(search_model, sort, page, num_results, load_all, genome_version=None):
+    previous_search_results = _get_cached_search_results(search_model, sort=sort)
+    if not previous_search_results:
+        unsorted_results = _get_any_sort_cached_results(search_model)
+        if unsorted_results:
+            previous_search_results = get_clickhouse_cache_results(
+                unsorted_results['all_results'], sort, family_guid=search_model.families.first().guid,
+            )
+            cache_key = _get_search_cache_key(search_model, sort=sort)
+            safe_redis_set_json(cache_key, previous_search_results, expire=timedelta(weeks=2))
+
+    start_index, end_index, num_results = _get_result_range(page, num_results, previous_search_results.get('total_results'), load_all)
+    cached_page = None
+    loaded_results = previous_search_results.get('all_results') or []
+    if len(loaded_results) >= end_index:
+        cached_page = format_clickhouse_results(loaded_results[start_index:end_index], genome_version)
+
+    return previous_search_results, cached_page, num_results
+
+
+def _get_result_range(page, num_results, total_results, load_all):
     if load_all:
         num_results = total_results or MAX_EXPORT_VARIANTS
         _validate_export_variant_count(num_results)
@@ -277,23 +300,20 @@ def query_variants(search_model, sort=XPOS_SORT_KEY, skip_genotype_filter=False,
     if total_results is not None:
         end_index = min(end_index, total_results)
 
-    genome_version = _get_search_genome_version(search_model.families.all())
-    loaded_results = previous_search_results.get('all_results') or []
-    if len(loaded_results) >= end_index:
-        results_page = backend_specific_call( # TODO
-            lambda results, genome_version: results, format_clickhouse_results,
-        )(loaded_results[start_index:end_index], genome_version)
-        return results_page, total_results
-
-    previously_loaded_results = backend_specific_call(  # TODO
-        process_es_previously_loaded_results,
-        lambda *args: None,  # Other backends need no additional parsing
-    )(previous_search_results, start_index, end_index)
-    if previously_loaded_results is not None:
-        return previously_loaded_results, total_results
-
     if end_index > MAX_VARIANTS:
         raise InvalidSearchException(f'Unable to load more than {MAX_VARIANTS} variants ({end_index} requested)')
+
+    return start_index, end_index, num_results
+
+
+def query_variants(search_model, sort=XPOS_SORT_KEY, skip_genotype_filter=False, load_all=False, user=None, page=1, num_results=100):
+    genome_version = _get_search_genome_version(search_model.families.all())
+    previous_search_results, cached_page, num_results = backend_specific_call(
+        _get_elasticsearch_previous_search_results,
+        _get_clickhouse_previous_search_results,
+    )(search_model, sort, page, num_results, load_all, genome_version=genome_version)
+    if cached_page is not None:
+        return cached_page, previous_search_results.get('total_results')
 
     variants, total_results = _query_variants(
         search_model, user, previous_search_results, genome_version, sort=sort, page=page, num_results=num_results,
@@ -383,44 +403,50 @@ def _execute_search(samples, parsed_search, user, previous_search_results, genom
 
 
 def get_variant_query_gene_counts(search_model, user):
+    return backend_specific_call(
+        _get_es_variant_query_gene_counts,
+        _get_clickhouse_variant_query_gene_counts,
+    )(search_model, user)
+
+
+def _get_es_variant_query_gene_counts(search_model, user):
     previous_search_results = _get_cached_search_results(search_model)
     if previous_search_results.get('gene_aggs'):
         return previous_search_results['gene_aggs']
 
     if len(previous_search_results.get('all_results', [])) == previous_search_results.get('total_results'):
-        return _get_gene_aggs_for_cached_variants(previous_search_results)
+        return _get_gene_aggs_for_cached_variants(
+            previous_search_results['all_results'],
+            lambda v: next((
+                [gene_id] for gene_id, transcripts in v['transcripts'].items()
+                if any(t['transcriptId'] == v['mainTranscriptId'] for t in transcripts)
+            ), []) if v['mainTranscriptId'] else [],
+        )
 
-    previously_loaded_results = backend_specific_call(  # TODO
-        process_es_previously_loaded_gene_aggs,
-        lambda *args: None,  # Other backends need no additional parsing
-    )(previous_search_results)
+    previously_loaded_results = process_es_previously_loaded_gene_aggs(previous_search_results)
     if previously_loaded_results is not None:
         return previously_loaded_results
 
     genome_version = _get_search_genome_version(search_model.families.all())
     gene_counts, _ = _query_variants(search_model, user, previous_search_results, genome_version, gene_agg=True)
-    gene_counts = backend_specific_call( # TODO
-        lambda *args: None, _get_gene_aggs_for_cached_variants,
-    )(previous_search_results) or gene_counts
     return gene_counts
 
 
-def _get_gene_aggs_for_cached_variants(previous_search_results):
+def _get_clickhouse_variant_query_gene_counts(search_model, user):
+    previous_search_results = _get_any_sort_cached_results(search_model) or {}
+    if len(previous_search_results.get('all_results', [])) != previous_search_results.get('total_results'):
+        genome_version = _get_search_genome_version(search_model.families.all())
+        _query_variants(search_model, user, previous_search_results, genome_version)
+
+    return _get_gene_aggs_for_cached_variants([
+        v for variants in previous_search_results['all_results'] for v in (variants if isinstance(variants, list) else [variants])
+    ], lambda v: v['transcripts'].keys() if 'transcripts' in v else {t['geneId'] for t in v['sortedTranscriptConsequences']})
+
+
+def _get_gene_aggs_for_cached_variants(variants, get_variant_genes):
     gene_aggs = defaultdict(lambda: {'total': 0, 'families': defaultdict(int)})
-    # ES caches compound hets separately from main results, other backends cache everything together
-    flattened_variants = backend_specific_call( # TODO
-        lambda results: results,
-        lambda results: [v for variants in results for v in (variants if isinstance(variants, list) else [variants])],
-    )(previous_search_results['all_results'])
-    for var in flattened_variants:
-        # ES only reports breakdown for main transcript gene only, other backends report for all genes
-        gene_ids = backend_specific_call( # TODO
-            lambda variant: next((
-                [gene_id] for gene_id, transcripts in variant['transcripts'].items()
-                if any(t['transcriptId'] == var['mainTranscriptId'] for t in transcripts)
-            ), []) if var['mainTranscriptId'] else [],
-            lambda variant: variant['transcripts'].keys() if 'transcripts' in variant else {t['geneId'] for t in variant['sortedTranscriptConsequences']},
-        )(var)
+    for var in variants:
+        gene_ids = get_variant_genes(var)
         for gene_id in gene_ids:
             gene_aggs[gene_id]['total'] += 1
             for family_guid in var['familyGuids']:
