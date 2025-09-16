@@ -1513,6 +1513,7 @@ class EsUtilsTest(TestCase):
             query_variants(results_model)
         self.assertEqual(str(cm.exception), 'Could not find expected indices: test_index_sv, test_index_mito_wgs, test_index')
 
+    @mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 100)
     @urllib3_responses.activate
     def test_get_es_variants(self):
         setup_responses()
@@ -1554,16 +1555,14 @@ class EsUtilsTest(TestCase):
 
         # test load_all
         setup_responses()
-        with mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 100):
-            variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
+        variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
         self.assertExecutedSearch(filters=[ANNOTATION_QUERY, ALL_INHERITANCE_QUERY], start_index=4, size=1)
         self.assertEqual(len(variants), 5)
         self.assertListEqual(variants, PARSED_VARIANTS + PARSED_VARIANTS + PARSED_VARIANTS[:1])
 
         # test does not re-fetch once all loaded
         urllib3_responses.reset()
-        with mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 1):
-            variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
+        variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
         self.assertEqual(len(variants), 5)
         self.assertListEqual(variants, PARSED_VARIANTS + PARSED_VARIANTS + PARSED_VARIANTS[:1])
 
