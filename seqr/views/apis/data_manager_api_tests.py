@@ -12,7 +12,7 @@ from seqr.views.apis.data_manager_api import elasticsearch_status, delete_index,
     update_rna_seq, load_rna_seq_sample_data, load_phenotype_prioritization_data, validate_callset, loading_vcfs, \
     get_loaded_projects, load_data, trigger_delete_project, trigger_delete_family
 from seqr.views.utils.orm_to_json_utils import _get_json_for_models
-from seqr.views.utils.test_utils import AuthenticationTestCase, AirflowTestCase, AirtableTest
+from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, AirtableTest
 from seqr.utils.search.elasticsearch.es_utils_tests import urllib3_responses
 from seqr.models import Individual, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSample, Project, PhenotypePrioritization
 from settings import SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL
@@ -1721,7 +1721,7 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
 
 
 @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
-class AnvilDataManagerAPITest(AirflowTestCase, DataManagerAPITest):
+class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'clickhouse_search']
 
     NUM_FIXTURE_GENES = 59
