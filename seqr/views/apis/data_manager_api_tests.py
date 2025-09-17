@@ -467,6 +467,7 @@ class DataManagerAPITest(AirtableTest):
 
     PROJECTS = [PROJECT_GUID, NON_ANALYST_PROJECT_GUID]
     VCF_SAMPLES = VCF_SAMPLES
+    SKIP_TDR = False
 
     @urllib3_responses.activate
     def test_elasticsearch_status(self):
@@ -1432,6 +1433,8 @@ class DataManagerAPITest(AirtableTest):
             'sample_type': 'WES',
             'skip_validation': True,
         }
+        if self.SKIP_TDR:
+            variables['skip_expect_tdr_metrics'] = True
         self._assert_success_notification(variables)
 
         # Test loading trigger error
@@ -1497,6 +1500,8 @@ class DataManagerAPITest(AirtableTest):
             'dataset_type': dataset_type,
             'reference_genome': 'GRCh38',
         }
+        if self.SKIP_TDR:
+            body['skip_expect_tdr_metrics'] = True
         if skip_validation:
             body['skip_validation'] = True
         self.assertDictEqual(json.loads(responses.calls[-1].request.body), body)
@@ -1620,6 +1625,7 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
     ]
     PROJECT_OPTIONS = [{'projectGuid': 'R0001_1kg'}, PROJECT_OPTION]
     REQUEST_BODY = CORE_REQUEST_BODY
+    SKIP_TDR = True
 
     def setUp(self):
         patcher = mock.patch('seqr.utils.file_utils.os.path.isfile')

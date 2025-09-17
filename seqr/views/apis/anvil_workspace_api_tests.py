@@ -831,6 +831,8 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
             'reference_genome': genome_version,
             'callset_path': 'gs://test_bucket/test_path.vcf',
             'sample_type': 'WES',
+            'skip_check_sex_and_relatedness': True,
+            'skip_expect_tdr_metrics': True,
         }
         self._assert_expected_requests(variables, project, num_samples=14 if test_add_data else 3, status='Loading')
         self.assert_expected_airtable_headers(-1)
@@ -914,6 +916,8 @@ Loading pipeline is triggered with:
             'reference_genome': genome_version,
             'callset_path': 'gs://test_bucket/test_path.vcf',
             'sample_type': sample_type,
+            'skip_check_sex_and_relatedness': True,
+            'skip_expect_tdr_metrics': True,
         }
 
         self.mock_add_data_utils_logger.error.assert_called_with(

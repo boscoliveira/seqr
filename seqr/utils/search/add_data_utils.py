@@ -106,34 +106,23 @@ def update_airtable_loading_tracking_status(project, status, additional_update=N
         update={'Status': status, **(additional_update or {})},
     )
 
-def _format_loading_pipeline_variables(
-    projects: list[Project], genome_version: str, dataset_type: str, sample_type: str = None, **kwargs
-):
+def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
+                         genome_version: str, data_path: str, user: User, raise_error: bool = False, skip_expect_tdr_metrics: bool = True,
+                         skip_validation: bool = False, skip_check_sex_and_relatedness: bool = True, vcf_sample_id_map=None,
+                         success_message: str = None,  error_message: str = None, success_slack_channel: str = SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
     variables = {
         'projects_to_run': sorted([p.guid for p in projects]) if projects else None,
-        'dataset_type': _dag_dataset_type(sample_type, dataset_type),
+        'dataset_type': _loading_dataset_type(sample_type, dataset_type),
         'reference_genome': GENOME_VERSION_LOOKUP[genome_version],
-        **kwargs
+        'callset_path': data_path,
+        'sample_type': sample_type,
     }
-    if sample_type:
-        variables['sample_type'] = sample_type
-    return variables
-
-def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
-                         genome_version: str, data_path: str, user: User, raise_error: bool = False,
-                         skip_validation: bool = False, skip_check_sex_and_relatedness: bool = False, vcf_sample_id_map=None,
-                         success_message: str = None,  error_message: str = None, success_slack_channel: str = SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
-    variables = _format_loading_pipeline_variables(
-        projects,
-        genome_version,
-        dataset_type,
-        sample_type,
-        callset_path=data_path,
-    )
-    if skip_validation:
-        variables['skip_validation'] = True
-    if skip_check_sex_and_relatedness:
-        variables['skip_check_sex_and_relatedness'] = True
+    bool_variables = {
+        'skip_validation': skip_validation,
+        'skip_check_sex_and_relatedness': skip_check_sex_and_relatedness,
+        'skip_expect_tdr_metrics': skip_expect_tdr_metrics,
+    }
+    variables.update({k: v for k, v in bool_variables.items() if v})
     file_path = _get_pedigree_path(genome_version, sample_type, dataset_type)
     _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_error)
     _write_gene_id_file(user)
@@ -168,7 +157,7 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
     return success
 
 
-def _dag_dataset_type(sample_type: str, dataset_type: str):
+def _loading_dataset_type(sample_type: str, dataset_type: str):
     return 'GCNV' if dataset_type == Sample.DATASET_TYPE_SV_CALLS and sample_type == Sample.SAMPLE_TYPE_WES \
         else dataset_type
 
@@ -223,8 +212,8 @@ def _write_gene_id_file(user):
 
 
 def _get_pedigree_path(genome_version: str, sample_type: str, dataset_type: str):
-    dag_dataset_type = _dag_dataset_type(sample_type, dataset_type)
-    return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{dag_dataset_type}/pedigrees/{sample_type}'
+    loading_dataset_type = _loading_dataset_type(sample_type, dataset_type)
+    return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{loading_dataset_type}/pedigrees/{sample_type}'
 
 
 def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids: list[int], sample_source: str,

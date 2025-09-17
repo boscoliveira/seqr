@@ -335,20 +335,19 @@ def load_data(request):
     if errors:
         raise ErrorsWarningsException(errors)
 
-    raise_error = True
+    is_local = True
     success_message = None
     error_message = None
     if AirtableSession.is_airtable_enabled():
-        raise_error = False
+        is_local = False
         success_message = f'*{request.user.email}* triggered loading internal {sample_type} {dataset_type} data for {len(individual_ids)} samples in {len(projects)} projects ({"; ".join(sorted(project_counts))})'
         error_message = f'ERROR triggering internal {sample_type} {dataset_type} loading'
-        vcf_sample_id_map = vcf_sample_id_map
 
     success = trigger_data_loading(
         projects_by_guid.values(), individual_ids, sample_type, dataset_type, request_json['genomeVersion'],
         _callset_path(request_json), user=request.user, skip_validation=request_json.get('skipValidation', False),
         skip_check_sex_and_relatedness=request_json.get('skipSRChecks', False), vcf_sample_id_map=vcf_sample_id_map,
-        raise_error=raise_error, success_message=success_message, error_message=error_message,
+        raise_error=is_local, skip_expect_tdr_metrics=is_local, success_message=success_message, error_message=error_message,
     )
 
     return create_json_response({'success': success})
