@@ -523,22 +523,6 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
     LOADING_PROJECT_GUID = f'P_{TEST_NO_PROJECT_WORKSPACE_NAME}'
     ADDITIONAL_REQUEST_COUNT = 1
 
-    @staticmethod
-    def _get_dag_variable_overrides(additional_tasks_check):
-        variables = {
-            'project': LoadAnvilDataAPITest.LOADING_PROJECT_GUID,
-            'callset_path': 'test_path.vcf',
-            'sample_source': 'AnVIL',
-            'sample_type': 'WES',
-            'dataset_type': 'SNV_INDEL',
-        }
-        if additional_tasks_check:
-            variables.update({
-                'project': PROJECT1_GUID,
-                'reference_genome': 'GRCh37',
-            })
-        return variables
-
     def setUp(self):
         # Set up api responses
         responses.add(responses.POST, PIPELINE_RUNNER_URL)
@@ -647,7 +631,7 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
                          .format(namespace=TEST_WORKSPACE_NAMESPACE, name=TEST_NO_PROJECT_WORKSPACE_NAME))
 
         url = reverse(create_project_from_workspace, args=[TEST_WORKSPACE_NAMESPACE, TEST_NO_PROJECT_WORKSPACE_NAME2])
-        self._test_mv_file_and_triggering_dag_exception(
+        self.test_mv_file_and_triggering_loading_exception(
             url, {'workspace_namespace': TEST_WORKSPACE_NAMESPACE, 'workspace_name': TEST_NO_PROJECT_WORKSPACE_NAME2},
             NEW_PROJECT_SAMPLE_DATA, 'GRCh38', REQUEST_BODY)
 
@@ -724,7 +708,7 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
         self.mock_load_file.return_value = LOAD_SAMPLE_DATA_ALL_PENDING_PROJECT_2
         mock_compute_indiv_guid.side_effect = ['I0000021_na19675_1', 'I0000022_na19678', 'I0000023_hg00735']
         url = reverse(add_workspace_data, args=[PROJECT2_GUID])
-        self._test_mv_file_and_triggering_dag_exception(
+        self.test_mv_file_and_triggering_loading_exception(
             url, {'guid': PROJECT2_GUID}, PROJECT2_SAMPLE_DATA, 'GRCh37', REQUEST_BODY_ADD_DATA2, sample_type='WGS')
 
     def _test_errors(self, url, fields, workspace_name, has_existing_data=False):
@@ -899,7 +883,7 @@ Loading pipeline is triggered with:
         if 'pedigrees' in to_path:
             raise Exception('Something wrong while moving the file.')
 
-    def _test_mv_file_and_triggering_dag_exception(self, url, workspace, sample_data, genome_version, request_body, num_samples=None, sample_type='WES'):
+    def test_mv_file_and_triggering_loading_exception(self, url, workspace, sample_data, genome_version, request_body, num_samples=None, sample_type='WES'):
         # Test saving ID file exception
         responses.calls.reset()
         self.mock_slack.reset_mock()
