@@ -1274,9 +1274,6 @@ class DataManagerAPITest(AirtableTest):
         response = self.client.get(url, content_type='application/json')
         self.assertEqual(response.status_code, 200)
 
-    def _assert_expected_read_vcf_header_subprocess_calls(self, body):
-        return True
-
     def test_validate_callset(self):
         url = reverse(validate_callset)
         self.check_pm_login(url)

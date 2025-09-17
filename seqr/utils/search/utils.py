@@ -560,14 +560,6 @@ def _filter_inheritance_family_samples(samples, inheritance_filter):
     ]
 
 
-def _format_interval(chrom=None, start=None, end=None, offset=None, **kwargs):
-    if offset:
-        offset_pos = int((end - start) * offset)
-        start = max(start - offset_pos, MIN_POS)
-        end = min(end + offset_pos, MAX_POS)
-    return [chrom, start, end]
-
-
 LIFTOVERS = {
     GENOME_VERSION_GRCh38: None,
     GENOME_VERSION_GRCh37: None,
