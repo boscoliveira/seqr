@@ -1,21 +1,24 @@
 from collections import defaultdict, OrderedDict
 from django.contrib.auth.models import User
 from django.db.models import F
+import json
+import requests
 from typing import Callable
 
 from reference_data.models import GeneInfo, GENOME_VERSION_LOOKUP
 from seqr.models import Sample, Individual, Project
-from seqr.utils.communication_utils import send_project_notification
+from seqr.utils.communication_utils import send_project_notification, safe_post_to_slack
 from seqr.utils.file_utils import does_file_exist
 from seqr.utils.logging_utils import SeqrLogger
+from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.search.utils import backend_specific_call
 from seqr.utils.search.elasticsearch.es_utils import validate_es_index_metadata_and_get_samples
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
 from seqr.views.utils.dataset_utils import match_and_update_search_samples, load_mapping_file
 from seqr.views.utils.export_utils import write_multiple_files
 from seqr.views.utils.pedigree_info_utils import JsonConstants
-from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, \
-    SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL
+from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, PIPELINE_RUNNER_SERVER, \
+    SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, LOADING_DATASETS_DIR
 
 logger = SeqrLogger(__name__)
 
@@ -116,9 +119,10 @@ def _format_loading_pipeline_variables(
         variables['sample_type'] = sample_type
     return variables
 
-def prepare_data_loading_request(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str, genome_version: str,
-                                 data_path: str, user: User, load_data_dir: str,  raise_pedigree_error: bool = False,
-                                 skip_validation: bool = False, skip_check_sex_and_relatedness: bool = False, vcf_sample_id_map=None):
+def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
+                         genome_version: str, data_path: str, user: User, raise_error: bool = False,
+                         skip_validation: bool = False, skip_check_sex_and_relatedness: bool = False, vcf_sample_id_map=None,
+                         success_message: str = None,  error_message: str = None, success_slack_channel: str = SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
     variables = _format_loading_pipeline_variables(
         projects,
         genome_version,
@@ -130,10 +134,35 @@ def prepare_data_loading_request(projects: list[Project], individual_ids: list[i
         variables['skip_validation'] = True
     if skip_check_sex_and_relatedness:
         variables['skip_check_sex_and_relatedness'] = True
-    file_path = _get_pedigree_path(load_data_dir, genome_version, sample_type, dataset_type)
-    _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_pedigree_error)
-    _write_gene_id_file(load_data_dir, user)
-    return variables, file_path
+    file_path = _get_pedigree_path(genome_version, sample_type, dataset_type)
+    _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_error)
+    _write_gene_id_file(user)
+
+    response = requests.post(f'{PIPELINE_RUNNER_SERVER}/loading_pipeline_enqueue', json=variables, timeout=60)
+    success = True
+    try:
+        response.raise_for_status()
+        logger.info('Triggered loading pipeline', user, detail=variables)
+    except requests.HTTPError as e:
+        success = False
+        if response.status_code == 409:
+            e = ErrorsWarningsException(['Loading pipeline is already running. Wait for it to complete and resubmit'])
+        if raise_error:
+            raise e
+        else:
+            safe_post_to_slack(
+                SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
+                f'{error_message}: {e}\nLoading pipeline should be triggered with following:\n```{json.dumps(variables, indent=4)}```',
+            )
+
+    if success_message and (success or success_slack_channel != SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
+        safe_post_to_slack(success_slack_channel, '\n\n'.join([
+            success_message,
+            f'Pedigree files have been uploaded to {file_path}',
+            f'Loading pipeline is triggered with:\n```{json.dumps(variables, indent=4)}```',
+        ]))
+
+    return success
 
 
 def _dag_dataset_type(sample_type: str, dataset_type: str):
@@ -173,9 +202,9 @@ def _upload_data_loading_files(individual_ids: list[int], vcf_sample_id_map: dic
             raise e
 
 
-def _write_gene_id_file(load_data_dir, user):
+def _write_gene_id_file(user):
     file_name = 'db_id_to_gene_id'
-    if does_file_exist(f'{load_data_dir}/{file_name}.csv.gz'):
+    if does_file_exist(f'{LOADING_DATASETS_DIR}/{file_name}.csv.gz'):
         return
 
     gene_data_loaded = (GeneInfo.objects.filter(gencode_release=int(GeneInfo.CURRENT_VERSION)).exists() and
@@ -187,12 +216,12 @@ def _write_gene_id_file(load_data_dir, user):
         )
     gene_data = GeneInfo.objects.all().values('gene_id', db_id=F('id')).order_by('id')
     file_config = (file_name, ['db_id', 'gene_id'], gene_data)
-    write_multiple_files([file_config], load_data_dir, user, file_format='csv', gzip_file=True)
+    write_multiple_files([file_config], LOADING_DATASETS_DIR, user, file_format='csv', gzip_file=True)
 
 
-def _get_pedigree_path(pedigree_dir: str, genome_version: str, sample_type: str, dataset_type: str):
+def _get_pedigree_path(genome_version: str, sample_type: str, dataset_type: str):
     dag_dataset_type = _dag_dataset_type(sample_type, dataset_type)
-    return f'{pedigree_dir}/{GENOME_VERSION_LOOKUP[genome_version]}/{dag_dataset_type}/pedigrees/{sample_type}'
+    return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{dag_dataset_type}/pedigrees/{sample_type}'
 
 
 def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids: list[int], sample_source: str,

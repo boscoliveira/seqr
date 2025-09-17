@@ -15,19 +15,18 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 
 from clickhouse_search.search import delete_clickhouse_project, delete_clickhouse_family
 from seqr.utils.communication_utils import send_project_notification
-from seqr.utils.search.add_data_utils import prepare_data_loading_request, get_loading_samples_validator
+from seqr.utils.search.add_data_utils import trigger_data_loading, get_loading_samples_validator
 from seqr.utils.search.utils import get_search_backend_status, delete_search_backend_data, backend_specific_call
 from seqr.utils.file_utils import file_iter, does_file_exist
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.vcf_utils import validate_vcf_and_get_samples, get_vcf_list
 
-from seqr.views.utils.airflow_utils import trigger_airflow_data_loading
 from seqr.views.utils.airtable_utils import AirtableSession, LOADABLE_PDO_STATUSES, AVAILABLE_PDO_STATUS
 from seqr.views.utils.dataset_utils import load_rna_seq, load_phenotype_prioritization_data_file, RNA_DATA_TYPE_CONFIGS, \
     post_process_rna_data, convert_django_meta_to_http_headers
 from seqr.views.utils.file_utils import get_temp_file_path, load_uploaded_file, persist_temp_file
-from seqr.views.utils.json_utils import create_json_response, _to_snake_case
+from seqr.views.utils.json_utils import create_json_response
 from seqr.views.utils.json_to_orm_utils import update_model_from_json
 from seqr.views.utils.pedigree_info_utils import get_validated_related_individuals, JsonConstants
 from seqr.views.utils.permissions_utils import data_manager_required, pm_or_data_manager_required, get_internal_projects
@@ -36,8 +35,7 @@ from seqr.views.utils.terra_api_utils import anvil_enabled
 from seqr.models import Sample, RnaSample, Individual, Project, PhenotypePrioritization
 
 from settings import KIBANA_SERVER, KIBANA_ELASTICSEARCH_PASSWORD, KIBANA_ELASTICSEARCH_USER, \
-    SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, LOADING_DATASETS_DIR, PIPELINE_RUNNER_SERVER, \
-    LUIGI_UI_SERVICE_HOSTNAME, LUIGI_UI_SERVICE_PORT
+    LOADING_DATASETS_DIR, LUIGI_UI_SERVICE_HOSTNAME, LUIGI_UI_SERVICE_PORT
 
 logger = SeqrLogger(__name__)
 
@@ -337,32 +335,23 @@ def load_data(request):
     if errors:
         raise ErrorsWarningsException(errors)
 
-    loading_args = (
-        projects_by_guid.values(), individual_ids, sample_type, dataset_type, request_json['genomeVersion'], _callset_path(request_json),
-    )
-    loading_kwargs = {
-        'user': request.user,
-        'skip_validation': request_json.get('skipValidation', False),
-        'skip_check_sex_and_relatedness': request_json.get('skipSRChecks', False),
-    }
+    raise_error = True
+    success_message = None
+    error_message = None
     if AirtableSession.is_airtable_enabled():
+        raise_error = False
         success_message = f'*{request.user.email}* triggered loading internal {sample_type} {dataset_type} data for {len(individual_ids)} samples in {len(projects)} projects ({"; ".join(sorted(project_counts))})'
         error_message = f'ERROR triggering internal {sample_type} {dataset_type} loading'
-        trigger_airflow_data_loading(
-            *loading_args, **loading_kwargs, success_message=success_message, error_message=error_message,
-            success_slack_channel=SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, is_internal=True, vcf_sample_id_map=vcf_sample_id_map,
-        )
-    else:
-        request_json, _ = prepare_data_loading_request(
-            *loading_args, **loading_kwargs, load_data_dir=LOADING_DATASETS_DIR, raise_pedigree_error=True,
-        )
-        response = requests.post(f'{PIPELINE_RUNNER_SERVER}/loading_pipeline_enqueue', json=request_json, timeout=60)
-        if response.status_code == 409:
-            raise ErrorsWarningsException(['Loading pipeline is already running. Wait for it to complete and resubmit'])
-        response.raise_for_status()
-        logger.info('Triggered loading pipeline', request.user, detail=request_json)
+        vcf_sample_id_map = vcf_sample_id_map
 
-    return create_json_response({'success': True})
+    success = trigger_data_loading(
+        projects_by_guid.values(), individual_ids, sample_type, dataset_type, request_json['genomeVersion'],
+        _callset_path(request_json), user=request.user, skip_validation=request_json.get('skipValidation', False),
+        skip_check_sex_and_relatedness=request_json.get('skipSRChecks', False), vcf_sample_id_map=vcf_sample_id_map,
+        raise_error=raise_error, success_message=success_message, error_message=error_message,
+    )
+
+    return create_json_response({'success': success})
 
 
 def _get_valid_search_individuals(project, airtable_samples, vcf_samples, dataset_type, sample_type, user, errors):
