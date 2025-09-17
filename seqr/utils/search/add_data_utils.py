@@ -152,9 +152,10 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
         if raise_error:
             raise e
         else:
+            logger.warning(f'Error triggering loading pipeline: {error}', user, detail=variables)
             safe_post_to_slack(
                 SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
-                f'{error_message}: {error}\nLoading pipeline should be triggered with following:\n```{json.dumps(variables, indent=4)}```',
+                f'{error_message}: {error}\nLoading pipeline should be triggered with:\n```{json.dumps(variables, indent=4)}```',
             )
 
     if success_message and (success or success_slack_channel != SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):

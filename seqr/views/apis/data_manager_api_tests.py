@@ -1903,7 +1903,7 @@ Loading pipeline is triggered with:
         variables_json = json.dumps(variables, indent=4).replace('callset.vcf', 'sv_callset.vcf').replace(
             'WGS', 'WES').replace('SNV_INDEL', 'GCNV').replace('v01', 'v3.1')
         error_message = f"""ERROR triggering internal WES SV loading: {error}
-Loading pipeline should be triggered with following:
+Loading pipeline should be triggered with:
 ```{variables_json}```"""
         self.mock_slack.assert_called_once_with(SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, error_message)
         self.mock_slack.reset_mock()
