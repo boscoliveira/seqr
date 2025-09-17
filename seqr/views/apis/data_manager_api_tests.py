@@ -1900,11 +1900,18 @@ Loading pipeline is triggered with:
         self.assertDictEqual(response.json(), {'success': False})
 
         error = response_body.get('error') or response_body['errors'][0]
-        variables_json = json.dumps(variables, indent=4).replace('callset.vcf', 'sv_callset.vcf').replace(
-            'WGS', 'WES').replace('SNV_INDEL', 'GCNV').replace('v01', 'v3.1')
+        variables = {
+            **variables,
+            'dataset_type': 'GCNV',
+            'callset_path': variables['callset_path'].replace('callset.vcf', 'sv_callset.vcf'),
+        }
+        self.assert_json_logs(self.data_manager_user, [
+            (f'Error triggering loading pipeline: {error}', {'severity': 'WARNING', 'detail': variables}),
+        ], offset=6)
+
         error_message = f"""ERROR triggering internal WES SV loading: {error}
 Loading pipeline should be triggered with:
-```{variables_json}```"""
+```{json.dumps(variables, indent=4)}```"""
         self.mock_slack.assert_called_once_with(SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, error_message)
         self.mock_slack.reset_mock()
 
