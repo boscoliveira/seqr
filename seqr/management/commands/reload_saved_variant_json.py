@@ -30,5 +30,5 @@ class Command(BaseCommand):
 
         family_ids = [family_guid] if family_guid else None
         project_list = [(*project, family_ids) for project in projects.order_by('id').values_list('id', 'guid', 'name', 'genome_version')]
-        update_projects_saved_variant_json(project_list, user_email='manage_command', update_function=update_project_saved_variant_json)
+        update_projects_saved_variant_json(project_list, update_function=update_project_saved_variant_json)
         logger.info("Done")

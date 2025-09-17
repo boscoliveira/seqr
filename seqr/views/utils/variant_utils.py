@@ -35,7 +35,7 @@ DISCOVERY_CATEGORY = 'CMG Discovery Tags'
 OMIM_GENOME_VERSION = GENOME_VERSION_GRCh38
 
 
-def update_projects_saved_variant_json(projects, user_email, update_function, **kwargs):
+def update_projects_saved_variant_json(projects, update_function, **kwargs):
     success = {}
     skipped = {}
     error = {}
@@ -43,7 +43,7 @@ def update_projects_saved_variant_json(projects, user_email, update_function, **
     for project_id, project_guid, project_name, genome_version, family_guids in tqdm(projects, unit=' project'):
         try:
             updated_saved_variants = update_function(
-                project_id, genome_version, user_email=user_email, family_guids=family_guids, project_guid=project_guid, **kwargs)
+                project_id, genome_version, family_guids=family_guids, project_guid=project_guid, **kwargs)
             if updated_saved_variants is None:
                 skipped[project_name] = True
             else:
