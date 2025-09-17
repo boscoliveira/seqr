@@ -413,7 +413,7 @@ class AnnotationsQuerySet(SearchQuerySet):
         except ValueError:
             return Q(**{score_column: value})
 
-    def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, gene_ids=None, intervals=None, exclude_intervals=False, padded_interval=None,  **kwargs):
+    def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, gene_ids=None, intervals=None, exclude_intervals=False, padded_interval_end=None,  **kwargs):
         transcript_field = self.transcript_field
         if self.model.GENOTYPE_OVERRIDE_FIELDS:
             results = results.annotate(**{
@@ -433,10 +433,10 @@ class AnnotationsQuerySet(SearchQuerySet):
             for interval_q in interval_qs:
                 gene_q |= interval_q
             results = results.filter(gene_q)
-        elif (interval_qs or padded_interval) and hasattr(self.model, 'end'):
-            if padded_interval:
-                padding = int((padded_interval['end'] - padded_interval['start']) * padded_interval['padding'])
-                interval_qs = [Q(end__range=(padded_interval['end'] - padding, padded_interval['end'] + padding))]
+        elif (interval_qs or padded_interval_end) and hasattr(self.model, 'end'):
+            if padded_interval_end:
+                end, padding = padded_interval_end
+                interval_qs = [Q(end__range=(end - padding, end + padding))]
             interval_q = interval_qs[0]
             for q in interval_qs[1:]:
                 interval_q |= q
@@ -724,7 +724,7 @@ class EntriesManager(SearchQuerySet):
 
         return entries
 
-    def result_values(self, sample_data):
+    def result_values(self, sample_data=None):
         entries = self._join_annotations(self)
         if sample_data:
             return self._search_call_data(entries, sample_data)
@@ -1043,18 +1043,14 @@ class EntriesManager(SearchQuerySet):
             mapped_expression='x.1', output_field=models.ArrayField(models.StringField()),
         )
 
-    def filter_locus(self, exclude_intervals=False, intervals=None, gene_intervals=None, gene_ids=None, variant_ids=None, padded_interval=None, require_gene_filter=False, **kwargs):
+    def filter_locus(self, exclude_intervals=False, intervals=None, gene_intervals=None, gene_ids=None, variant_ids=None, require_gene_filter=False, **kwargs):
         entries = self
         if variant_ids:
             # although technically redundant, the interval query is applied to the entries table before join and reduces the join size,
             # while the full variant_id filter is applied to the annotation table after the join
             intervals = [(chrom, pos, pos) for chrom, pos, _, _ in variant_ids]
 
-        if padded_interval:
-            pos = padded_interval['start']
-            padding = int((padded_interval['end'] - pos) * padded_interval['padding'])
-            intervals = [(padded_interval['chrom'], max(pos - padding, MIN_POS), min(pos + padding, MAX_POS))]
-        elif 'cn' in self.call_fields:
+        if 'cn' in self.call_fields:
             # SV interval filtering occurs after joining on annotations to correctly incorporate end position
             if exclude_intervals:
                 intervals = None
@@ -1095,6 +1091,10 @@ class EntriesManager(SearchQuerySet):
 
         filter_func = entries.exclude if exclude_intervals else entries.filter
         return filter_func(locus_q)
+
+    def search_padded_interval(self, chrom, pos, padding):
+        interval_q = self._interval_query(chrom, max(pos - padding, MIN_POS), min(pos + padding, MAX_POS))
+        return self.filter(interval_q).result_values()
 
     @staticmethod
     def _interval_query(chrom, start, end):
