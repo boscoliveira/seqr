@@ -145,14 +145,16 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
         logger.info('Triggered loading pipeline', user, detail=variables)
     except requests.HTTPError as e:
         success = False
+        error = str(e)
         if response.status_code == 409:
-            e = ErrorsWarningsException(['Loading pipeline is already running. Wait for it to complete and resubmit'])
+            error = 'Loading pipeline is already running. Wait for it to complete and resubmit'
+            e = ErrorsWarningsException([error])
         if raise_error:
             raise e
         else:
             safe_post_to_slack(
                 SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
-                f'{error_message}: {e}\nLoading pipeline should be triggered with following:\n```{json.dumps(variables, indent=4)}```',
+                f'{error_message}: {error}\nLoading pipeline should be triggered with following:\n```{json.dumps(variables, indent=4)}```',
             )
 
     if success_message and (success or success_slack_channel != SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):

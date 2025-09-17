@@ -1435,7 +1435,6 @@ class DataManagerAPITest(AirtableTest):
         self._assert_success_notification(dag_json)
 
         # Test loading trigger error
-        self._set_loading_trigger_error()
         self._set_file_not_found(has_mv_commands=True)
         mock_open.reset_mock()
         mock_gzip_open.reset_mock()
@@ -1487,11 +1486,39 @@ class DataManagerAPITest(AirtableTest):
         })
         self.assertEqual(len(responses.calls), 0)
 
+    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_validation=False):
+        projects = [PROJECT_GUID, NON_ANALYST_PROJECT_GUID]
+        if skip_project:
+            projects = projects[1:]
+        body = {
+            'projects_to_run': projects,
+            'callset_path': f'{self.TRIGGER_CALLSET_DIR}/{"sv_" if trigger_error else ""}callset.vcf',
+            'sample_type': sample_type,
+            'dataset_type': dataset_type,
+            'reference_genome': 'GRCh38',
+        }
+        if skip_validation:
+            body['skip_validation'] = True
+        self.assertDictEqual(json.loads(responses.calls[-1].request.body), body)
+
     def _trigger_error(self, url, body, dag_json, mock_open, mock_gzip_open, mock_mkdir):
+        responses.add(responses.POST, PIPELINE_RUNNER_URL, status=400)
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self._assert_expected_load_data_requests(trigger_error=True, dataset_type='GCNV', sample_type='WES')
-        self._assert_trigger_error(response, body, dag_json)
+        self._assert_trigger_error(response, body, dag_json, response_body={
+            'error': f'400 Client Error: Bad Request for url: {PIPELINE_RUNNER_URL}'
+        })
         self._has_expected_ped_files(mock_open, mock_gzip_open, mock_mkdir, 'GCNV', sample_type='WES')
+
+        self._set_file_not_found(has_mv_commands=True)
+        self.reset_logs()
+        responses.add(responses.POST, PIPELINE_RUNNER_URL, status=409)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self._assert_trigger_error(response, body, dag_json, response_body={
+            'errors': ['Loading pipeline is already running. Wait for it to complete and resubmit'], 'warnings': None,
+        })
+
+        responses.add(responses.POST, PIPELINE_RUNNER_URL)
 
     def _has_expected_ped_files(self, mock_open, mock_gzip_open, mock_mkdir, dataset_type, sample_type='WGS', single_project=False, has_remap=False, has_gene_id_file=False):
         mock_open.assert_has_calls([
@@ -1536,6 +1563,7 @@ class DataManagerAPITest(AirtableTest):
         self._has_expected_ped_files(mock_open, mock_gzip_open, mock_mkdir, 'SNV_INDEL', single_project=True, has_gene_id_file=True)
         # Only a DAG trigger, no airtable calls as there is no previously loaded WGS SNV_INDEL data for these samples
         self.assertEqual(len(responses.calls), 1)
+        self._assert_expected_load_data_requests(skip_project=True, trigger_error=True)
 
     def _test_no_affected_family(self, url, body):
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
@@ -1616,6 +1644,9 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
         self.mock_subprocess = patcher.start()
         self.mock_subprocess.side_effect = [self.mock_file_iter]
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.LOADING_DATASETS_DIR', self.TRIGGER_CALLSET_DIR)
+        patcher.start()
+        self.addCleanup(patcher.stop)
         super().setUp()
 
     def _set_file_not_found(self, file_name=None, sample_guid=None, list_files=False, has_mv_commands=False):
@@ -1640,22 +1671,9 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
     def _assert_expected_get_projects_requests(self):
         self.assertEqual(len(responses.calls), 0)
 
-    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_validation=False):
+    def _assert_expected_load_data_requests(self, *args, **kwargs):
         self.assertEqual(len(responses.calls), 1)
-        projects = [PROJECT_GUID, NON_ANALYST_PROJECT_GUID]
-        if skip_project:
-            projects = projects[1:]
-        body = {
-            'projects_to_run': projects,
-            'callset_path': '/local_datasets/sv_callset.vcf' if trigger_error else '/local_datasets/callset.vcf',
-            'sample_type': sample_type,
-            'dataset_type': dataset_type,
-            'reference_genome': 'GRCh38',
-        }
-        if skip_validation:
-            body['skip_validation'] = True
-        self.assertDictEqual(json.loads(responses.calls[0].request.body), body)
-
+        super()._assert_expected_load_data_requests(*args, **kwargs)
 
     @staticmethod
     def _local_pedigree_path(dataset_type, sample_type):
@@ -1673,19 +1691,9 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
         self.maxDiff = None
         self.assert_json_logs(self.pm_user, [('Triggered loading pipeline', {'detail': dag_json})])
 
-    def _set_loading_trigger_error(self):
-        responses.add(responses.POST, PIPELINE_RUNNER_URL, status=400)
-
     def _trigger_error(self, url, body, dag_json, mock_open, mock_gzip_open, mock_mkdir):
         super()._trigger_error(url, body, dag_json, mock_open, mock_gzip_open, mock_mkdir)
 
-        responses.add(responses.POST, PIPELINE_RUNNER_URL, status=409)
-        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-        self._assert_trigger_error(response, body, dag_json, response_body={
-            'errors': ['Loading pipeline is already running. Wait for it to complete and resubmit'], 'warnings': None,
-        })
-
-        responses.add(responses.POST, PIPELINE_RUNNER_URL)
         body['vcfSamples'] = body['vcfSamples'][:5]
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
@@ -1694,10 +1702,10 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
             'warnings': None,
         })
 
-    def _assert_trigger_error(self, response, body, *args, response_body=None, **kwargs):
+    def _assert_trigger_error(self, response, body, variables, response_body):
         self.assertEqual(response.status_code, 400)
-        error = f'400 Client Error: Bad Request for url: {PIPELINE_RUNNER_URL}'
-        self.assertDictEqual(response.json(), response_body or {'error': error})
+        self.assertDictEqual(response.json(), response_body)
+        error = response_body.get('error') or response_body['errors'][0]
         self.assert_json_logs(self.data_manager_user, [
             (error, {'severity': 'WARNING', 'requestBody': body, 'httpRequest': mock.ANY, 'traceback': mock.ANY}),
         ])
@@ -1706,10 +1714,6 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
         self.mock_subprocess.assert_has_calls([
             mock.call(f'dd skip=0 count=65537 bs=1 if={self.TRIGGER_CALLSET_DIR}{body["filePath"]} status="none" | gunzip -c - ', stdout=-1, stderr=-2, shell=True) # nosec
         ])
-
-    def _test_load_single_project(self, *args, **kwargs):
-        super()._test_load_single_project(*args, **kwargs)
-        self._assert_expected_load_data_requests(skip_project=True, trigger_error=True)
 
     def _assert_write_pedigree_error(self, response):
         self.assertEqual(response.status_code, 500)
@@ -1751,6 +1755,12 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         self.mock_file_iter.stdout = []
         self.mock_subprocess.side_effect = [self.mock_does_file_exist, self.mock_file_iter]
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.safe_post_to_slack')
+        self.mock_slack = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.LOADING_DATASETS_DIR', 'gs://seqr-loading-temp/v3.1')
+        patcher.start()
+        self.addCleanup(patcher.stop)
         super().setUp()
 
     def _set_file_not_found(self, file_name=None, sample_guid=None, list_files=False, has_mv_commands=False):
@@ -1773,6 +1783,7 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         ]
 
     def _set_file_found(self):
+        self.mock_subprocess.reset_mock()
         self.mock_does_file_exist.wait.return_value = 0
         self.mock_subprocess.side_effect = [
             self.mock_does_file_exist, self.mock_does_file_exist, self.mock_does_file_exist, self.mock_does_file_exist,
@@ -1846,14 +1857,19 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
             'skip_validation': True,
         }
 
-    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', **kwargs):
+    def _assert_expected_load_data_requests(self, *args, dataset_type='SNV_INDEL', skip_project=False, **kwargs):
+        num_calls = 1
         is_gcnv = dataset_type == 'GCNV'
         required_sample_field = 'gCNV_CallsetPath' if is_gcnv else None
-        self._assert_expected_airtable_call(required_sample_field, 'R0001_1kg')
-        if not is_gcnv:
+        if not skip_project:
+            self._assert_expected_airtable_call(required_sample_field, 'R0001_1kg')
+            num_calls += 1
+        if (not is_gcnv) and (not skip_project):
             self._assert_expected_airtable_vcf_id_call(required_sample_field, call_index=1)
-        self.ADDITIONAL_REQUEST_COUNT = 1 if is_gcnv else 2
-        self.assert_airflow_loading_calls(offset=self.ADDITIONAL_REQUEST_COUNT, dataset_type=dataset_type, **kwargs)
+            num_calls += 1
+
+        self.assertEqual(len(responses.calls), num_calls)
+        super()._assert_expected_load_data_requests(*args, dataset_type=dataset_type, skip_project=skip_project, **kwargs)
 
     def _assert_expected_airtable_call(self, required_sample_field, project_guid, call_index=0, additional_filter=None, additional_pdo_statuses='', additional_fields=None):
         airtable_filters = [
@@ -1879,41 +1895,28 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
             additional_pdo_statuses=",SEARCH('Methods (Loading)',ARRAYJOIN(PDOStatus,';')),SEARCH('On hold for phenotips, but ready to load',ARRAYJOIN(PDOStatus,';'))",
         )
 
-    def _set_loading_trigger_error(self):
-        self.set_dag_trigger_error_response(status=400)
-        self.mock_authorized_session.reset_mock()
-
     def _assert_success_notification(self, dag_json):
-        dag_json['sample_source'] = 'Broad_Internal'
-
         message = f"""*test_data_manager@broadinstitute.org* triggered loading internal WES SNV_INDEL data for 12 samples in 2 projects (1kg project nåme with uniçøde: 10; Non-Analyst Project: 2)
 
-        Pedigree files have been uploaded to gs://seqr-loading-temp/v3.1/GRCh38/SNV_INDEL/pedigrees/WES
+Pedigree files have been uploaded to gs://seqr-loading-temp/v3.1/GRCh38/SNV_INDEL/pedigrees/WES
 
-        DAG LOADING_PIPELINE is triggered with following:
-        ```{json.dumps(dag_json, indent=4)}```
-    """
+Loading pipeline is triggered with:
+```{json.dumps(dag_json, indent=4)}```"""
         self.mock_slack.assert_called_once_with(SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, message)
         self.mock_slack.reset_mock()
 
-    def _assert_trigger_error(self, response, body, dag_json, **kwargs):
+    def _assert_trigger_error(self, response, body, variables, response_body):
         self.assertEqual(response.status_code, 200)
-        self.assertDictEqual(response.json(), {'success': True})
+        self.assertDictEqual(response.json(), {'success': False})
 
-        self.mock_airflow_logger.warning.assert_not_called()
-        self.mock_airflow_logger.error.assert_called_with(mock.ANY, self.data_manager_user)
-        errors = [call.args[0] for call in self.mock_airflow_logger.error.call_args_list]
-        for error in errors:
-            self.assertRegex(error, '400 Client Error: Bad Request')
-
-        dag_json = json.dumps(dag_json, indent=4).replace('callset.vcf', 'sv_callset.vcf').replace(
+        error = response_body.get('error') or response_body['errors'][0]
+        variables_json = json.dumps(variables, indent=4).replace('callset.vcf', 'sv_callset.vcf').replace(
             'WGS', 'WES').replace('SNV_INDEL', 'GCNV').replace('v01', 'v3.1')
-        error_message = f"""ERROR triggering internal WES SV loading: {errors[0]}
-        
-        DAG LOADING_PIPELINE should be triggered with following:
-        ```{dag_json}```
-        """
+        error_message = f"""ERROR triggering internal WES SV loading: {error}
+Loading pipeline should be triggered with following:
+```{variables_json}```"""
         self.mock_slack.assert_called_once_with(SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, error_message)
+        self.mock_slack.reset_mock()
 
     def _trigger_error(self, url, body, dag_json, mock_open, mock_gzip_open, mock_mkdir):
         body['vcfSamples'] = None
@@ -1950,12 +1953,9 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         })
         self.assertEqual(len(responses.calls), 2)
         self._assert_expected_airtable_call(required_sample_field='SV_CallsetPath', project_guid='R0004_non_analyst_project')
-        self.mock_authorized_session.reset_mock()
 
     def _test_load_single_project(self, mock_open, mock_gzip_open, mock_mkdir, response, *args, url=None, body=None, **kwargs):
         super()._test_load_single_project(mock_open, mock_gzip_open, mock_mkdir, response, url, body)
-        self.ADDITIONAL_REQUEST_COUNT = 0
-        self.assert_airflow_loading_calls(offset=0, dataset_type='SNV_INDEL', trigger_error=True)
 
         responses.calls.reset()
         mock_open.reset_mock()
