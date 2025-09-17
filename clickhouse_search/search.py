@@ -29,10 +29,6 @@ SELECTED_GENE_FIELD = 'selectedGeneId'
 SELECTED_TRANSCRIPT_FIELD = 'selectedTranscript'
 
 
-def clickhouse_backend_enabled():
-    return bool(CLICKHOUSE_SERVICE_HOSTNAME)
-
-
 def get_clickhouse_variants(samples, search, user, previous_search_results, genome_version,page=1, num_results=100, sort=None, **kwargs):
     sample_data_by_dataset_type = _get_sample_data(samples)
     results = []
@@ -272,13 +268,15 @@ def get_transcripts_queryset(genome_version, keys):
     return TRANSCRIPTS_CLASS_MAP[genome_version].objects.filter(key__in=keys)
 
 
+def get_transcripts_by_key(genome_version, keys):
+    return dict(get_transcripts_queryset(genome_version, keys).values_list('key', 'transcripts'))
+
+
 def format_clickhouse_results(results, genome_version, **kwargs):
     keys_with_transcripts = {
         variant['key'] for result in results for variant in (result if isinstance(result, list) else [result]) if not 'transcripts' in variant
     }
-    transcripts_by_key = dict(
-        get_transcripts_queryset(genome_version, keys_with_transcripts).values_list('key', 'transcripts')
-    )
+    transcripts_by_key = get_transcripts_by_key(genome_version, keys_with_transcripts)
 
     formatted_results = []
     for variant in results:
@@ -528,7 +526,7 @@ def _get_sort_key(sort, gene_metadata):
     return lambda x: tuple(expr(x[0] if isinstance(x, list) else x) for expr in [*sort_expressions, lambda x: x[XPOS_SORT_KEY]])
 
 
-def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples):
+def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None):
     entry_cls = ENTRY_CLASS_MAP[genome_version][data_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][data_type]
 
@@ -554,10 +552,12 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples):
         variant = format_clickhouse_results([variant], genome_version)[0]
     return variant
 
-def clickhouse_variant_lookup(user, variant_id, data_type, genome_version=None, samples=None, **kwargs):
+def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version):
+    is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
+    data_type = f'{dataset_type}_{sample_type}' if is_sv else dataset_type
     logger.info(f'Looking up variant {variant_id} with data type {data_type}', user)
 
-    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples)
+    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type)
     if variant:
         _add_liftover_genotypes(variant, data_type, variant_id)
     else:
@@ -567,12 +567,29 @@ def clickhouse_variant_lookup(user, variant_id, data_type, genome_version=None, 
             liftover_results = run_liftover(lifted_genome_version, variant_id[0], variant_id[1])
             if liftover_results:
                 lifted_id = (liftover_results[0], liftover_results[1], *variant_id[2:])
-                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type, samples)
+                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type)
 
     if not variant:
         raise ObjectDoesNotExist('Variant not present in seqr')
 
-    return variant
+    variants = [variant]
+
+    if is_sv and variant['svType'] in {'DEL', 'DUP'}:
+        other_sample_type, other_entry_class = next(
+            (dt, cls) for dt, cls in ENTRY_CLASS_MAP[genome_version].items()
+            if dt != data_type and dt.startswith(Sample.DATASET_TYPE_SV_CALLS)
+        )
+        other_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][other_sample_type]
+
+        padding = int((variant['end'] - variant['pos']) * 0.2)
+        entries = other_entry_class.objects.search_padded_interval(variant['chrom'], variant['pos'], padding)
+        results = other_annotations_cls.objects.subquery_join(entries).search(
+            padded_interval_end=(variant['end'], padding),
+            annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
+        )
+        variants += list(results.result_values())
+
+    return variants
 
 
 def _add_liftover_genotypes(variant, data_type, variant_id):
