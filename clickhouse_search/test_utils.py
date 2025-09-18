@@ -388,12 +388,12 @@ GRCH37_VARIANT = {
             'familyGuid': 'F000002_2', 'numAlt': 2, 'dp': 16, 'gq': 48, 'ab': 1, 'filters': ['VQSRTrancheSNP99.90to99.95'],
         }, 'I000006_hg00733': {
             'sampleId': 'HG00733', 'sampleType': 'WES', 'individualGuid': 'I000006_hg00733',
-            'familyGuid': 'F000002_2', 'numAlt': 1, 'dp': 49, 'gq': 99, 'ab': 0.65306,
+            'familyGuid': 'F000002_2', 'numAlt': None, 'dp': None, 'gq': 0, 'ab': None,
             'filters': ['VQSRTrancheSNP99.90to99.95'],
         },
     },
     'populations': {
-        'seqr': {'ac': 3, 'hom': 1},
+        'seqr': {'ac': 2, 'hom': 1},
         'topmed': {'af': 0.52131897, 'ac': 65461, 'an': 125568, 'hom': 16156, 'het': 33149},
         'exac': {'af': 0.63, 'ac': 66593, 'an': 104352, 'hom': 22162, 'hemi': 0, 'het': 22269, 'filter_af': 0.81987739},
         'gnomad_exomes': {'af': 0.63542193, 'ac': 137532, 'an': 216442, 'hom': 45869, 'hemi': 0, 'filter_af': 0.82261163},

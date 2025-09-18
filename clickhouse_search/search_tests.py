@@ -498,6 +498,12 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             ],
         )
 
+        self._set_grch37_search()
+        self._assert_expected_search([], inheritance_mode=inheritance_mode)
+        self._assert_expected_search(
+            [GRCH37_VARIANT], inheritance_mode=inheritance_mode, inheritance_filter={'allowNoCall': True},
+        )
+
     def test_quality_filter(self):
         quality_filter = {'vcf_filter': 'pass'}
         self._assert_expected_search(

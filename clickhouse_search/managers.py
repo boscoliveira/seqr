@@ -873,6 +873,7 @@ class EntriesManager(SearchQuerySet):
                 gt_filter = (genotype_maps, 'has(arrayFlatten(arrayMap({value}[ifNull({field}, -1)])), x.sampleId)')
             inheritance_q = Q(calls__array_all={'gt': gt_filter})
 
+        #  TODO allowNoCall
         quality_q = self._quality_q(quality_filter, affected_samples, clinvar_override_q)
 
         return inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples
