@@ -77,7 +77,7 @@ def get_saved_variants(genome_version, project_id=None, family_guids=None, click
         saved_variants = saved_variants.filter(family__project_id=project_id)
     if family_guids:
         saved_variants = saved_variants.filter(family__guid__in=family_guids)
-    elif clickhouse_dataset_type:
+    if clickhouse_dataset_type:
         saved_variants = saved_variants.filter(dataset_type=clickhouse_dataset_type)
     return saved_variants
 
