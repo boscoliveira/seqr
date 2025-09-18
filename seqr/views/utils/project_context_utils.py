@@ -1,9 +1,11 @@
 from collections import defaultdict
 from django.db.models import Count, Q, F, prefetch_related_objects
+from django.contrib.postgres.aggregates import ArrayAgg
+from django.db.models.functions import JSONObject
 
-from clickhouse_search.search import get_transcripts_by_key
+from clickhouse_search.search import get_transcripts_by_key, get_annotations_queryset
 from seqr.models import Individual, IgvSample, AnalysisGroup, DynamicAnalysisGroup, LocusList, VariantTagType,\
-    VariantFunctionalData, FamilyNote, SavedVariant, VariantTag, VariantNote
+    VariantFunctionalData, FamilyNote, SavedVariant, VariantTag, VariantNote, Sample
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.search.utils import backend_specific_call
@@ -119,22 +121,22 @@ def families_discovery_tags(families, genome_version, project=None):
     families_by_guid = {f['familyGuid']: dict(discoveryTags=[], **f) for f in families}
 
     family_filter = {'family__project': project} if project else {'family__guid__in': families_by_guid.keys()}
-    discovery_tags_by_key = {v.pop('key'): v for v in SavedVariant.objects.filter(
+    discovery_variants = SavedVariant.objects.filter(
         varianttag__variant_tag_type__category='CMG Discovery Tags', **family_filter,
-    ).values(
-        'key', 'family__guid', selectedMainTranscriptId=F('selected_main_transcript_id'),
-        transcripts=F('saved_variant_json__transcripts'), mainTranscriptId=F('saved_variant_json__mainTranscriptId'),
-    )}
+    )
     try:
-        backend_specific_call(lambda *args: None, _add_clickhouse_transcripts)(discovery_tags_by_key, genome_version)
+        discovery_tags = backend_specific_call(_get_no_key_tags, _get_clickhouse_tags)(
+            discovery_variants, genome_version=genome_version,
+        )
     except Exception as e:
         logger.error(f'Error loading discovery genes from clickhouse: {e}', None)
+        discovery_tags = []
 
     gene_ids = set()
-    for tag in discovery_tags_by_key.values():
+    for tag in discovery_tags:
         tag['transcripts'] = tag.get('transcripts') or {}
         gene_ids.update(list(tag['transcripts'].keys()))
-        families_by_guid[tag.pop('family__guid')]['discoveryTags'].append(tag)
+        families_by_guid[tag.pop('family_guid')]['discoveryTags'].append(tag)
 
     return {
         'familiesByGuid': families_by_guid,
@@ -142,15 +144,37 @@ def families_discovery_tags(families, genome_version, project=None):
     }
 
 
-def _add_clickhouse_transcripts(discovery_tags_by_key, genome_version):
-    transcripts_by_key = get_transcripts_by_key(genome_version, discovery_tags_by_key.keys())
-    for key, tag in discovery_tags_by_key.items():
-        if key in transcripts_by_key:
+def _get_no_key_tags(discovery_variants, **kwargs):
+    return discovery_variants.values(
+        family_guid=F('family__guid'), selectedMainTranscriptId=F('selected_main_transcript_id'),
+        transcripts=F('saved_variant_json__transcripts'), mainTranscriptId=F('saved_variant_json__mainTranscriptId'),
+    )
+
+
+def _get_clickhouse_tags(discovery_variants, genome_version):
+    discovery_tags = list(_get_no_key_tags(discovery_variants.filter(key__isnull=True)))
+
+    tags_by_dataset_type = discovery_variants.filter(key__isnull=False).values('dataset_type').annotate(
+        keys=ArrayAgg('key', distinct=True),
+        tags=ArrayAgg(JSONObject(key='key', family_guid='family__guid', selectedMainTranscriptId='selected_main_transcript_id')),
+    )
+
+    for dataset_type, keys, tags in tags_by_dataset_type.values_list('dataset_type', 'keys', 'tags'):
+        if dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS:
+            transcripts_by_key = get_transcripts_by_key(genome_version, keys)
+        else:
+            qs = get_annotations_queryset(genome_version, dataset_type, keys)
+            transcripts_by_key = dict(qs.values_list('key', qs.transcript_field))
+        for tag in tags:
+            key = tag.pop('key')
             tag['transcripts'] = transcripts_by_key[key]
-            tag['mainTranscriptId'] = next(
+            tag['mainTranscriptId'] = next((
                 t['transcriptId'] for gene_transcripts in tag['transcripts'].values() for t in gene_transcripts
-                if t['transcriptRank'] == 0
-            )
+                if t.get('transcriptRank') == 0
+            ), None)
+            discovery_tags.append(tag)
+
+    return discovery_tags
 
 
 MME_TAG_NAME = 'MME Submission'
