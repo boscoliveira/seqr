@@ -13,7 +13,7 @@ from urllib3_mock import Responses
 
 from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchResults
 from seqr.utils.search.utils import get_single_variant, query_variants, \
-    get_variant_query_gene_counts, get_variants_for_variant_ids, InvalidSearchException
+    get_variant_query_gene_counts, get_es_variants_for_variant_ids, InvalidSearchException
 from seqr.utils.search.elasticsearch.es_search import _get_family_affected_status
 from seqr.utils.search.elasticsearch.es_utils import InvalidIndexException
 from seqr.utils.search.utils import _get_liftover
@@ -1394,9 +1394,10 @@ class EsUtilsTest(TestCase):
     @urllib3_responses.activate
     def test_get_es_variants_for_variant_ids(self):
         setup_responses()
-        get_variants_for_variant_ids(self.families, ['2-103343353-GAGA-G', '1-248367227-TC-T', 'prefix-938_DEL'])
+        samples = Sample.objects.filter(individual__family__in=self.families).exclude(dataset_type='MITO')
+        get_es_variants_for_variant_ids(samples, '37', ['2-103343353-GAGA-G', '1-248367227-TC-T', 'prefix-938_DEL'], None)
         self.assertExecutedSearch(
-            filters=[{'terms': {'variantId': ['2-103343353-GAGA-G', '1-248367227-TC-T', 'prefix-938_DEL']}}],
+            filters=[{'terms': {'variantId': ['1-248367227-TC-T', '2-103343353-GAGA-G', 'prefix-938_DEL']}}],
             size=6, index=','.join([INDEX_NAME, SV_INDEX_NAME]),
         )
 
@@ -1513,6 +1514,7 @@ class EsUtilsTest(TestCase):
             query_variants(results_model)
         self.assertEqual(str(cm.exception), 'Could not find expected indices: test_index_sv, test_index_mito_wgs, test_index')
 
+    @mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 100)
     @urllib3_responses.activate
     def test_get_es_variants(self):
         setup_responses()
@@ -1554,16 +1556,14 @@ class EsUtilsTest(TestCase):
 
         # test load_all
         setup_responses()
-        with mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 100):
-            variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
+        variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
         self.assertExecutedSearch(filters=[ANNOTATION_QUERY, ALL_INHERITANCE_QUERY], start_index=4, size=1)
         self.assertEqual(len(variants), 5)
         self.assertListEqual(variants, PARSED_VARIANTS + PARSED_VARIANTS + PARSED_VARIANTS[:1])
 
         # test does not re-fetch once all loaded
         urllib3_responses.reset()
-        with mock.patch('seqr.utils.search.utils.MAX_VARIANTS', 1):
-            variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
+        variants, _ = query_variants(results_model, page=1, num_results=2, load_all=True)
         self.assertEqual(len(variants), 5)
         self.assertListEqual(variants, PARSED_VARIANTS + PARSED_VARIANTS + PARSED_VARIANTS[:1])
 
@@ -2859,11 +2859,11 @@ class EsUtilsTest(TestCase):
 
         _, total_results = query_variants(results_model, num_results=2)
         self.assertEqual(total_results, 14)
-        self.assertTrue('index_metadata__{},{},{}'.format(INDEX_NAME, MITO_WGS_INDEX_NAME, SV_INDEX_NAME) in REDIS_CACHE)
+        self.assertTrue('index_metadata__{},{},{}'.format(INDEX_NAME, SECOND_INDEX_NAME, SV_INDEX_NAME) in REDIS_CACHE)
 
         gene_filter = {'terms': {'geneIds': ['ENSG00000228198']}}
         prefilter_search = dict(
-            filters=[gene_filter], index=f'{SV_INDEX_NAME},{MITO_WGS_INDEX_NAME},{SECOND_INDEX_NAME},{INDEX_NAME}',
+            filters=[gene_filter], index=f'{SV_INDEX_NAME},{SECOND_INDEX_NAME},{INDEX_NAME}',
             size=200, expected_source_fields=set(),
         )
         sv_search = dict(
@@ -2910,24 +2910,6 @@ class EsUtilsTest(TestCase):
                         '_name': 'F000011_11'
                     }}
             ], start_index=0, size=2, index=SECOND_INDEX_NAME),
-            dict(filters=[
-                gene_filter,
-                {
-                    'bool': {'must': [
-                        {'bool': {'should': [
-                            {'term': {'samples_num_alt_1': 'HG00731'}},
-                            {'term': {'samples_num_alt_2': 'HG00731'}},
-                        ]}}, {'bool': {'must_not': [
-                            {'term': {'samples_gq_0_to_5': 'HG00731'}},
-                            {'term': {'samples_gq_5_to_10': 'HG00731'}},
-                            {'term': {'samples_gq_0_to_5': 'HG00732'}},
-                            {'term': {'samples_gq_5_to_10': 'HG00732'}},
-                            {'term': {'samples_gq_0_to_5': 'HG00733'}},
-                            {'term': {'samples_gq_5_to_10': 'HG00733'}},
-                        ]}}
-                    ],
-                        '_name': 'F000002_2'
-                    }}], start_index=0, size=2, index=MITO_WGS_INDEX_NAME),
             dict(filters=[
                     gene_filter,
                     {'bool': {'should': [
@@ -3018,13 +3000,14 @@ class EsUtilsTest(TestCase):
         expected_transcript_variant['selectedMainTranscriptId'] = PARSED_VARIANTS[1]['selectedMainTranscriptId']
         self.assertListEqual(variants, [expected_transcript_variant, PARSED_MULTI_INDEX_VARIANT])
         self.assertExecutedSearch(
-            index=','.join([INDEX_NAME, MITO_WGS_INDEX_NAME, SECOND_INDEX_NAME]),
+            index=','.join([INDEX_NAME, SECOND_INDEX_NAME]),
             filters=[{'terms': {'geneIds': ['ENSG00000228198']}}, ANNOTATION_QUERY],
             size=3,
         )
 
         # test with inheritance override
         search_model.search['inheritance'] = {'mode': 'any_affected'}
+        search_model.search['locus'] = None
         search_model.save()
         _set_cache('search_results__{}__xpos'.format(results_model.guid), None)
         query_variants(results_model, num_results=2, skip_genotype_filter=True)
@@ -3032,7 +3015,6 @@ class EsUtilsTest(TestCase):
         self.assertExecutedSearches([
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [
@@ -3044,7 +3026,6 @@ class EsUtilsTest(TestCase):
                 ], start_index=0, size=2, index=SECOND_INDEX_NAME),
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [
@@ -3056,7 +3037,6 @@ class EsUtilsTest(TestCase):
                 ], start_index=0, size=2, index=MITO_WGS_INDEX_NAME),
             dict(
                 filters=[
-                    {'terms': {'geneIds': ['ENSG00000228198']}},
                     ANNOTATION_QUERY,
                     {'bool': {
                         'should': [

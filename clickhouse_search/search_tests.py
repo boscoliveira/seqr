@@ -14,11 +14,12 @@ from clickhouse_search.test_utils import VARIANT1, VARIANT2, VARIANT3, VARIANT4,
     SV_VARIANT1, SV_VARIANT2, SV_VARIANT3, SV_VARIANT4, SV_GENE_COUNTS, NEW_SV_FILTER, GCNV_VARIANT1, GCNV_VARIANT2, \
     GCNV_VARIANT3, GCNV_VARIANT4, GCNV_MULTI_FAMILY_VARIANT1, GCNV_MULTI_FAMILY_VARIANT2, GCNV_GENE_COUNTS, \
     MULTI_DATA_TYPE_COMP_HET_VARIANT2, ALL_SNV_INDEL_PASS_FILTERS, MULTI_PROJECT_GCNV_VARIANT3, VARIANT_LOOKUP_VARIANT, \
-    MITO_GENE_COUNTS, PROJECT_4_COMP_HET_VARIANT, format_cached_variant
+    MITO_GENE_COUNTS, PROJECT_4_COMP_HET_VARIANT, SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT_3, \
+    format_cached_variant
 from reference_data.models import Omim
 from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchResults
 from seqr.utils.search.search_utils_tests import SearchTestHelper
-from seqr.utils.search.utils import query_variants, variant_lookup, sv_variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
+from seqr.utils.search.utils import query_variants, variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
 
@@ -664,50 +665,45 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         mock_convert_coordinate = mock_liftover.return_value.convert_coordinate
         mock_convert_coordinate.side_effect = lambda chrom, pos: [(chrom, pos + 10000)]
 
-        variant = variant_lookup(self.user, ('1', 10439, 'AC', 'A'))
-        self._assert_expected_variants([variant], [VARIANT_LOOKUP_VARIANT])
+        variants = variant_lookup(self.user, '1-10439-AC-A', '38')
+        self._assert_expected_variants(variants, [VARIANT_LOOKUP_VARIANT])
 
         with self.assertRaises(ObjectDoesNotExist) as cm:
-            variant_lookup(self.user, ('1', 91511686, 'TCA', 'G'))
+            variant_lookup(self.user, '1-91511686-TCA-G', '38')
         self.assertEqual(str(cm.exception), 'Variant not present in seqr')
 
-        variant = variant_lookup(self.user, ('7', 143270172, 'A', 'G'), genome_version='37')
+        variants = variant_lookup(self.user, '7-143270172-A-G', '37')
         grch37_lookup_variant = {
             **{k: v for k, v in GRCH37_VARIANT.items() if k not in {'familyGuids', 'genotypes'}},
             'familyGenotypes': {GRCH37_VARIANT['familyGuids'][0]: sorted([
                 {k: v for k, v in g.items() if k != 'individualGuid'} for g in GRCH37_VARIANT['genotypes'].values()
             ], key=lambda x: x['sampleId'], reverse=True)},
         }
-        self._assert_expected_variants([variant], [grch37_lookup_variant])
+        self._assert_expected_variants(variants, [grch37_lookup_variant])
 
         # Lookup works if variant is only present on a different build
-        variant = variant_lookup(self.user, ('7', 143260172, 'A', 'G'))
-        self._assert_expected_variants([variant], [grch37_lookup_variant])
+        variants = variant_lookup(self.user, '7-143260172-A-G', '38')
+        self._assert_expected_variants(variants, [grch37_lookup_variant])
         mock_liftover.assert_called_with('hg38', 'hg19')
         mock_convert_coordinate.assert_called_with('chr7', 143260172)
 
-        variant = variant_lookup(self.user, ('M', 4429, 'G', 'A'), genome_version='38')
-        self._assert_expected_variants([variant], [{
+        variants = variant_lookup(self.user, 'M-4429-G-A', '38')
+        self._assert_expected_variants(variants, [{
             **{k: v for k, v in MITO_VARIANT1.items() if k not in {'familyGuids', 'genotypes'}},
             'familyGenotypes': {MITO_VARIANT1['familyGuids'][0]: [
                 {k: v for k, v in g.items() if k != 'individualGuid'} for g in MITO_VARIANT1['genotypes'].values()
             ]},
         }])
 
-        families = Family.objects.all()
-        variants = sv_variant_lookup(self.user, 'phase2_DEL_chr14_4640', families, sample_type='WGS')
-        self._assert_expected_variants(variants, [SV_VARIANT4, GCNV_VARIANT4])
+        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
+        self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
 
         # reciprocal overlap does not meet the threshold for smaller events
-        variants = sv_variant_lookup(self.user, 'suffix_140608_DUP', families, sample_type='WES')
-        self._assert_expected_variants(variants, [GCNV_VARIANT4])
+        variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES')
+        self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT])
 
-        variants = sv_variant_lookup(self.user, 'suffix_140593_DUP', families, sample_type='WES')
-        self._assert_expected_variants(variants, [GCNV_VARIANT3])
-
-        with self.assertRaises(ObjectDoesNotExist) as cm:
-            variant_lookup(self.user, ('5', 143270172, 'A', 'G'))
-        self.assertEqual(str(cm.exception), 'Variant not present in seqr')
+        variants = variant_lookup(self.user, 'suffix_140593_DUP', '38', sample_type='WES')
+        self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT_3])
 
     def test_get_single_variant(self):
         self._set_single_family_search()
