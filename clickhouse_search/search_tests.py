@@ -586,7 +586,14 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             [VARIANT2, selected_family_3_variant, MITO_VARIANT1], quality_filter=quality_filter,
             annotations=annotations, pathogenicity={'clinvar': ['pathogenic']}, cached_variant_fields=cached_variant_fields[1:],
         )
-#
+
+        self._set_grch37_search()
+        quality_filter = {'min_gq': 1, 'min_ab': 10}
+        self._assert_expected_search([], quality_filter=quality_filter, annotations=None, pathogenicity=None)
+        self._assert_expected_search(
+            [GRCH37_VARIANT], quality_filter=quality_filter, inheritance_filter={'allowNoCall': True},
+        )
+
     def test_location_search(self):
         self._assert_expected_search(
             [MULTI_FAMILY_VARIANT, VARIANT4], **LOCATION_SEARCH, cached_variant_fields=[
