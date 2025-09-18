@@ -2,6 +2,9 @@
 
 ## dev
 
+## 9/18/25
+# Deprecate hail backend support
+
 ## 8/7/25
 * Deprecate support for lifting existing projects from GRCH37 to GRCh38
 
