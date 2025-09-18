@@ -827,6 +827,7 @@ class EntriesManager(SearchQuerySet):
         unaffected_samples = []
         family_missing_type_samples = defaultdict(lambda: defaultdict(list))
         custom_affected = inheritance_filter.get('affected') or {}
+        allow_no_call = inheritance_filter.get('allowNoCall')
         for sample in sample_data['samples']:
             affected = custom_affected.get(sample['individual_guid']) or sample['affected']
             genotype = self._sample_genotype(sample, affected, inheritance_mode, individual_genotype_filter)
@@ -851,7 +852,7 @@ class EntriesManager(SearchQuerySet):
             })
         elif samples_by_genotype:
             genotype_lookup = self.genotype_lookup
-            if inheritance_filter.get('allowNoCall') and inheritance_mode:
+            if allow_no_call and inheritance_mode:
                 unaffected_genotype = self.INHERITANCE_FILTERS.get(inheritance_mode, {}).get(UNAFFECTED)
                 if unaffected_genotype and -1 not in genotype_lookup[unaffected_genotype]:
                     genotype_lookup = {**genotype_lookup, unaffected_genotype: [-1] + genotype_lookup[unaffected_genotype]}
@@ -873,8 +874,7 @@ class EntriesManager(SearchQuerySet):
                 gt_filter = (genotype_maps, 'has(arrayFlatten(arrayMap({value}[ifNull({field}, -1)])), x.sampleId)')
             inheritance_q = Q(calls__array_all={'gt': gt_filter})
 
-        #  TODO allowNoCall
-        quality_q = self._quality_q(quality_filter, affected_samples, clinvar_override_q)
+        quality_q = self._quality_q(quality_filter, allow_no_call, affected_samples, clinvar_override_q)
 
         return inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples
 
@@ -888,7 +888,7 @@ class EntriesManager(SearchQuerySet):
                 genotype = REF_REF
         return genotype
 
-    def _quality_q(self, quality_filter, affected_samples, clinvar_override_q):
+    def _quality_q(self, quality_filter, allow_no_call, affected_samples, clinvar_override_q):
         quality_filter_conditions = {}
 
         for field, scale, *filters in self.quality_filters:
@@ -898,6 +898,8 @@ class EntriesManager(SearchQuerySet):
             value = quality_filter.get(filter_key)
             if value:
                 or_filters = ['isNull({field})', '{field} >= {value}'] + filters
+                if allow_no_call:
+                    or_filters.append('isNull(x.gt)')
                 quality_filter_conditions[field] = (value / scale, f'or({", ".join(or_filters)})')
 
         if not quality_filter_conditions:
