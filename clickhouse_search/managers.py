@@ -1117,11 +1117,7 @@ class EntriesManager(SearchQuerySet):
         return self.filter(interval_q).result_values()
 
     @staticmethod
-    def _interval_query(chrom, start, end, offset=None, **kwargs):
-        if offset:
-            offset_pos = int((end - start) * offset)
-            start = max(start - offset_pos, MIN_POS)
-            end = min(end + offset_pos, MAX_POS)
+    def _interval_query(chrom, start, end, **kwargs):
         return Q(xpos__range=(get_xpos(chrom, start), get_xpos(chrom, end)))
 
     def _filter_seqr_frequency(self, entries, ac=None, hh=None, **kwargs):

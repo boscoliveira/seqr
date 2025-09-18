@@ -25,10 +25,9 @@ def _post_to_slack(channel, message):
         return None
 
     slack = Slacker(SLACK_TOKEN)
-    response = slack.chat.post_message(
+    slack.chat.post_message(
         channel, message, as_user=False, icon_emoji=":beaker:", username="Beaker (engineering-minion)",
     )
-    return response.raw
 
 
 def send_welcome_email(user, referrer):

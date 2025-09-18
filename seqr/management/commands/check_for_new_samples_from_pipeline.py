@@ -36,7 +36,6 @@ CLICKHOUSE_DATASET_TYPE_MAP = {
     'GCNV': f'{Sample.DATASET_TYPE_SV_CALLS}_WES',
     Sample.DATASET_TYPE_SV_CALLS: f'{Sample.DATASET_TYPE_SV_CALLS}_WGS',
 }
-USER_EMAIL = 'manage_command'
 RELATEDNESS_CHECK_NAME = 'relatedness_check'
 
 PDO_COPY_FIELDS = [
@@ -255,7 +254,7 @@ class Command(BaseCommand):
         # Reload saved variant JSON
         update_projects_saved_variant_json([
             (project.id, project.guid, project.name, project.genome_version, families) for project, families in families_by_project.items()
-        ], user_email=USER_EMAIL, dataset_type=dataset_type, update_function=cls._update_project_saved_variant_genotypes, samples=updated_samples, clickhouse_dataset_type=clickhouse_dataset_type)
+        ], dataset_type=dataset_type, update_function=cls._update_project_saved_variant_genotypes, samples=updated_samples, clickhouse_dataset_type=clickhouse_dataset_type)
 
     @classmethod
     def _is_internal_project(cls, project):
@@ -390,7 +389,7 @@ class Command(BaseCommand):
             )
 
     @classmethod
-    def _update_project_saved_variant_genotypes(cls, project_id, genome_version, user_email, family_guids, project_guid, samples=None, clickhouse_dataset_type=None, **kwargs):
+    def _update_project_saved_variant_genotypes(cls, project_id, genome_version, family_guids, project_guid, samples=None, clickhouse_dataset_type=None, **kwargs):
         updates = {}
         for family_guid in family_guids:
             variant_models_by_key = {

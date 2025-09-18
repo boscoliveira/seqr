@@ -451,12 +451,6 @@ class LocalDatasetAPITest(AuthenticationTestCase, DatasetAPITest):
     fixtures = ['users', '1kg_project']
 
 
-def assert_no_anvil_calls(self):
-    self.mock_list_workspaces.assert_not_called()
-    self.mock_get_ws_access_level.assert_not_called()
-    self.assert_no_extra_anvil_calls()
-
-
 # Test for permissions from AnVIL only
 class AnvilDatasetAPITest(AnvilAuthenticationTestCase, DatasetAPITest):
     fixtures = ['users', 'social_auth', '1kg_project']
