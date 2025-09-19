@@ -14,7 +14,8 @@ from seqr.models import Sample
 from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFECTED, UNAFFECTED, MALE_SEXES, \
     X_LINKED_RECESSIVE, REF_REF, REF_ALT, ALT_ALT, HAS_ALT, HAS_REF, SPLICE_AI_FIELD, SCREEN_KEY, UTR_ANNOTATOR_KEY, \
     EXTENDED_SPLICE_KEY, MOTIF_FEATURES_KEY, REGULATORY_FEATURES_KEY, CLINVAR_KEY, HGMD_KEY, NEW_SV_FIELD, \
-    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, PATH_FREQ_OVERRIDE_CUTOFF, \
+    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_VUS_FILTER, \
+    CLINVAR_CONFLICTING_NOT_BENIGN_FILTER, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
@@ -62,6 +63,11 @@ class SearchQuerySet(QuerySet):
         ranges = [r for r in ranges if r[0] is not None]
 
         clinvar_qs = [cls._clinvar_range_q(path_range) for path_range in ranges]
+
+        if CLINVAR_CONFLICTING_NOT_BENIGN_FILTER in clinvar_filters:
+            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_VUS_FILTER)
+            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: (max_path, "{field} <= '{value}'")}))
+
         clinvar_q = clinvar_qs[0]
         for q in clinvar_qs[1:]:
             clinvar_q |= q
@@ -616,9 +622,13 @@ class AnnotationsQuerySet(SearchQuerySet):
             return ('{field}__classification__range', (min_class, max_class))
         return ('{field}__classification__gt', min_class)
 
-    @classmethod
-    def _clinvar_range_q(cls, path_range):
+    @staticmethod
+    def _clinvar_range_q(path_range):
         return Q(clinvar__0__range=path_range, clinvar_key__isnull=False)
+
+    @staticmethod
+    def _clinvar_conflicting_path_filter(conflicting_filter):
+        return Q(clinvar__5__array_exists=conflicting_filter, clinvar_key__isnull=False)
 
     def explode_gene_id(self, gene_id_key):
         consequence_field = self.GENE_CONSEQUENCE_FIELD if self.has_annotation(self.GENE_CONSEQUENCE_FIELD) else self.transcript_field
@@ -752,9 +762,13 @@ class EntriesManager(SearchQuerySet):
     def _has_clinvar(self):
         return hasattr(self.model, 'clinvar_join')
 
-    @classmethod
-    def _clinvar_range_q(cls, path_range):
+    @staticmethod
+    def _clinvar_range_q(path_range):
         return Q(clinvar_join__pathogenicity__range=path_range)
+
+    @staticmethod
+    def _clinvar_conflicting_path_filter(conflicting_filter):
+        return Q(clinvar_join__conflicting_pathogenicities__array_exists=conflicting_filter)
 
     def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, skip_individual_guid=False, **kwargs):
        project_guids = sample_data['project_guids']
