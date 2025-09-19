@@ -340,23 +340,21 @@ def _get_clickhouse_exclude_keys(search_hash, user, genome_version):
     exclude_key_pairs = defaultdict(list)
     for variant in results:
         if isinstance(variant, list):
-            dt1, key1 = _parse_variant_key(variant[0])
-            dt2, key2 = _parse_variant_key(variant[1])
+            dt1= variant_dataset_type(variant[0])
+            dt2 = variant_dataset_type(variant[1])
             dataset_type = dt1 if dt1 == dt2 else ','.join(sorted([dt1, dt2]))
-            exclude_key_pairs[dataset_type].append(sorted([key1, key2]))
+            exclude_key_pairs[dataset_type].append(sorted([variant[0]['key'], variant[1]['key']]))
         else:
-            dataset_type, key = _parse_variant_key(variant)
-            exclude_keys[dataset_type].append(key)
+            dataset_type = variant_dataset_type(variant)
+            exclude_keys[dataset_type].append(variant['key'])
     return {'exclude_keys': exclude_keys, 'exclude_key_pairs': exclude_key_pairs}
 
 
-def _parse_variant_key(variant):
-    parsed_variant_id = parse_variant_id(variant['variantId'])
-    dataset_type = DATASET_TYPES_LOOKUP[_variant_ids_dataset_type([parsed_variant_id])][0]
-    if dataset_type == Sample.DATASET_TYPE_SV_CALLS:
-        sample_type = next(g['sampleType'] for g in variant['genotypes'].values())
-        dataset_type = f'{dataset_type}_{sample_type}'
-    return dataset_type, variant['key']
+def variant_dataset_type(variant):
+    if not parse_variant_id(variant['variantId']):
+        sample_type = Sample.SAMPLE_TYPE_WGS if 'endChrom' in variant else Sample.SAMPLE_TYPE_WES
+        return f'{Sample.DATASET_TYPE_SV_CALLS}_{sample_type}'
+    return Sample.DATASET_TYPE_MITO_CALLS if 'mitomapPathogenic' in variant else Sample.DATASET_TYPE_VARIANT_CALLS
 
 
 def get_variant_query_gene_counts(search_model, user):
