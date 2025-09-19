@@ -124,7 +124,7 @@
       ],
       "sorted_transcript_consequences": [
         [null, null, ["splice_donor_variant"], true, null, "ENSG00000097046"],
-        [null, 1, ["missense_variant"], false, null, "ENSG00000097046"],
+        [0.1, 1, ["missense_variant"], false, null, "ENSG00000097046"],
         [null, null, ["missense_variant"], false, null, "ENSG00000097046"]
       ],
       "sorted_motif_feature_consequences": [
