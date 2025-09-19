@@ -393,13 +393,14 @@ class AnnotationsQuerySet(SearchQuerySet):
         return results
 
     def _filter_in_silico(self, results, in_silico=None, **kwargs):
+        in_silico = in_silico or {}
         require_score = in_silico.get('requireScore', False)
 
         in_silico_q = None
-        if (in_silico or {}).get('alphamissense'):
+        if in_silico.get('alphamissense'):
             in_silico_q = self._alphamissense_q(in_silico['alphamissense'], require_score)
 
-        for score, value in (in_silico or {}).items():
+        for score, value in in_silico.items():
             score_q = self._get_in_silico_score_q(score, value)
             if in_silico_q is None:
                 in_silico_q = score_q
