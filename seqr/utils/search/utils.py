@@ -295,7 +295,9 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
 
     exclude_previous = exclude.pop('previousSearch', None)
     if (exclude_previous or {}).get('shouldExclude'):
-        parsed_search['exclude_keys'] = backend_specific_call(lambda *args: None, _get_clickhouse_search_keys)(exclude_previous['searchHash'])
+        parsed_search.update(backend_specific_call(
+            lambda *args: {}, _get_clickhouse_exclude_keys,
+        )(exclude_previous['searchHash'], user, genome_version))
 
     for annotation_key in ['annotations', 'annotations_secondary']:
         if parsed_search.get(annotation_key):
@@ -327,12 +329,34 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
     return variant_results, previous_search_results.get('total_results')
 
 
-def _get_clickhouse_search_keys(search_hash):
+def _get_clickhouse_exclude_keys(search_hash, user, genome_version):
     previous_search_model = VariantSearchResults.objects.get(search_hash=search_hash)
     cached_results = _get_any_sort_cached_results(previous_search_model)
     if cached_results:
-        return {v['key'] for variants in cached_results['all_results'] for v in (variants if isinstance(variants, list) else [variants])}
-    raise NotImplementedError  # TODO
+        results = cached_results['all_results']
+    else:
+        results, _ = _query_variants(previous_search_model, user, {}, genome_version)
+    exclude_keys = defaultdict(list)
+    exclude_key_pairs = defaultdict(list)
+    for variant in results:
+        if isinstance(variant, list):
+            dt1, key1 = _parse_variant_key(variant[0])
+            dt2, key2 = _parse_variant_key(variant[1])
+            dataset_type = dt1 if dt1 == dt2 else ','.join(sorted([dt1, dt2]))
+            exclude_key_pairs[dataset_type].append(sorted([key1, key2]))
+        else:
+            dataset_type, key = _parse_variant_key(variant)
+            exclude_keys[dataset_type].append(key)
+    return {'exclude_keys': exclude_keys, 'exclude_key_pairs': exclude_key_pairs}
+
+
+def _parse_variant_key(variant):
+    parsed_variant_id = parse_variant_id(variant['variantId'])
+    dataset_type = DATASET_TYPES_LOOKUP[_variant_ids_dataset_type([parsed_variant_id])][0]
+    if dataset_type == Sample.DATASET_TYPE_SV_CALLS:
+        sample_type = next(g['sampleType'] for g in variant['genotypes'].values())
+        dataset_type = f'{dataset_type}_{sample_type}'
+    return dataset_type, variant['key']
 
 
 def get_variant_query_gene_counts(search_model, user):
