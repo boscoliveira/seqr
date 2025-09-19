@@ -7,7 +7,7 @@ from pyliftover.liftover import LiftOver
 from clickhouse_search.search import get_clickhouse_variants, format_clickhouse_results, \
     get_clickhouse_cache_results, clickhouse_variant_lookup, get_clickhouse_variant_by_id
 from reference_data.models import GENOME_VERSION_GRCh38, GENOME_VERSION_GRCh37
-from seqr.models import Sample, Individual, Project
+from seqr.models import Sample, Individual, Project, VariantSearchResults
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.redis_utils import safe_redis_get_json, safe_redis_get_wildcard_json, safe_redis_set_json
 from seqr.utils.search.constants import XPOS_SORT_KEY, PRIORITIZED_GENE_SORT, RECESSIVE, COMPOUND_HET, \
@@ -293,6 +293,10 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
         if duplicates:
             raise InvalidSearchException(f'ClinVar pathogenicity {", ".join(sorted(duplicates))} is both included and excluded')
 
+    exclude_previous = exclude.pop('previousSearch', None)
+    if (exclude_previous or {}).get('shouldExclude'):
+        parsed_search['exclude_keys'] = backend_specific_call(lambda *args: None, _get_clickhouse_search_keys)(exclude_previous['searchHash'])
+
     for annotation_key in ['annotations', 'annotations_secondary']:
         if parsed_search.get(annotation_key):
             parsed_search[annotation_key] = {k: v for k, v in parsed_search[annotation_key].items() if v}
@@ -321,6 +325,14 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
     safe_redis_set_json(cache_key, previous_search_results, expire=timedelta(weeks=2))
 
     return variant_results, previous_search_results.get('total_results')
+
+
+def _get_clickhouse_search_keys(search_hash):
+    previous_search_model = VariantSearchResults.objects.get(search_hash=search_hash)
+    cached_results = _get_any_sort_cached_results(previous_search_model)
+    if cached_results:
+        return {v['key'] for variants in cached_results['all_results'] for v in (variants if isinstance(variants, list) else [variants])}
+    raise NotImplementedError  # TODO
 
 
 def get_variant_query_gene_counts(search_model, user):
