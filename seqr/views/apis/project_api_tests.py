@@ -390,7 +390,7 @@ class ProjectAPITest(object):
         gene_ids = self._assert_expected_project_families(url, response_keys)
         self.assertSetEqual(gene_ids, {'ENSG00000135953', 'ENSG00000240361'})
 
-    def _assert_expected_project_families(self, url, response_keys):
+    def _assert_expected_project_families(self, url, response_keys, no_discovery_tags=False):
         response = self.client.get(url)
         self.assertEqual(response.status_code, 200)
 
@@ -436,12 +436,14 @@ class ProjectAPITest(object):
 
         self.assertListEqual(family_3['discoveryTags'], [])
         self.assertListEqual(empty_family['discoveryTags'], [])
-        self.assertListEqual(family_1['discoveryTags'], [{
+        family_1_tags = [] if no_discovery_tags else [{
             'transcripts': {'ENSG00000135953': [mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY]},
             'mainTranscriptId': 'ENST00000258436',
             'selectedMainTranscriptId': None,
-        }])
-        self.assertListEqual(response_json['familiesByGuid']['F000002_2']['discoveryTags'], [self.DISCOVERY_TAG])
+        }]
+        self.assertListEqual(family_1['discoveryTags'], family_1_tags)
+        family_2_tags = [] if no_discovery_tags else [self.DISCOVERY_TAG]
+        self.assertListEqual(response_json['familiesByGuid']['F000002_2']['discoveryTags'], family_2_tags)
         no_discovery_families = set(response_json['familiesByGuid'].keys()) - {'F000001_1', 'F000002_2'}
         self.assertSetEqual({
             len(response_json['familiesByGuid'][family_guid]['discoveryTags']) for family_guid in no_discovery_families
@@ -802,8 +804,8 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
         self.reset_logs()
         connections['clickhouse'].close()
         self.DISCOVERY_TAG = {**DISCOVERY_TAG, 'transcripts': {}}
-        no_clickhouse_gene_ids = super()._assert_expected_project_families(*args, **kwargs)
-        self.assertSetEqual(no_clickhouse_gene_ids, {'ENSG00000135953'})
+        no_clickhouse_gene_ids = super()._assert_expected_project_families(*args, **kwargs, no_discovery_tags=True)
+        self.assertSetEqual(no_clickhouse_gene_ids, set())
         self.assert_json_logs(None, [
             ("Error loading discovery genes from clickhouse: An error occurred in the current transaction. You can't execute queries until the end of the 'atomic' block.", {
                 'severity': 'ERROR',

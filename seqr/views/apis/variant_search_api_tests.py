@@ -327,20 +327,17 @@ class VariantSearchAPITest(object):
               'start': 132885746, 'strand': '*', 'tissueType': 'F', 'type': 'psi5', 'deltaIntronJaccardIndex': 12.34}]
         )
 
-    def _assert_expected_results_family_context(self, response_json, locus_list_detail=False, skip_gene_context=False):
-        if not skip_gene_context:
-            self._assert_expected_results_context(response_json, locus_list_detail=locus_list_detail)
+    def _assert_expected_results_family_context(self, response_json, locus_list_detail=False):
+        self._assert_expected_results_context(response_json, locus_list_detail=locus_list_detail)
 
         family_fields = {'individualGuids'}
         family_fields.update(FAMILY_FIELDS)
         if len(response_json['familiesByGuid']) > 1:
             self.assertSetEqual(set(response_json['familiesByGuid']['F000002_2'].keys()), family_fields)
 
-        if not skip_gene_context:
-            family_fields.add('tpmGenes')
+        family_fields.add('tpmGenes')
         self.assertSetEqual(set(response_json['familiesByGuid']['F000001_1'].keys()), family_fields)
-        if not skip_gene_context:
-            self.assertSetEqual(set(response_json['familiesByGuid']['F000001_1']['tpmGenes']), {'ENSG00000227232'})
+        self.assertSetEqual(set(response_json['familiesByGuid']['F000001_1']['tpmGenes']), {'ENSG00000227232'})
 
         self.assertEqual(len(response_json['individualsByGuid']), len(response_json['familiesByGuid'])*3)
         individual_fields = {'igvSampleGuids'}
@@ -353,8 +350,7 @@ class VariantSearchAPITest(object):
         self.assertEqual(len(response_json['familyNotesByGuid']), 3)
         self.assertSetEqual(set(response_json['familyNotesByGuid']['FAN000001_1'].keys()), FAMILY_NOTE_FIELDS)
 
-        if not skip_gene_context:
-            self._assert_expected_rnaseq_response(response_json)
+        self._assert_expected_rnaseq_response(response_json)
 
     def _assert_expected_results_context(self, response_json, has_pa_detail=True, locus_list_detail=False, rnaseq=True):
         gene_fields = {'locusListGuids'}
@@ -869,7 +865,7 @@ class VariantSearchAPITest(object):
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['error'], 'Variant not found')
 
-    def _assert_expected_single_variant_results_context(self, response_json, omit_fields=None, no_metadata=False, **expected_response):
+    def _assert_expected_single_variant_results_context(self, response_json, omit_fields=None, **expected_response):
         omit_fields = {'search', *(omit_fields or [])}
 
         expected_search_response = deepcopy({**self.EXPECTED_SEARCH_RESPONSE, **EXPECTED_SEARCH_FAMILY_CONTEXT})
@@ -879,25 +875,18 @@ class VariantSearchAPITest(object):
         })
         for k in omit_fields:
             expected_search_response.pop(k)
-        if no_metadata:
-            expected_search_response.update({k: {} for k in {
-                'savedVariantsByGuid', 'variantTagsByGuid', 'variantFunctionalDataByGuid', 'genesById',
-                'rnaSeqData', 'phenotypeGeneScores', 'mmeSubmissionsByGuid'
-            }})
-            expected_search_response.pop('transcriptsById', None)
-        else:
-            expected_search_response['savedVariantsByGuid'].pop('SV0000002_1248367227_r0390_100')
-            expected_search_response['variantTagsByGuid'] = {
-                k: EXPECTED_SEARCH_RESPONSE['variantTagsByGuid'][k]
-                for k in {'VT1708633_2103343353_r0390_100', 'VT1726961_2103343353_r0390_100'}
-            }
+        expected_search_response['savedVariantsByGuid'].pop('SV0000002_1248367227_r0390_100')
+        expected_search_response['variantTagsByGuid'] = {
+            k: EXPECTED_SEARCH_RESPONSE['variantTagsByGuid'][k]
+            for k in {'VT1708633_2103343353_r0390_100', 'VT1726961_2103343353_r0390_100'}
+        }
         expected_search_response['variantNotesByGuid'] = {}
         expected_search_response['genesById'] = {
             k: v for k, v in expected_search_response['genesById'].items() if k in {'ENSG00000227232', 'ENSG00000268903'}
         }
         self.assertSetEqual(set(response_json.keys()), set(expected_search_response.keys()))
         self.assertDictEqual(response_json, expected_search_response)
-        self._assert_expected_results_family_context(response_json, locus_list_detail=True, skip_gene_context=no_metadata)
+        self._assert_expected_results_family_context(response_json, locus_list_detail=True)
         self.assertSetEqual(set(response_json['projectsByGuid'][PROJECT_GUID].keys()), PROJECT_TAG_TYPE_FIELDS)
         self.assertSetEqual(set(response_json['familiesByGuid'].keys()), {'F000001_1'})
 

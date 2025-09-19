@@ -599,7 +599,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             [SV_VARIANT1, SV_VARIANT2], locus=sv_locus,
         )
         self._assert_expected_search(
-            [SV_VARIANT1], locus={'rawItems': 'chr1:9292894-9369532'}
+            [SV_VARIANT1], locus={'rawItems': 'chr1:9297894-9369732%10'}
         )
 
         self._reset_search_families()

@@ -35,7 +35,7 @@ DISCOVERY_CATEGORY = 'CMG Discovery Tags'
 OMIM_GENOME_VERSION = GENOME_VERSION_GRCh38
 
 
-def update_projects_saved_variant_json(projects, user_email, update_function, **kwargs):
+def update_projects_saved_variant_json(projects, update_function, **kwargs):
     success = {}
     skipped = {}
     error = {}
@@ -43,7 +43,7 @@ def update_projects_saved_variant_json(projects, user_email, update_function, **
     for project_id, project_guid, project_name, genome_version, family_guids in tqdm(projects, unit=' project'):
         try:
             updated_saved_variants = update_function(
-                project_id, genome_version, user_email=user_email, family_guids=family_guids, project_guid=project_guid, **kwargs)
+                project_id, genome_version, family_guids=family_guids, project_guid=project_guid, **kwargs)
             if updated_saved_variants is None:
                 skipped[project_name] = True
             else:
@@ -68,7 +68,7 @@ def update_projects_saved_variant_json(projects, user_email, update_function, **
         logger.info(f'  {k}: {v}')
 
 
-def get_saved_variants(genome_version, project_id=None, family_guids=None, dataset_type=None, clickhouse_dataset_type=None):
+def get_saved_variants(genome_version, project_id=None, family_guids=None, clickhouse_dataset_type=None):
     saved_variants = SavedVariant.objects.filter(
         Q(saved_variant_json__genomeVersion__isnull=True) |
         Q(saved_variant_json__genomeVersion=genome_version.replace('GRCh', ''))
@@ -77,22 +77,9 @@ def get_saved_variants(genome_version, project_id=None, family_guids=None, datas
         saved_variants = saved_variants.filter(family__project_id=project_id)
     if family_guids:
         saved_variants = saved_variants.filter(family__guid__in=family_guids)
-    if dataset_type:
-        saved_variants = saved_variants.filter(**saved_variants_dataset_type_filter(dataset_type))
-    elif clickhouse_dataset_type:
+    if clickhouse_dataset_type:
         saved_variants = saved_variants.filter(dataset_type=clickhouse_dataset_type)
     return saved_variants
-
-
-def saved_variants_dataset_type_filter(dataset_type):
-    xpos_filter_key = 'xpos__gte' if dataset_type == Sample.DATASET_TYPE_MITO_CALLS else 'xpos__lt'
-    dataset_filter = {xpos_filter_key: get_xpos('M', 1)}
-    if dataset_type == Sample.DATASET_TYPE_SV_CALLS:
-        dataset_filter['alt__isnull'] = True
-    else:
-        # Filter out manual variants with invalid characters, such as those used for STRs
-        dataset_filter['alt__regex'] = '^[ACGT]+$'
-    return dataset_filter
 
 
 def parse_saved_variant_json(variant_json, family_id, variant_id=None,):

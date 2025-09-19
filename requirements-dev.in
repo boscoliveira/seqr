@@ -1,5 +1,5 @@
 -c requirements.txt # use the generated reqs as a constraint
-coverage<5.2
+coverage<6.6
 django-compressor
 django-debug-toolbar      # https://github.com/jazzband/django-debug-toolbar
 mock                      # mock objects for unit tests

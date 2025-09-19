@@ -189,15 +189,6 @@ def _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, num_
                     {2: ('arrayIntersect(primary_familyGuids, secondary_familyGuids)', 'has({value}, {field})')},
                 ]),
             }
-        elif results.has_annotation('secondary_genotypes'):
-            genotype_expressions = {
-                'primary_familyGenotypes': ArrayFilter('primary_familyGenotypes', conditions=[
-                    {1: ('secondary_familyGuids', 'has({value}, {field})')},
-                ]),
-                'secondary_genotypes': ArrayFilter('secondary_genotypes', conditions=[
-                    {2: (None, 'arrayExists(g -> g.1 = {field}, primary_familyGenotypes)')},
-                ]),
-            }
         else:
             genotype_expressions = {
                 'primary_familyGenotypes': ArrayFilter('primary_familyGenotypes', conditions=[
@@ -699,10 +690,11 @@ def delete_clickhouse_family(project, family_guid, dataset_type, sample_type=Non
     return f'Clickhouse does not support deleting individual families from project. Manually delete {dataset_type} data for {family_guid} in project {project.guid}'
 
 
+SV_DATASET_TYPES = {
+    Sample.SAMPLE_TYPE_WGS: Sample.DATASET_TYPE_SV_CALLS,
+    Sample.SAMPLE_TYPE_WES: 'GCNV',
+}
 def _clickhouse_dataset_type(dataset_type, sample_type):
     if dataset_type == Sample.DATASET_TYPE_SV_CALLS:
-        if not sample_type:
-            raise ValueError('sample_type is required when dataset_type is SV')
-        if sample_type == Sample.SAMPLE_TYPE_WES:
-            return 'GCNV'
+        dataset_type = SV_DATASET_TYPES[sample_type]
     return dataset_type

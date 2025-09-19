@@ -39,6 +39,11 @@ class Urllib3Responses(Responses):
     def call_request_json(self, index=-1):
         return json.loads(self.calls[index].request.body)
 
+    def activate(self, func):
+        def wrapper(*args, **kwargs):
+            with self:
+                return func(*args, **kwargs)
+        return wrapper
 
 urllib3_responses = Urllib3Responses()
 
