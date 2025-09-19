@@ -1,4 +1,5 @@
 import React from 'react'
+import PropTypes from 'prop-types'
 import styled from 'styled-components'
 import { Form, Grid, Header, List, Loader, Table } from 'semantic-ui-react'
 
@@ -529,6 +530,24 @@ export const QUALITY_PANEL = {
   fieldProps: { control: LazyLabeledSlider, format: val => val || null },
 }
 
+const handleChange = (onChange, value) => shouldExclude => onChange({ ...value, shouldExclude })
+
+const ExcludeSearchToggle = ({ name, value, onChange, ...props }) => (
+  <InlineToggle
+    {...props}
+    disabled={!value?.searchHash}
+    name={`${name}.shouldExclude`}
+    value={value?.shouldExclude}
+    onChange={handleChange(onChange, value)}
+  />
+)
+
+ExcludeSearchToggle.propTypes = {
+  name: PropTypes.string,
+  value: PropTypes.object,
+  onChange: PropTypes.func,
+}
+
 const ES_EXCLUDE_FIELDS = [
   {
     ...BASE_LOCUS_FIELD,
@@ -537,6 +556,14 @@ const ES_EXCLUDE_FIELDS = [
   },
 ]
 const EXCLUDE_FIELDS = [
+  {
+    name: 'previousSearch',
+    label: 'Exclude Previous Search Results',
+    labelHelp: 'Exclude any results returned by the current search from the next search results',
+    color: 'grey',
+    component: ExcludeSearchToggle,
+    width: 8,
+  },
   {
     ...CLINVAR_FIELD,
     ...PATHOGENICITY_FIELD_PROPS,
