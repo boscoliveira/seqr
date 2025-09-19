@@ -1505,7 +1505,7 @@ const REVERSE_PRED_COLOR_MAP = [...PRED_COLOR_MAP].reverse()
 export const ORDERED_PREDICTOR_FIELDS = [
   { field: 'cadd', group: CODING_IN_SILICO_GROUP, thresholds: [0.151, 22.8, 25.3, 28.1, undefined], min: 1, max: 99, fieldTitle: 'CADD', requiresCitation: true },
   { field: 'revel', group: MISSENSE_IN_SILICO_GROUP, thresholds: [0.0161, 0.291, 0.644, 0.773, 0.932], fieldTitle: 'REVEL', requiresCitation: true },
-  { field: 'alphamissense', fieldTitle: 'AlphaMissense', group: MISSENSE_IN_SILICO_GROUP },
+  { field: 'alphamissense', fieldTitle: 'AlphaMissense', group: MISSENSE_IN_SILICO_GROUP, thresholds: [0.34, 0.34, 0.564, 0.564] },
   { field: 'vest', thresholds: [undefined, 0.45, 0.764, 0.861, 0.965], fieldTitle: 'VEST', requiresCitation: true },
   { field: 'mpc', group: MISSENSE_IN_SILICO_GROUP, thresholds: [undefined, undefined, 1.36, 1.828, undefined], max: 5, fieldTitle: 'MPC' },
   {
