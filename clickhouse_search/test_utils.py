@@ -128,7 +128,7 @@ VARIANT2 = {
        'topmed': {'af': 0.246152, 'ac': 65154, 'an': 264690, 'hom': 8775, 'het': 47604},
        'exac': {'af': 0.29499999, 'ac': 35805, 'an': 121372, 'hom': 5872, 'hemi': 0, 'het': 24061, 'filter_af': 0.41530353},
        'gnomad_exomes': {'af': 0.28899795, 'ac': 72672, 'an': 251462, 'hom': 11567, 'hemi': 0, 'filter_af': 0.4116475},
-       'gnomad_genomes': {'af': 0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'filter_af': 0},
+       'gnomad_genomes': {'af': 0.03444932, 'ac': 927, 'an': 26912, 'hom': 0, 'hemi': 0, 'filter_af': 0.04027665},
     },
     'predictions': {
        'cadd': 20.9,
