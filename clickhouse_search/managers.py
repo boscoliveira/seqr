@@ -393,7 +393,12 @@ class AnnotationsQuerySet(SearchQuerySet):
         return results
 
     def _filter_in_silico(self, results, in_silico=None, **kwargs):
+        require_score = in_silico.get('requireScore', False)
+
         in_silico_q = None
+        if (in_silico or {}).get('alphamissense'):
+            in_silico_q = self._alphamissense_q(in_silico['alphamissense'], require_score)
+
         for score, value in (in_silico or {}).items():
             score_q = self._get_in_silico_score_q(score, value)
             if in_silico_q is None:
@@ -401,7 +406,7 @@ class AnnotationsQuerySet(SearchQuerySet):
             elif score_q:
                 in_silico_q |= score_q
 
-        if in_silico_q and not in_silico.get('requireScore', False):
+        if in_silico_q and not require_score:
             in_silico_q |= Q(**{f'predictions__{score}__isnull': True for score in in_silico.keys() if score in self.prediction_fields})
 
         if in_silico_q:
@@ -420,6 +425,14 @@ class AnnotationsQuerySet(SearchQuerySet):
             return Q(**{f'{score_column}__gte': float(value)})
         except ValueError:
             return Q(**{score_column: value})
+
+    def _alphamissense_q(self, value, require_score):
+        if not ('alphamissensePathogenicity' in self.transcript_fields and value):
+            return None
+        q = Q(**{f'{self.transcript_field}__array_exists': {'alphamissensePathogenicity': (value, '{value} <= {field}')}})
+        if not require_score:
+            q |= Q(**{f'{self.transcript_field}__array_all': {'alphamissensePathogenicity': (None, 'isNull({field})')}})
+        return q
 
     def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, genes=None, intervals=None, exclude_locations=False, padded_interval_end=None,  **kwargs):
         transcript_field = self.transcript_field
