@@ -728,12 +728,28 @@ class VariantSearchAPITest(object):
 
         VariantSearchResults.objects.get(search_hash=SEARCH_HASH).delete()
         body['trioFamiliesOnly'] = True
-        expected_searched_families = {'F000001_1', 'F000002_2'}
+        expected_searched_families = {'F000002_2'}
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
-        self.assertSetEqual(set(response_json.keys()), set(self.EXPECTED_SEARCH_RESPONSE.keys()))
-        self.assertDictEqual(response_json, self.EXPECTED_SEARCH_RESPONSE)
+        expected_variants = self.EXPECTED_SEARCH_RESPONSE['searchedVariants'][:1] + self.EXPECTED_SEARCH_RESPONSE['searchedVariants'][2:]
+        expected_response = {
+            **self.EXPECTED_SEARCH_RESPONSE,
+            'searchedVariants': expected_variants,
+            'search': {**self.EXPECTED_SEARCH_RESPONSE['search'], 'totalResults': len(expected_variants)},
+            'mmeSubmissionsByGuid': {},
+            'variantFunctionalDataByGuid': {},
+            'savedVariantsByGuid': {
+                k: v for k, v in self.EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'].items()
+                if k != 'SV0000001_2103343353_r0390_100'
+            },
+            'variantTagsByGuid': {
+                k: v for k, v in self.EXPECTED_SEARCH_RESPONSE['variantTagsByGuid'].items()
+                if k not in ['VT1708633_2103343353_r0390_100', 'VT1726961_2103343353_r0390_100']
+            },
+        }
+        self.assertSetEqual(set(response_json.keys()), set(expected_response.keys()))
+        self.assertDictEqual(response_json, expected_response)
         self._assert_expected_results_context(response_json)
         self.assertSetEqual(
             set(response_json['search']['projectFamilies'][0]['familyGuids']), expected_searched_families)
