@@ -293,11 +293,11 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
         if duplicates:
             raise InvalidSearchException(f'ClinVar pathogenicity {", ".join(sorted(duplicates))} is both included and excluded')
 
-    exclude_previous = exclude.pop('previousSearch', None)
-    if (exclude_previous or {}).get('shouldExclude'):
+    exclude_previous_hash = exclude.pop('previousSearchHash', None)
+    if exclude_previous_hash:
         parsed_search.update(backend_specific_call(
             lambda *args: {}, _get_clickhouse_exclude_keys,
-        )(exclude_previous['searchHash'], user, genome_version))
+        )(exclude_previous_hash, user, genome_version))
 
     for annotation_key in ['annotations', 'annotations_secondary']:
         if parsed_search.get(annotation_key):
