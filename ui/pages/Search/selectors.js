@@ -135,6 +135,7 @@ export const getIntitialSearch = createSelector(
   getIntitialProjectFamilies,
   (searchHash, searchParams, projectFamilies) => {
     if (searchParams) {
+      //  TODO does not work when search is edited - use form spy?
       return {
         ...searchParams,
         search: {
