@@ -6,14 +6,14 @@ from django.utils import timezone
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import MultipleObjectsReturned, PermissionDenied
 from django.db.utils import IntegrityError
-from django.db.models import Q, F, Value
+from django.db.models import Q, F, Value, Count
 from django.db.models.functions import JSONObject
 from django.shortcuts import redirect
 from math import ceil
 import re
 
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
-from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory
+from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory, Sample
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
     variant_lookup, parse_variant_id
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
@@ -106,7 +106,11 @@ def _get_or_create_results_model(search_hash, search_context, user):
         if search_context.get('unsolvedFamiliesOnly'):
             families = families.exclude(analysis_status__in=Family.SOLVED_ANALYSIS_STATUSES)
         if search_context.get('trioFamiliesOnly'):
-            families = families.filter(individual__mother__isnull=False, individual__father__isnull=False).distinct()
+            families = families.annotate(search_sample_count=Count('individual__sample__id', filter=Q(
+                individual__sample__is_active=True, individual__sample__dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS,
+            ))).filter(
+                search_sample_count__gte=3, individual__mother__isnull=False, individual__father__isnull=False,
+            ).distinct()
 
         search_dict = search_context.get('search', {})
         search_model = VariantSearch.objects.filter(search=search_dict).filter(

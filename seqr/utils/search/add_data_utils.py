@@ -1,18 +1,21 @@
 from collections import defaultdict, OrderedDict
 from django.contrib.auth.models import User
 from django.db.models import F
+import json
+import requests
 from typing import Callable
 
 from reference_data.models import GeneInfo, GENOME_VERSION_LOOKUP
 from seqr.models import Sample, Individual, Project
-from seqr.utils.communication_utils import send_project_notification
+from seqr.utils.communication_utils import send_project_notification, safe_post_to_slack
 from seqr.utils.file_utils import does_file_exist
 from seqr.utils.logging_utils import SeqrLogger
+from seqr.utils.middleware import ErrorsWarningsException
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
 from seqr.views.utils.export_utils import write_multiple_files
 from seqr.views.utils.pedigree_info_utils import JsonConstants
-from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, \
-    SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL
+from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, PIPELINE_RUNNER_SERVER, \
+    SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, LOADING_DATASETS_DIR
 
 logger = SeqrLogger(__name__)
 
@@ -62,40 +65,58 @@ def update_airtable_loading_tracking_status(project, status, additional_update=N
         update={'Status': status, **(additional_update or {})},
     )
 
-def _format_loading_pipeline_variables(
-    projects: list[Project], genome_version: str, dataset_type: str, sample_type: str = None, **kwargs
-):
+def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
+                         genome_version: str, data_path: str, user: User, raise_error: bool = False, skip_expect_tdr_metrics: bool = True,
+                         skip_validation: bool = False, skip_check_sex_and_relatedness: bool = True, vcf_sample_id_map=None,
+                         success_message: str = None,  error_message: str = None, success_slack_channel: str = SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
     variables = {
         'projects_to_run': sorted([p.guid for p in projects]) if projects else None,
-        'dataset_type': _dag_dataset_type(sample_type, dataset_type),
+        'dataset_type': _loading_dataset_type(sample_type, dataset_type),
         'reference_genome': GENOME_VERSION_LOOKUP[genome_version],
-        **kwargs
+        'callset_path': data_path,
+        'sample_type': sample_type,
     }
-    if sample_type:
-        variables['sample_type'] = sample_type
-    return variables
+    bool_variables = {
+        'skip_validation': skip_validation,
+        'skip_check_sex_and_relatedness': skip_check_sex_and_relatedness,
+        'skip_expect_tdr_metrics': skip_expect_tdr_metrics,
+    }
+    variables.update({k: v for k, v in bool_variables.items() if v})
+    file_path = _get_pedigree_path(genome_version, sample_type, dataset_type)
+    _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_error)
+    _write_gene_id_file(user)
 
-def prepare_data_loading_request(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str, genome_version: str,
-                                 data_path: str, user: User, load_data_dir: str,  raise_pedigree_error: bool = False,
-                                 skip_validation: bool = False, skip_check_sex_and_relatedness: bool = False, vcf_sample_id_map=None):
-    variables = _format_loading_pipeline_variables(
-        projects,
-        genome_version,
-        dataset_type,
-        sample_type,
-        callset_path=data_path,
-    )
-    if skip_validation:
-        variables['skip_validation'] = True
-    if skip_check_sex_and_relatedness:
-        variables['skip_check_sex_and_relatedness'] = True
-    file_path = _get_pedigree_path(load_data_dir, genome_version, sample_type, dataset_type)
-    _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_pedigree_error)
-    _write_gene_id_file(load_data_dir, user)
-    return variables, file_path
+    response = requests.post(f'{PIPELINE_RUNNER_SERVER}/loading_pipeline_enqueue', json=variables, timeout=60)
+    success = True
+    try:
+        response.raise_for_status()
+        logger.info('Triggered loading pipeline', user, detail=variables)
+    except requests.HTTPError as e:
+        success = False
+        error = str(e)
+        if response.status_code == 409:
+            error = 'Loading pipeline is already running. Wait for it to complete and resubmit'
+            e = ErrorsWarningsException([error])
+        if raise_error:
+            raise e
+        else:
+            logger.warning(f'Error triggering loading pipeline: {error}', user, detail=variables)
+            safe_post_to_slack(
+                SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
+                f'{error_message}: {error}\nLoading pipeline should be triggered with:\n```{json.dumps(variables, indent=4)}```',
+            )
+
+    if success_message and (success or success_slack_channel != SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
+        safe_post_to_slack(success_slack_channel, '\n\n'.join([
+            success_message,
+            f'Pedigree files have been uploaded to {file_path}',
+            f'Loading pipeline is triggered with:\n```{json.dumps(variables, indent=4)}```',
+        ]))
+
+    return success
 
 
-def _dag_dataset_type(sample_type: str, dataset_type: str):
+def _loading_dataset_type(sample_type: str, dataset_type: str):
     return 'GCNV' if dataset_type == Sample.DATASET_TYPE_SV_CALLS and sample_type == Sample.SAMPLE_TYPE_WES \
         else dataset_type
 
@@ -132,9 +153,9 @@ def _upload_data_loading_files(individual_ids: list[int], vcf_sample_id_map: dic
             raise e
 
 
-def _write_gene_id_file(load_data_dir, user):
+def _write_gene_id_file(user):
     file_name = 'db_id_to_gene_id'
-    if does_file_exist(f'{load_data_dir}/{file_name}.csv.gz'):
+    if does_file_exist(f'{LOADING_DATASETS_DIR}/{file_name}.csv.gz'):
         return
 
     gene_data_loaded = (GeneInfo.objects.filter(gencode_release=int(GeneInfo.CURRENT_VERSION)).exists() and
@@ -146,12 +167,12 @@ def _write_gene_id_file(load_data_dir, user):
         )
     gene_data = GeneInfo.objects.all().values('gene_id', db_id=F('id')).order_by('id')
     file_config = (file_name, ['db_id', 'gene_id'], gene_data)
-    write_multiple_files([file_config], load_data_dir, user, file_format='csv', gzip_file=True)
+    write_multiple_files([file_config], LOADING_DATASETS_DIR, user, file_format='csv', gzip_file=True)
 
 
-def _get_pedigree_path(pedigree_dir: str, genome_version: str, sample_type: str, dataset_type: str):
-    dag_dataset_type = _dag_dataset_type(sample_type, dataset_type)
-    return f'{pedigree_dir}/{GENOME_VERSION_LOOKUP[genome_version]}/{dag_dataset_type}/pedigrees/{sample_type}'
+def _get_pedigree_path(genome_version: str, sample_type: str, dataset_type: str):
+    loading_dataset_type = _loading_dataset_type(sample_type, dataset_type)
+    return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{loading_dataset_type}/pedigrees/{sample_type}'
 
 
 def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids: list[int], sample_source: str,
