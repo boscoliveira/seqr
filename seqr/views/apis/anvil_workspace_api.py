@@ -13,7 +13,6 @@ from reference_data.models import GENOME_VERSION_LOOKUP
 from seqr.models import Project, Family, CAN_EDIT, Sample, IgvSample
 from seqr.views.react_app import render_app_html
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
-from seqr.views.utils.airflow_utils import trigger_airflow_data_loading
 from seqr.views.utils.json_to_orm_utils import create_model_from_json
 from seqr.views.utils.json_utils import create_json_response
 from seqr.views.utils.file_utils import load_uploaded_file
@@ -23,7 +22,7 @@ from seqr.views.utils.pedigree_info_utils import parse_basic_pedigree_table, Jso
 from seqr.views.utils.individual_utils import add_or_update_individuals_and_families
 from seqr.utils.communication_utils import send_html_email
 from seqr.utils.file_utils import list_files
-from seqr.utils.search.add_data_utils import get_loading_samples_validator
+from seqr.utils.search.add_data_utils import get_loading_samples_validator, trigger_data_loading
 from seqr.utils.vcf_utils import validate_vcf_and_get_samples, get_vcf_list
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
@@ -275,7 +274,7 @@ def _trigger_add_workspace_data(project, pedigree_records, user, data_path, samp
         f"({GENOME_VERSION_LOOKUP.get(project.genome_version)}) from AnVIL workspace *{project.workspace_namespace}/{project.workspace_name}* at "
         f"{data_path} to seqr project <{_get_seqr_project_url(project)}|*{project.name}*> (guid: {project.guid})"
     )
-    trigger_success = trigger_airflow_data_loading(
+    trigger_success = trigger_data_loading(
         [project], individual_ids, sample_type, Sample.DATASET_TYPE_VARIANT_CALLS, project.genome_version, data_path, user=user, success_message=success_message,
         success_slack_channel=SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, error_message=f'ERROR triggering AnVIL loading for project {project.guid}',
     )

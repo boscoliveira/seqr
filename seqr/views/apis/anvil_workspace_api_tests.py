@@ -8,7 +8,7 @@ import responses
 from seqr.models import Project, Family, Individual
 from seqr.views.apis.anvil_workspace_api import anvil_workspace_page, create_project_from_workspace, \
     validate_anvil_vcf, grant_workspace_access, add_workspace_data, get_anvil_vcf_list, get_anvil_igv_options
-from seqr.views.utils.test_utils import AnvilAuthenticationTestCase, AuthenticationTestCase, AirflowTestCase, AirtableTest, \
+from seqr.views.utils.test_utils import AnvilAuthenticationTestCase, AuthenticationTestCase, AirtableTest, \
     TEST_WORKSPACE_NAMESPACE, TEST_WORKSPACE_NAME, TEST_WORKSPACE_NAME1, TEST_NO_PROJECT_WORKSPACE_NAME, TEST_NO_PROJECT_WORKSPACE_NAME2
 from seqr.views.utils.terra_api_utils import remove_token, TerraAPIException, TerraRefreshTokenFailedException
 from settings import SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL
@@ -157,6 +157,8 @@ HEADER_LINE = [b'#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tHG00735\
 DATA_LINES = [
     b'chr1\t10333\t.\tCT\tC\t1895\tPASS\tAC=5;AF=0.045;AN=112;DP=22546\tGT:AD:DP:GQ\t./.:63,0:63\t./.:44,0:44\t./.:44,0:44\n'
 ]
+
+PIPELINE_RUNNER_URL = 'http://pipeline-runner:6000/loading_pipeline_enqueue'
 
 
 @mock.patch('seqr.views.utils.permissions_utils.logger')
@@ -513,31 +515,17 @@ class AnvilWorkspaceAPITest(AnvilAuthenticationTestCase):
         ])
 
 
+@mock.patch('seqr.utils.search.add_data_utils.LOADING_DATASETS_DIR', 'gs://seqr-loading-temp/v3.1')
 @mock.patch('reference_data.models.GeneInfo.CURRENT_VERSION', '27')
-class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
+class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
     fixtures = ['users', 'social_auth', 'reference_data', '1kg_project']
 
     LOADING_PROJECT_GUID = f'P_{TEST_NO_PROJECT_WORKSPACE_NAME}'
     ADDITIONAL_REQUEST_COUNT = 1
 
-    @staticmethod
-    def _get_dag_variable_overrides(additional_tasks_check):
-        variables = {
-            'project': LoadAnvilDataAPITest.LOADING_PROJECT_GUID,
-            'callset_path': 'test_path.vcf',
-            'sample_source': 'AnVIL',
-            'sample_type': 'WES',
-            'dataset_type': 'SNV_INDEL',
-        }
-        if additional_tasks_check:
-            variables.update({
-                'project': PROJECT1_GUID,
-                'reference_genome': 'GRCh37',
-            })
-        return variables
-
     def setUp(self):
         # Set up api responses
+        responses.add(responses.POST, PIPELINE_RUNNER_URL)
         responses.add(responses.POST, f'{MOCK_AIRTABLE_URL}/appUelDNM3BnWaR7M/AnVIL%20Seqr%20Loading%20Requests%20Tracking', status=400)
         patcher = mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', MOCK_AIRTABLE_URL)
         patcher.start()
@@ -584,6 +572,9 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
         patcher = mock.patch('seqr.views.apis.anvil_workspace_api.send_html_email')
         self.mock_send_email = patcher.start()
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.safe_post_to_slack')
+        self.mock_slack = patcher.start()
+        self.addCleanup(patcher.stop)
 
         super().setUp()
 
@@ -603,7 +594,6 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
 
         # Test valid operation
         responses.calls.reset()
-        self.mock_authorized_session.reset_mock()
         self.mock_load_file.return_value = LOAD_SAMPLE_DATA
         response = self.client.post(url, content_type='application/json', data=json.dumps(REQUEST_BODY))
         self.assertEqual(response.status_code, 200)
@@ -641,7 +631,7 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
                          .format(namespace=TEST_WORKSPACE_NAMESPACE, name=TEST_NO_PROJECT_WORKSPACE_NAME))
 
         url = reverse(create_project_from_workspace, args=[TEST_WORKSPACE_NAMESPACE, TEST_NO_PROJECT_WORKSPACE_NAME2])
-        self._test_mv_file_and_triggering_dag_exception(
+        self._test_mv_file_and_triggering_loading_exception(
             url, {'workspace_namespace': TEST_WORKSPACE_NAMESPACE, 'workspace_name': TEST_NO_PROJECT_WORKSPACE_NAME2},
             NEW_PROJECT_SAMPLE_DATA, 'GRCh38', REQUEST_BODY)
 
@@ -718,7 +708,7 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
         self.mock_load_file.return_value = LOAD_SAMPLE_DATA_ALL_PENDING_PROJECT_2
         mock_compute_indiv_guid.side_effect = ['I0000021_na19675_1', 'I0000022_na19678', 'I0000023_hg00735']
         url = reverse(add_workspace_data, args=[PROJECT2_GUID])
-        self._test_mv_file_and_triggering_dag_exception(
+        self._test_mv_file_and_triggering_loading_exception(
             url, {'guid': PROJECT2_GUID}, PROJECT2_SAMPLE_DATA, 'GRCh37', REQUEST_BODY_ADD_DATA2, sample_type='WGS')
 
     def _test_errors(self, url, fields, workspace_name, has_existing_data=False):
@@ -819,40 +809,22 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
             mock.call(f'{TEMP_PATH}/*', 'gs://seqr-loading-temp/v3.1/', self.manager_user)
         ])
 
-        self.assert_airflow_loading_calls(additional_tasks_check=test_add_data)
-
-        # create airtable record
-        self.assertDictEqual(json.loads(responses.calls[-1].request.body), {'records': [{'fields': {
-            'Requester Name': 'Test Manager User',
-            'Requester Email': 'test_user_manager@test.com',
-            'AnVIL Project URL': f'http://testserver/project/{project.guid}/project_page',
-            'Initial Request Date': '2021-03-01',
-            'Number of Samples': 14 if test_add_data else 3,
-            'Status': 'Loading',
-        }}]})
-        self.assert_expected_airtable_headers(-1)
-
-        dag_json = {
+        variables = {
             'projects_to_run': [project.guid],
             'dataset_type': 'SNV_INDEL',
             'reference_genome': genome_version,
             'callset_path': 'gs://test_bucket/test_path.vcf',
             'sample_type': 'WES',
-            'sample_source': 'AnVIL',
+            'skip_check_sex_and_relatedness': True,
+            'skip_expect_tdr_metrics': True,
         }
+        self._assert_expected_requests(variables, project, num_samples=14 if test_add_data else 3, status='Loading')
+        self.assert_expected_airtable_headers(-1)
+
         sample_summary = '13 new and 7 re-loaded' if test_add_data else '3 new'
-        slack_message = """*test_user_manager@test.com* requested to load {sample_summary} WES samples ({version}) from AnVIL workspace *my-seqr-billing/{workspace_name}* at gs://test_bucket/test_path.vcf to seqr project <http://testserver/project/{guid}/project_page|*{project_name}*> (guid: {guid})
-
-        Pedigree files have been uploaded to gs://seqr-loading-temp/v3.1/{version}/SNV_INDEL/pedigrees/WES
-
-        DAG LOADING_PIPELINE is triggered with following:
-        ```{dag}```
-    """.format(guid=project.guid, version=genome_version, workspace_name=project.workspace_name,
-                   project_name=project.name, sample_summary=sample_summary,
-               dag=json.dumps(dag_json, indent=4),
-               )
         self.mock_slack.assert_called_with(
-            SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, slack_message,
+            SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL,
+            self._success_slack_message(project, sample_summary, genome_version, variables),
         )
         self.mock_send_email.assert_not_called()
 
@@ -884,64 +856,79 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
             'father__individual_id': None, 'sex': 'F', 'affected': 'N', 'notes': 'a individual note', 'features': [],
         }, individual_model_data)
 
+    def _assert_expected_requests(self, variables, project, num_samples, status):
+        self.assertEqual(len(responses.calls), 2)
+        self.assertDictEqual(json.loads(responses.calls[0].request.body), variables)
+
+        # create airtable record
+        self.assertDictEqual(json.loads(responses.calls[1].request.body), {'records': [{'fields': {
+            'Requester Name': 'Test Manager User',
+            'Requester Email': 'test_user_manager@test.com',
+            'AnVIL Project URL': f'http://testserver/project/{project.guid}/project_page',
+            'Initial Request Date': '2021-03-01',
+            'Number of Samples': num_samples,
+            'Status': status,
+        }}]})
+
+    def _success_slack_message(self, project, sample_summary, genome_version, variables, sample_type='WES'):
+        return f"""*test_user_manager@test.com* requested to load {sample_summary} {sample_type} samples ({genome_version}) from AnVIL workspace *my-seqr-billing/{project.workspace_name}* at gs://test_bucket/test_path.vcf to seqr project <http://testserver/project/{project.guid}/project_page|*{project.name}*> (guid: {project.guid})
+
+Pedigree files have been uploaded to gs://seqr-loading-temp/v3.1/{genome_version}/SNV_INDEL/pedigrees/{sample_type}
+
+Loading pipeline is triggered with:
+```{json.dumps(variables, indent=4)}```"""
+
     @staticmethod
     def _raise_move_file_error(from_path, to_path, *args, **kwargs):
         if 'pedigrees' in to_path:
             raise Exception('Something wrong while moving the file.')
 
-    def _test_mv_file_and_triggering_dag_exception(self, url, workspace, sample_data, genome_version, request_body, num_samples=None, sample_type='WES'):
+    def _test_mv_file_and_triggering_loading_exception(self, url, workspace, sample_data, genome_version, request_body, num_samples=None, sample_type='WES'):
         # Test saving ID file exception
         responses.calls.reset()
-        self.mock_authorized_session.reset_mock()
+        self.mock_slack.reset_mock()
         self.mock_mv_file.side_effect = self._raise_move_file_error
-        # Test triggering dag exception
-        self.set_dag_trigger_error_response()
+        # Test triggering loading exception
+        responses.add(responses.POST, PIPELINE_RUNNER_URL, status=409)
 
         response = self.client.post(url, content_type='application/json', data=json.dumps(request_body))
         self.assertEqual(response.status_code, 200)
         project = Project.objects.get(**workspace)
+        variables = {
+            'projects_to_run': [project.guid],
+            'dataset_type': 'SNV_INDEL',
+            'reference_genome': genome_version,
+            'callset_path': 'gs://test_bucket/test_path.vcf',
+            'sample_type': sample_type,
+            'skip_check_sex_and_relatedness': True,
+            'skip_expect_tdr_metrics': True,
+        }
 
         self.mock_add_data_utils_logger.error.assert_called_with(
             'Uploading Pedigrees failed. Errors: Something wrong while moving the file.',
             self.manager_user, detail={f'{project.guid}_pedigree': sample_data})
         self.mock_api_logger.error.assert_not_called()
-        self.mock_airflow_logger.warning.assert_called_with(
-            'LOADING_PIPELINE DAG is running and cannot be triggered again.', self.manager_user)
+        self.mock_add_data_utils_logger.warning.assert_called_with(
+            'Error triggering loading pipeline: Loading pipeline is already running. Wait for it to complete and resubmit',
+            self.manager_user, detail=variables,
+        )
         self.mock_airtable_logger.error.assert_called_with(
             f'Airtable post "AnVIL Seqr Loading Requests Tracking" error: 400 Client Error: Bad Request for url: '
             f'{MOCK_AIRTABLE_URL}/appUelDNM3BnWaR7M/AnVIL%20Seqr%20Loading%20Requests%20Tracking', self.manager_user, detail=mock.ANY)
 
-        slack_message_on_failure = """ERROR triggering AnVIL loading for project {guid}: LOADING_PIPELINE DAG is running and cannot be triggered again.
-        
-        DAG LOADING_PIPELINE should be triggered with following:
-        ```{dag}```
-        """.format(
-            guid=project.guid,
-            dag=json.dumps({
-                'projects_to_run': [project.guid],
-                'dataset_type': 'SNV_INDEL',
-                'reference_genome': genome_version,
-                'callset_path': 'gs://test_bucket/test_path.vcf',
-                'sample_type': sample_type,
-                'sample_source': 'AnVIL',
-            }, indent=4),
-        )
-
-        self.mock_slack.assert_any_call(
-            SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, slack_message_on_failure,
-        )
+        slack_message_on_failure = f"""ERROR triggering AnVIL loading for project {project.guid}: Loading pipeline is already running. Wait for it to complete and resubmit
+Loading pipeline should be triggered with:
+```{json.dumps(variables, indent=4)}```"""
+        self.mock_slack.assert_has_calls([
+            mock.call(SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, slack_message_on_failure),
+            mock.call(SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, self._success_slack_message(
+                project, '3 new' if sample_type == 'WES' else '5 new and 1 re-loaded', genome_version, variables, sample_type,
+            )),
+        ])
         self.mock_send_email.assert_not_called()
-        self.assert_airflow_loading_calls(trigger_error=True)
-
-        # Airtable record created with correct status
-        self.assertDictEqual(json.loads(responses.calls[-1].request.body), {'records': [{'fields': {
-            'Requester Name': 'Test Manager User',
-            'Requester Email': 'test_user_manager@test.com',
-            'AnVIL Project URL': f'http://testserver/project/{project.guid}/project_page',
-            'Initial Request Date': '2021-03-01',
-            'Number of Samples': num_samples or len(sample_data),
-            'Status': 'Loading Requested',
-        }}]})
+        self._assert_expected_requests(
+            variables, project, num_samples=num_samples or len(sample_data), status='Loading Requested',
+        )
 
     @mock.patch('seqr.views.apis.anvil_workspace_api.ANVIL_LOADING_DELAY_EMAIL_START_DATE', '2021-06-01')
     @responses.activate
@@ -949,9 +936,6 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
         url = reverse(create_project_from_workspace, args=[TEST_WORKSPACE_NAMESPACE, TEST_NO_PROJECT_WORKSPACE_NAME])
         self.check_manager_login(url, login_redirect_url='/login/google-oauth2')
 
-        # make sure the task id including the newly created project to avoid infinitely pulling the tasks
-        self._add_dag_tasks_response([
-            'R0006_anvil_no_project_workspace', 'R0007_anvil_no_project_workspace', 'R0008_anvil_no_project_workspace'])
         self._test_not_yet_email_date(url, REQUEST_BODY)
 
         # Remove created project to allow future requests
@@ -968,8 +952,6 @@ class LoadAnvilDataAPITest(AirflowTestCase, AirtableTest):
         url = reverse(add_workspace_data, args=[PROJECT1_GUID])
         self.check_manager_login(url, login_redirect_url='/login/google-oauth2')
 
-        # make sure the task id including the newly created project to avoid infinitely pulling the tasks
-        self._add_dag_tasks_response(['R0003_test', 'R0004_test'])
         self.mock_load_file.return_value = LOAD_SAMPLE_DATA_ALL_PENDING
         self._test_not_yet_email_date(url, REQUEST_BODY_ADD_DATA)
 
