@@ -466,6 +466,23 @@ class SearchUtilsTests(SearchTestHelper):
             omitted_sample_guids=['S000145_hg00731', 'S000146_hg00732', 'S000148_hg00733'],
         )
 
+        self.set_cache(None)
+        self.search_model.search = {
+            'inheritance': {'mode': 'any_affected'},
+            'exclude': {'previousSearch': True, 'previousSearchHash': 'abc1234', 'clinvar': ['benign']},
+        }
+        previous_search_model = VariantSearch.objects.create(search={'inheritance': {'mode': 'de_novo'}})
+        previous_results_model = VariantSearchResults.objects.create(variant_search=previous_search_model, search_hash='abc1234')
+        previous_results_model.families.set(self.families)
+        query_variants(self.results_model, user=self.user)
+        self._test_exclude_previous_search(
+            mock_get_variants, results_cache, sort='xpos', page=1, num_results=100, skip_genotype_filter=False,
+            inheritance_mode='any_affected', exclude={'clinvar': ['benign']}, search_fields=['exclude'],
+        )
+
+    def _test_exclude_previous_search(self, *args, **kwargs):
+        self._test_expected_search_call(*args, **kwargs)
+
     def test_cached_query_variants(self):
         self.set_cache({'total_results': 4, 'all_results': self.CACHED_VARIANTS})
         variants, total = query_variants(self.results_model, user=self.user)

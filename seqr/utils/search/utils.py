@@ -293,6 +293,7 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
         if duplicates:
             raise InvalidSearchException(f'ClinVar pathogenicity {", ".join(sorted(duplicates))} is both included and excluded')
 
+    exclude.pop('previousSearch', None)
     exclude_previous_hash = exclude.pop('previousSearchHash', None)
     if exclude_previous_hash:
         parsed_search.update(backend_specific_call(
