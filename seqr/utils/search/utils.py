@@ -333,10 +333,10 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
 def _get_clickhouse_exclude_keys(search_hash, user, genome_version):
     previous_search_model = VariantSearchResults.objects.get(search_hash=search_hash)
     cached_results = _get_any_sort_cached_results(previous_search_model)
-    if cached_results:
-        results = cached_results['all_results']
-    else:
-        results, _ = _query_variants(previous_search_model, user, {}, genome_version)
+    if not cached_results:
+        cached_results = {}
+        _query_variants(previous_search_model, user, cached_results, genome_version)
+    results = cached_results['all_results']
     exclude_keys = defaultdict(list)
     exclude_key_pairs = defaultdict(list)
     for variant in results:
@@ -348,7 +348,7 @@ def _get_clickhouse_exclude_keys(search_hash, user, genome_version):
         else:
             dataset_type = variant_dataset_type(variant)
             exclude_keys[dataset_type].append(variant['key'])
-    return {'exclude_keys': exclude_keys, 'exclude_key_pairs': exclude_key_pairs}
+    return {'exclude_keys': dict(exclude_keys), 'exclude_key_pairs': dict(exclude_key_pairs)}
 
 
 def variant_dataset_type(variant):
