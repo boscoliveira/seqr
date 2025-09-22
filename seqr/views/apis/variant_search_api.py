@@ -113,7 +113,7 @@ def _get_or_create_results_model(search_hash, search_context, user):
             ).distinct()
 
         search_dict = search_context.get('search', {})
-        if search_context.get('previousSearchHash') and (search_dict.get('exclude') or {}).pop('previousSearch', False):
+        if search_context.get('previousSearchHash') and (search_dict.get('exclude') or {}).get('previousSearch'):
             search_dict['exclude']['previousSearchHash'] = search_context['previousSearchHash']
         search_model = VariantSearch.objects.filter(search=search_dict).filter(
             Q(created_by=user) | Q(name__isnull=False)).first()

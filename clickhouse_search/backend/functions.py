@@ -7,6 +7,12 @@ from clickhouse_search.backend.fields import NestedField
 class Array(Func):
     function = 'array'
 
+    def _resolve_output_field(self):
+        output_field = super()._resolve_output_field()
+        if not isinstance(output_field, ArrayField):
+            output_field = ArrayField(base_field=output_field)
+        return output_field
+
 
 class ArrayConcat(Func):
     function = 'arrayConcat'
