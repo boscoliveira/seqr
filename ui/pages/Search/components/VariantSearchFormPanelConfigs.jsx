@@ -1,5 +1,5 @@
 import React from 'react'
-import PropTypes from 'prop-types'
+import { FormSpy } from 'react-final-form'
 import styled from 'styled-components'
 import { Form, Grid, Header, List, Loader, Table } from 'semantic-ui-react'
 
@@ -530,23 +530,15 @@ export const QUALITY_PANEL = {
   fieldProps: { control: LazyLabeledSlider, format: val => val || null },
 }
 
-const handleChange = (onChange, value) => shouldExclude => onChange({ ...value, shouldExclude })
+const SUBSCRIPTION = { values: true }
 
-const ExcludeSearchToggle = ({ name, value, onChange, ...props }) => (
-  <InlineToggle
-    {...props}
-    disabled={!value?.searchHash}
-    name={`${name}.shouldExclude`}
-    value={value?.shouldExclude}
-    onChange={handleChange(onChange, value)}
-  />
+const ExcludeSearchToggle = props => (
+  <FormSpy subscription={SUBSCRIPTION}>
+    {({ values }) => (
+      <InlineToggle {...props} disabled={!values.previousSearchHash} />
+    )}
+  </FormSpy>
 )
-
-ExcludeSearchToggle.propTypes = {
-  name: PropTypes.string,
-  value: PropTypes.object,
-  onChange: PropTypes.func,
-}
 
 const ES_EXCLUDE_FIELDS = [
   {
