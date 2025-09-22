@@ -63,14 +63,13 @@ ALL_DATA_TYPES = 'ALL'
 CLINVAR_KEY = 'clinvar'
 CLINVAR_PATH_FILTER = 'pathogenic'
 CLINVAR_LIKELY_PATH_FILTER = 'likely_pathogenic'
-CLINVAR_CONFLICTING_NOT_BENIGN_FILTER = 'conflicting_not_benign'
-CLINVAR_VUS_FILTER = 'vus_or_conflicting'
-CLINVAR_PATH_SIGNIFICANCES = {CLINVAR_PATH_FILTER, CLINVAR_LIKELY_PATH_FILTER, CLINVAR_CONFLICTING_NOT_BENIGN_FILTER}
+CLINVAR_CONFLICTING_P_LP = 'conflicting_p_lp'
+CLINVAR_PATH_SIGNIFICANCES = {CLINVAR_PATH_FILTER, CLINVAR_LIKELY_PATH_FILTER, CLINVAR_CONFLICTING_P_LP}
 PATH_FREQ_OVERRIDE_CUTOFF = 0.05
 CLINVAR_PATH_RANGES = [
     (CLINVAR_PATH_FILTER, 'Pathogenic', 'Pathogenic/Likely_risk_allele'),
     (CLINVAR_LIKELY_PATH_FILTER, 'Pathogenic/Likely_pathogenic', 'Likely_risk_allele'),
-    (CLINVAR_VUS_FILTER, 'Conflicting_classifications_of_pathogenicity', 'No_pathogenic_assertion'),
+    ('vus_or_conflicting', 'Conflicting_classifications_of_pathogenicity', 'No_pathogenic_assertion'),
     ('likely_benign', 'Likely_benign', 'Benign/Likely_benign'),
     ('benign', 'Benign/Likely_benign', 'Benign'),
 ]

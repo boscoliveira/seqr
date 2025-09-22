@@ -14,8 +14,8 @@ from seqr.models import Sample
 from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFECTED, UNAFFECTED, MALE_SEXES, \
     X_LINKED_RECESSIVE, REF_REF, REF_ALT, ALT_ALT, HAS_ALT, HAS_REF, SPLICE_AI_FIELD, SCREEN_KEY, UTR_ANNOTATOR_KEY, \
     EXTENDED_SPLICE_KEY, MOTIF_FEATURES_KEY, REGULATORY_FEATURES_KEY, CLINVAR_KEY, HGMD_KEY, NEW_SV_FIELD, \
-    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_VUS_FILTER, \
-    CLINVAR_CONFLICTING_NOT_BENIGN_FILTER, PATH_FREQ_OVERRIDE_CUTOFF, \
+    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_LIKELY_PATH_FILTER, \
+    CLINVAR_CONFLICTING_P_LP, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
@@ -64,8 +64,8 @@ class SearchQuerySet(QuerySet):
 
         clinvar_qs = [cls._clinvar_range_q(path_range) for path_range in ranges]
 
-        if CLINVAR_CONFLICTING_NOT_BENIGN_FILTER in clinvar_filters:
-            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_VUS_FILTER)
+        if CLINVAR_CONFLICTING_P_LP in clinvar_filters:
+            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
             clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: (max_path, "{field} <= '{value}'")}))
 
         clinvar_q = clinvar_qs[0]

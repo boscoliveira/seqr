@@ -580,13 +580,13 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
 
         self._assert_expected_search(
             [VARIANT1, VARIANT2, selected_family_3_variant, MITO_VARIANT1, MITO_VARIANT3], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'conflicting_not_benign', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
             cached_variant_fields=cached_variant_fields,
         )
 
         self._assert_expected_search(
             [VARIANT2, selected_family_3_variant, MITO_VARIANT1], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_not_benign']}, cached_variant_fields=cached_variant_fields[1:],
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp']}, cached_variant_fields=cached_variant_fields[1:],
         )
 #
     def test_location_search(self):
@@ -805,7 +805,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
 
         self._assert_expected_search(
             [VARIANT2, VARIANT4, MITO_VARIANT1], freqs={'gnomad_genomes': {'af': 0.01}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_not_benign', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
         )
 
     def test_annotations_filter(self):
@@ -817,7 +817,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
         )
 
-        self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_not_benign']})
+        self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
 
         exclude = {'clinvar': pathogenicity['clinvar'][1:]}
         pathogenicity['clinvar'] = pathogenicity['clinvar'][:1]

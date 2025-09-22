@@ -81,7 +81,7 @@
                 "clinvar": [
                     "pathogenic",
                     "likely_pathogenic",
-                    "conflicting_not_benign"
+                    "conflicting_p_lp"
                 ]
             },
             "qualityFilter": {
@@ -177,7 +177,7 @@
                 "clinvar": [
                     "pathogenic",
                     "likely_pathogenic",
-                    "conflicting_not_benign"
+                    "conflicting_p_lp"
                 ]
             },
             "qualityFilter": {
@@ -323,7 +323,7 @@
                 "clinvar": [
                     "pathogenic",
                     "likely_pathogenic",
-                    "conflicting_not_benign",
+                    "conflicting_p_lp",
                     "vus_or_conflicting"
                 ]
             },
@@ -425,7 +425,7 @@
                 "clinvar": [
                     "pathogenic",
                     "likely_pathogenic",
-                    "conflicting_not_benign",
+                    "conflicting_p_lp",
                     "vus_or_conflicting"
                 ]
             },
