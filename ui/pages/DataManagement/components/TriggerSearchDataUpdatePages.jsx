@@ -46,25 +46,25 @@ const FAMILY_FIELDS = [
   DATASET_TYPE_FIELD,
 ]
 
-const TriggerSearchDataUpdateForm = ({ path, fields }) => (
+const TriggerSearchDataUpdateForm = ({ entity, fields }) => (
   <SubmitFormPage
-    header={`Trigger ${snakecaseToTitlecase(path)}`}
-    url={`/api/data_management/trigger_${path}`}
+    header={`Trigger Delete ${snakecaseToTitlecase(entity)} Search`}
+    url={`/api/data_management/trigger_delete_${entity}`}
     fields={fields}
   />
 )
 
 TriggerSearchDataUpdateForm.propTypes = {
-  path: PropTypes.string,
+  entity: PropTypes.string,
   fields: PropTypes.arrayOf(PropTypes.object),
 }
 
 const TriggerDeleteProjects = () => (
-  <TriggerSearchDataUpdateForm path="delete_project" fields={PROJECT_FIELDS} />
+  <TriggerSearchDataUpdateForm entity="project" fields={PROJECT_FIELDS} />
 )
 
 const TriggerDeleteFamilies = () => (
-  <TriggerSearchDataUpdateForm path="delete_family" fields={FAMILY_FIELDS} />
+  <TriggerSearchDataUpdateForm entity="family" fields={FAMILY_FIELDS} />
 )
 
 export default [
