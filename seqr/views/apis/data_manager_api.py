@@ -353,7 +353,7 @@ def load_data(request):
 
     success = trigger_data_loading(
         projects_by_guid.values(), individual_ids, sample_type, dataset_type, request_json['genomeVersion'],
-        _callset_path(request_json), user=request.user, skip_validation=request_json.get('skipValidation', False),
+        _callset_path(request_json), user=request.user,
         skip_check_sex_and_relatedness=request_json.get('skipSRChecks', False), vcf_sample_id_map=vcf_sample_id_map,
         raise_error=is_local, skip_expect_tdr_metrics=is_local, success_message=success_message, error_message=error_message,
     )
