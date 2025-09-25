@@ -67,7 +67,7 @@ def update_airtable_loading_tracking_status(project, status, additional_update=N
 
 def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
                          genome_version: str, data_path: str, user: User, raise_error: bool = False, skip_expect_tdr_metrics: bool = True,
-                         skip_validation: bool = False, skip_check_sex_and_relatedness: bool = True, vcf_sample_id_map=None,
+                         skip_check_sex_and_relatedness: bool = True, vcf_sample_id_map=None,
                          success_message: str = None,  error_message: str = None, success_slack_channel: str = SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
     variables = {
         'projects_to_run': sorted([p.guid for p in projects]) if projects else None,
@@ -77,7 +77,6 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
         'sample_type': sample_type,
     }
     bool_variables = {
-        'skip_validation': skip_validation,
         'skip_check_sex_and_relatedness': skip_check_sex_and_relatedness,
         'skip_expect_tdr_metrics': skip_expect_tdr_metrics,
     }

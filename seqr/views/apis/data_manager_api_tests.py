@@ -1403,7 +1403,7 @@ class DataManagerAPITest(AirtableTest):
         mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
         body = {**self.REQUEST_BODY, 'projects': [
             json.dumps(option) for option in self.PROJECT_OPTIONS + [{'projectGuid': 'R0005_not_project'}]
-        ], 'vcfSamples': self.VCF_SAMPLES, 'skipValidation': True}
+        ], 'vcfSamples': self.VCF_SAMPLES, 'skipSRChecks': True}
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'error': 'The following projects are invalid: R0005_not_project'})
@@ -1419,7 +1419,7 @@ class DataManagerAPITest(AirtableTest):
         )
         self.assertDictEqual(response.json(), {'success': True})
 
-        self._assert_expected_load_data_requests(sample_type='WES', skip_validation=True)
+        self._assert_expected_load_data_requests(sample_type='WES', skip_check_sex_and_relatedness=True)
         self._has_expected_ped_files(mock_open, mock_gzip_open, mock_mkdir, 'SNV_INDEL', sample_type='WES', has_remap=bool(self.MOCK_AIRTABLE_KEY))
 
         variables = {
@@ -1431,7 +1431,7 @@ class DataManagerAPITest(AirtableTest):
             'reference_genome': 'GRCh38',
             'callset_path': f'{self.TRIGGER_CALLSET_DIR}/callset.vcf',
             'sample_type': 'WES',
-            'skip_validation': True,
+            'skip_check_sex_and_relatedness': True,
         }
         if self.SKIP_TDR:
             variables['skip_expect_tdr_metrics'] = True
@@ -1445,8 +1445,8 @@ class DataManagerAPITest(AirtableTest):
         responses.calls.reset()
         self.reset_logs()
 
-        del body['skipValidation']
-        del variables['skip_validation']
+        del body['skipSRChecks']
+        del variables['skip_check_sex_and_relatedness']
         body.update({'datasetType': 'SV', 'filePath': f'{self.CALLSET_DIR}/sv_callset.vcf'})
         self._trigger_error(url, body, variables, mock_open, mock_gzip_open, mock_mkdir)
 
@@ -1489,7 +1489,7 @@ class DataManagerAPITest(AirtableTest):
         })
         self.assertEqual(len(responses.calls), 0)
 
-    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_validation=False):
+    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_check_sex_and_relatedness=False):
         projects = [PROJECT_GUID, NON_ANALYST_PROJECT_GUID]
         if skip_project:
             projects = projects[1:]
@@ -1502,8 +1502,8 @@ class DataManagerAPITest(AirtableTest):
         }
         if self.SKIP_TDR:
             body['skip_expect_tdr_metrics'] = True
-        if skip_validation:
-            body['skip_validation'] = True
+        if skip_check_sex_and_relatedness:
+            body['skip_check_sex_and_relatedness'] = True
         self.assertDictEqual(json.loads(responses.calls[-1].request.body), body)
 
     def _trigger_error(self, url, body, variables, mock_open, mock_gzip_open, mock_mkdir):
