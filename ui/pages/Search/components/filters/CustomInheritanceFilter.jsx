@@ -2,12 +2,13 @@ import React from 'react'
 import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
 import { FormSpy } from 'react-final-form'
-import { Table, Header, Popup, Loader } from 'semantic-ui-react'
+import { Table, Header, Popup, Loader, Divider } from 'semantic-ui-react'
 
 import { loadFamilyDetails } from 'redux/rootReducer'
-import { getFamiliesByGuid, getIndividualsByGuid, getFamilyDetailsLoading } from 'redux/selectors'
+import { getFamiliesByGuid, getIndividualsByGuid, getFamilyDetailsLoading, getElasticsearchEnabled } from 'redux/selectors'
 import DataLoader from 'shared/components/DataLoader'
-import { Select } from 'shared/components/form/Inputs'
+import { helpLabel } from 'shared/components/form/FormHelpers'
+import { Select, InlineToggle } from 'shared/components/form/Inputs'
 import PedigreeIcon from 'shared/components/icons/PedigreeIcon'
 import PedigreeImagePanel from 'shared/components/panel/view-pedigree-image/PedigreeImagePanel'
 import { AFFECTED, UNAFFECTED, AFFECTED_OPTIONS } from 'shared/utils/constants'
@@ -103,14 +104,45 @@ CustomInheritanceFilterContent.propTypes = {
   individualsByGuid: PropTypes.object,
 }
 
-const CustomInheritanceFilter = React.memo(({ load, loading, family, ...props }) => {
-  if (!family) {
-    return <Header disabled content="Custom inheritance search is disabled for multi-family searches" />
+const NO_CALL_FIELD = 'allowNoCall'
+
+const handleChange = (onChange, value) => update => onChange({ ...value, [NO_CALL_FIELD]: update })
+
+const NoCallToggle = ({ name, value, onChange, ...props }) => (
+  <InlineToggle
+    name={`${name}.${NO_CALL_FIELD}`}
+    value={value && value[NO_CALL_FIELD]}
+    onChange={handleChange(onChange, value)}
+    label={helpLabel(
+      'Allow No-Call for Unaffected Individuals',
+      'By default, inheritance-based searches require all individuals to be called for a given variant. This overrides that requirement for unaffected individuals, allowing variants where unaffected individuals are no-call to be included in results.',
+    )}
+    color="grey"
+    {...props}
+  />
+)
+
+NoCallToggle.propTypes = {
+  name: PropTypes.string.isRequired,
+  value: PropTypes.object,
+  onChange: PropTypes.func.isRequired,
+}
+
+const CustomInheritanceFilter = React.memo(({ load, loading, family, esEnabled, individualsByGuid, ...props }) => {
+  const content = family ? (
+    <DataLoader load={load} contentId={family.familyGuid} content={family && family.detailsLoaded} loading={loading}>
+      <CustomInheritanceFilterContent family={family} individualsByGuid={individualsByGuid} {...props} />
+    </DataLoader>
+  ) : <Header disabled content="Custom inheritance search is disabled for multi-family searches" />
+  if (esEnabled) {
+    return content
   }
   return (
-    <DataLoader load={load} contentId={family.familyGuid} content={family && family.detailsLoaded} loading={loading}>
-      <CustomInheritanceFilterContent family={family} {...props} />
-    </DataLoader>
+    <div>
+      {content}
+      <Divider />
+      <NoCallToggle {...props} />
+    </div>
   )
 })
 
@@ -118,6 +150,7 @@ const mapStateToProps = (state, ownProps) => ({
   family: getFamiliesByGuid(state)[ownProps.familyGuid],
   individualsByGuid: getIndividualsByGuid(state),
   loading: !!getFamilyDetailsLoading(state)[ownProps.familyGuid],
+  esEnabled: getElasticsearchEnabled(state),
 })
 
 const mapDispatchToProps = {
@@ -127,7 +160,9 @@ const mapDispatchToProps = {
 CustomInheritanceFilter.propTypes = {
   load: PropTypes.func,
   family: PropTypes.object,
+  individualsByGuid: PropTypes.object,
   loading: PropTypes.bool,
+  esEnabled: PropTypes.bool,
 }
 
 const ConnectedCustomInheritanceFilter = connect(mapStateToProps, mapDispatchToProps)(CustomInheritanceFilter)
