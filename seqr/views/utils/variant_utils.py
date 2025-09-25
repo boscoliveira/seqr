@@ -98,6 +98,8 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
         }
     else:
         update_json = {'saved_variant_json': variant_json}
+    if 'transcripts' in variant_json:
+        update_json['gene_ids'] = sorted(variant_json['transcripts'].keys(), key=lambda gene_id: _transcript_sort(gene_id, variant_json))
     return {
         'xpos': xpos,
         'xpos_end': xpos + var_length,
@@ -115,6 +117,13 @@ def _dataset_type(variant_id, variant):
     return Sample.DATASET_TYPE_MITO_CALLS if 'mitomapPathogenic' in variant else Sample.DATASET_TYPE_VARIANT_CALLS
 
 
+def _transcript_sort(gene_id, saved_variant_json):
+    gene_transcripts = saved_variant_json['transcripts'][gene_id]
+    main_transcript_id = saved_variant_json.get('mainTranscriptId')
+    is_main_gene = bool(main_transcript_id) and any(t.get('transcriptId') == main_transcript_id for t in gene_transcripts)
+    return (is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
+
+
 def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False):
     all_family_ids = {family_id for family_id, _ in family_variant_data.keys()}
     all_variant_ids = {variant_id for _, variant_id in family_variant_data.keys()}
@@ -129,7 +138,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     new_variant_keys = set(family_variant_data.keys()) - set(saved_variant_map.keys())
     if new_variant_keys:
         new_variant_data = _search_new_saved_variants(new_variant_keys, user, genome_version) if load_new_variant_data else backend_specific_call(
-            lambda o, _: o, _get_clickhouse_variant_keys,
+            lambda o, _: o, _get_clickhouse_variant_keys,  # TODO need to have gene ids when new variants created (or update after)
         )({k: v for k, v in family_variant_data.items() if k in new_variant_keys}, genome_version)
         new_variant_models = []
         for (family_id, variant_id), variant in new_variant_data.items():
