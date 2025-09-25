@@ -115,7 +115,7 @@ def saved_variants_page(request, tag):
     saved_variant_models = saved_variant_models.filter(family__project__guid__in=get_project_guids_user_can_view(request.user))
 
     if gene:
-        gene_filter = Q(saved_variant_json__transcripts__has_key=gene) | backend_specific_call(
+        gene_filter = Q(saved_variant_json__transcripts__has_key=gene) | backend_specific_call(  # TODO update
             lambda *args: Q(),
             _saved_variant_with_clickhouse_gene_q,
         )(saved_variant_models, gene, is_all_tags)

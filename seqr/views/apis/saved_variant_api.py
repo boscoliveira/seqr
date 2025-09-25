@@ -127,7 +127,7 @@ def _create_variant_note(saved_variants, note_json, user, genome_version):
 
     response = {}
     if note_json.get('saveAsGeneNote'):
-        gene_id = backend_specific_call(_variant_gene_id, _clickhouse_variant_gene_id)(saved_variants[0], genome_version)
+        gene_id = backend_specific_call(_variant_gene_id, _clickhouse_variant_gene_id)(saved_variants[0], genome_version)  # TODO
         create_model_from_json(GeneNote, {'note': note_json.get('note'), 'gene_id': gene_id}, user)
         response['genesById'] = {gene_id: {
             'notes': get_json_for_gene_notes_by_gene_id([gene_id], user)[gene_id],

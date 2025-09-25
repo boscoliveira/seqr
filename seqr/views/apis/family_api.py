@@ -61,7 +61,7 @@ def family_page_data(request, family_guid):
         'xpos', 'xpos_end', *additional_fields,
         svType=F('saved_variant_json__svType'), transcripts=F('saved_variant_json__transcripts'),
     )
-    gene_ids = backend_specific_call(
+    gene_ids = backend_specific_call( # TODO
         _variants_gene_ids, _clickhouse_variants_gene_ids,
     )(discovery_variants, project.genome_version, request.user)
     discovery_variant_intervals = [dict(zip(

@@ -125,7 +125,7 @@ def families_discovery_tags(families, genome_version, project=None):
         varianttag__variant_tag_type__category='CMG Discovery Tags', **family_filter,
     )
     try:
-        discovery_tags = backend_specific_call(_get_no_key_tags, _get_clickhouse_tags)(
+        discovery_tags = backend_specific_call(_get_no_key_tags, _get_clickhouse_tags)(  # TODO
             discovery_variants, genome_version=genome_version,
         )
     except Exception as e:

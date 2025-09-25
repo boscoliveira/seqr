@@ -147,7 +147,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
         ).annotate(saved_variant_ids=ArrayAgg('saved_variants__id', ordering='id'))
     }
 
-    variant_genes_by_id = backend_specific_call(
+    variant_genes_by_id = backend_specific_call(  # TODO
         _get_saved_variant_genes, _get_clickhouse_saved_variant_genes,
     )(saved_variant_map.values(), genome_version)
 

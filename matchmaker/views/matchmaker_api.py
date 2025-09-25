@@ -58,7 +58,7 @@ def get_individual_mme_matches(request, submission_guid):
     )
 
     variants = response_json['savedVariantsByGuid'].values()
-    backend_specific_call(lambda *args: None, _add_clickhouse_transcripts)(
+    backend_specific_call(lambda *args: None, _add_clickhouse_transcripts)( # TODO
         variants, project.genome_version, request.user,
     )
 
