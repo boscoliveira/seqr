@@ -668,7 +668,7 @@ class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, S
             None,
             json.dumps({'all_results': [VARIANT1, [VARIANT1, VARIANT2], [VARIANT1, SV_VARIANT1], VARIANT2, [VARIANT4, VARIANT3], SV_VARIANT1]}),
         ]
-        self.mock_redis.keys.side_effect = [[], [f'search_results__abc1234__gnomad']]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
         query_variants(self.results_model, user=self.user)
         super()._test_exclude_previous_search(
             mock_get_variants, *args, **kwargs, num_searches=1,

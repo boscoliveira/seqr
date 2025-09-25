@@ -509,7 +509,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
             VARIANT1, VARIANT2, [VARIANT3, VARIANT2], [GCNV_VARIANT4, GCNV_VARIANT3],
         ]})]
-        self.mock_redis.keys.side_effect = [[], [f'search_results__abc1234__gnomad']]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
 
         self._assert_expected_search(
             [[MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3],
@@ -524,7 +524,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
             [MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3,
         ]})]
-        self.mock_redis.keys.side_effect = [[], [f'search_results__abc1234__gnomad']]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
         self._assert_expected_search(
             [VARIANT2, [GCNV_VARIANT3, GCNV_VARIANT4]],
             inheritance_mode='recessive', cached_variant_fields=[
