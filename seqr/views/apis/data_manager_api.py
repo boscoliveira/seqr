@@ -445,8 +445,8 @@ def _trigger_data_update(clickhouse_func, user, samples, request_json, project, 
     sample_types = list(
         samples.values_list('sample_type', flat=True).distinct()
     ) if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
-    Sample.bulk_update(user=user, update_json={'is_active': False}, queryset=samples)
-    info = []
+    updated = Sample.bulk_update(user=user, update_json={'is_active': False}, queryset=samples)
+    info = [f'Deactivated search for {len(updated)} individuals']
     for sample_type in sample_types:
         info.append(clickhouse_func(project, *args, dataset_type=dataset_type, sample_type=sample_type))
     return create_json_response({'info': info})

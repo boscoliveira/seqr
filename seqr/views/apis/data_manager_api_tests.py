@@ -2053,7 +2053,10 @@ Loading pipeline should be triggered with:
     def _assert_expected_delete_project(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de'],
+            'info': [
+                'Deactivated search for 7 individuals',
+                'Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de',
+            ],
         })
         self.assertEqual(EntriesSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
         self.assertEqual(ProjectGtStatsSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
@@ -2076,7 +2079,10 @@ Loading pipeline should be triggered with:
     def _assert_expected_delete_family(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg'],
+            'info': [
+                'Deactivated search for 3 individuals',
+                'Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg',
+            ],
         })
 
         family_samples = Sample.objects.filter(individual__family_id=2, is_active=True)
