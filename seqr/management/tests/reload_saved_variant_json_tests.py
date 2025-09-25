@@ -1,7 +1,7 @@
 #-*- coding: utf-8 -*-
 import mock
 
-from django.core.management import call_command, CommandError
+from django.core.management import call_command
 from django.test import TestCase
 
 PROJECT_NAME = '1kg project n\u00e5me with uni\u00e7\u00f8de'
