@@ -89,7 +89,8 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
     ref = variant_json.get('ref')
     alt = variant_json.get('alt')
     var_length = variant_json['end'] - variant_json['pos'] if variant_json.get('end') is not None else len(ref) - 1
-    variant_id = variant_json.get('variantId', variant_id)
+    if not variant_json.get('variantId'):
+        variant_json['variantId'] = variant_id
     if variant_json.get('key'):
         update_json = {
             'key': variant_json['key'],
