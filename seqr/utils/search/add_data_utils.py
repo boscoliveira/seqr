@@ -182,7 +182,6 @@ def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids:
     def validate_expected_samples(record_family_ids, previous_loaded_individuals, sample_type):
         errors = []
 
-        nonlocal loaded_sample_types
         if loaded_sample_types is not None:
             if sample_type:
                 loaded_sample_types.append(sample_type)

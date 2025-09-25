@@ -1,7 +1,6 @@
 # Utilities used for unit and integration tests.
 from collections import defaultdict
 from copy import deepcopy
-from datetime import datetime
 from django.contrib.auth.models import User, Group
 from django.core.management import call_command
 from django.db import connections, transaction
@@ -12,7 +11,6 @@ import json
 import logging
 import mock
 import re
-import requests
 import responses
 from urllib.parse import quote_plus, urlparse
 
@@ -47,8 +45,6 @@ class AuthenticationTestCase(TestCase):
     no_policy_user = None
 
     def setUp(self):
-        patcher = mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', self.CLICKHOUSE_HOSTNAME)
-        patcher.start()
         patcher = mock.patch('seqr.utils.search.elasticsearch.es_utils.ELASTICSEARCH_SERVICE_HOSTNAME', self.ES_HOSTNAME)
         patcher.start()
         self.addCleanup(patcher.stop)

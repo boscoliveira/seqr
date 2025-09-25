@@ -813,20 +813,9 @@ class EntriesManager(SearchQuerySet):
                 entries = entries.annotate(carriers=self._carriers_expression(unaffected_samples))
 
        if multi_sample_type_families:
-           if gt_filter:
-               inheritance_q |= multi_sample_type_family_q
-               entries = self._annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples)
-           elif inheritance_q is not None:
-               entries = entries.annotate(passes_inheritance=inheritance_q)
-               inheritance_q = Q(passes_inheritance=True) | multi_sample_type_family_q
-           else:
-                entries = entries.annotate(passes_inheritance=Value(True))
-
-           if quality_q is None:
-               entries = entries.annotate(passes_quality=Value(True))
-           else:
-               entries = entries.annotate(passes_quality=quality_q)
-               quality_q = Q(passes_quality=True) | multi_sample_type_family_q
+           entries, inheritance_q, quality_q = self._get_multi_sample_type_family_call_qs(
+               entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, family_missing_type_samples,
+           )
 
        if inheritance_q is not None:
            entries = entries.filter(inheritance_q)
@@ -931,6 +920,24 @@ class EntriesManager(SearchQuerySet):
             quality_q |= clinvar_override_q
 
         return quality_q
+
+    def _get_multi_sample_type_family_call_qs(self, entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, family_missing_type_samples):
+        if gt_filter:
+            inheritance_q |= multi_sample_type_family_q
+            entries = self._annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples)
+        elif inheritance_q is not None:
+            entries = entries.annotate(passes_inheritance=inheritance_q)
+            inheritance_q = Q(passes_inheritance=True) | multi_sample_type_family_q
+        else:
+            entries = entries.annotate(passes_inheritance=Value(True))
+
+        if quality_q is None:
+            entries = entries.annotate(passes_quality=Value(True))
+        else:
+            entries = entries.annotate(passes_quality=quality_q)
+            quality_q = Q(passes_quality=True) | multi_sample_type_family_q
+
+        return entries, inheritance_q, quality_q
 
     @staticmethod
     def _annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples):

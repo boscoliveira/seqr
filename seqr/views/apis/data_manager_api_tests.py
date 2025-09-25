@@ -1377,7 +1377,7 @@ class DataManagerAPITest(AirtableTest):
 
         self._assert_expected_airtable_errors(url)
 
-    def _assert_expected_pm_access(self, get_response, mock_current_gene_version=None):
+    def _assert_expected_pm_access(self, get_response):
         response = get_response()
         self.assertEqual(response.status_code, 200)
         self.login_data_manager_user()

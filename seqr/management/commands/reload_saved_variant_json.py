@@ -1,5 +1,5 @@
 import logging
-from django.core.management.base import BaseCommand, CommandError
+from django.core.management.base import BaseCommand
 from django.db.models.query_utils import Q
 from seqr.models import Project
 from seqr.utils.search.elasticsearch.es_utils import update_project_saved_variant_json
