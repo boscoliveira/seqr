@@ -51,7 +51,7 @@ def _transcript_sort(gene_id, saved_variant_json):
     gene_transcripts = saved_variant_json['transcripts'][gene_id]
     main_transcript_id = saved_variant_json.get('mainTranscriptId')
     is_main_gene = bool(main_transcript_id) and any(t.get('transcriptId') == main_transcript_id for t in gene_transcripts)
-    return (is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
+    return (not is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
 
 
 class Migration(migrations.Migration):
