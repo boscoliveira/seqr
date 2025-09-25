@@ -393,15 +393,21 @@ class AnnotationsQuerySet(SearchQuerySet):
         return results
 
     def _filter_in_silico(self, results, in_silico=None, **kwargs):
+        in_silico = in_silico or {}
+        require_score = in_silico.get('requireScore', False)
+
         in_silico_q = None
-        for score, value in (in_silico or {}).items():
+        if in_silico.get('alphamissense'):
+            in_silico_q = self._alphamissense_q(in_silico['alphamissense'], require_score)
+
+        for score, value in in_silico.items():
             score_q = self._get_in_silico_score_q(score, value)
             if in_silico_q is None:
                 in_silico_q = score_q
             elif score_q:
                 in_silico_q |= score_q
 
-        if in_silico_q and not in_silico.get('requireScore', False):
+        if in_silico_q and not require_score:
             in_silico_q |= Q(**{f'predictions__{score}__isnull': True for score in in_silico.keys() if score in self.prediction_fields})
 
         if in_silico_q:
@@ -420,6 +426,14 @@ class AnnotationsQuerySet(SearchQuerySet):
             return Q(**{f'{score_column}__gte': float(value)})
         except ValueError:
             return Q(**{score_column: value})
+
+    def _alphamissense_q(self, value, require_score):
+        if not ('alphamissensePathogenicity' in self.transcript_fields and value):
+            return None
+        q = Q(**{f'{self.transcript_field}__array_exists': {'alphamissensePathogenicity': (value, '{value} <= {field}')}})
+        if not require_score:
+            q |= Q(**{f'{self.transcript_field}__array_all': {'alphamissensePathogenicity': (None, 'isNull({field})')}})
+        return q
 
     def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, genes=None, intervals=None, exclude_locations=False, padded_interval_end=None,  **kwargs):
         transcript_field = self.transcript_field
@@ -791,7 +805,7 @@ class EntriesManager(SearchQuerySet):
             ) if self._has_clinvar() else None
             inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples = self._get_inheritance_quality_qs(
                sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q,
-                annotate_carriers, custom_affected=(inheritance_filter or {}).get('affected') or {},
+                annotate_carriers, inheritance_filter=inheritance_filter or {},
             )
             if quality_filter.get('vcf_filter'):
                 q = Q(filters__len=0)
@@ -824,11 +838,13 @@ class EntriesManager(SearchQuerySet):
 
        return self._annotate_calls(entries, sample_data, annotate_hom_alts, skip_individual_guid, multi_sample_type_families)
 
-    def _get_inheritance_quality_qs(self, sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q, annotate_carriers, custom_affected):
+    def _get_inheritance_quality_qs(self, sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q, annotate_carriers, inheritance_filter):
         samples_by_genotype = defaultdict(list)
         affected_samples = []
         unaffected_samples = []
         family_missing_type_samples = defaultdict(lambda: defaultdict(list))
+        custom_affected = inheritance_filter.get('affected') or {}
+        allow_no_call = inheritance_filter.get('allowNoCall')
         for sample in sample_data['samples']:
             affected = custom_affected.get(sample['individual_guid']) or sample['affected']
             genotype = self._sample_genotype(sample, affected, inheritance_mode, individual_genotype_filter)
@@ -852,22 +868,30 @@ class EntriesManager(SearchQuerySet):
                 'sampleId': (affected_samples, 'has({value}, {field})'),
             })
         elif samples_by_genotype:
-            if all(len(self.genotype_lookup[genotype]) == 1 for genotype in samples_by_genotype.keys()):
-                samples_by_gt = {self.genotype_lookup[genotype][0]: samples for genotype, samples in samples_by_genotype.items()}
+            genotype_lookup = self.genotype_lookup
+            if allow_no_call and inheritance_mode:
+                unaffected_genotype = self.INHERITANCE_FILTERS.get(inheritance_mode, {}).get(UNAFFECTED)
+                if unaffected_genotype and -1 not in genotype_lookup[unaffected_genotype]:
+                    genotype_lookup = {**genotype_lookup, unaffected_genotype: [-1] + genotype_lookup[unaffected_genotype]}
+                if inheritance_mode == X_LINKED_RECESSIVE and -1 not in genotype_lookup[REF_REF]:
+                    genotype_lookup = {**genotype_lookup, REF_REF: [-1] + genotype_lookup[REF_REF]}
+
+            if all(len(genotype_lookup[genotype]) == 1 for genotype in samples_by_genotype.keys()):
+                samples_by_gt = {genotype_lookup[genotype][0]: samples for genotype, samples in samples_by_genotype.items()}
                 gt_filter_map = ', '.join([f"{gt}, {samples_by_gt.get(gt, [])}" for gt in [-1, 0, 1, 2]])
                 gt_filter = (gt_filter_map, 'has(map({value})[ifNull({field}, -1)], x.sampleId)')
             else:
                 genotype_sample_map = ', '.join([f"'{genotype or 'any'}', {samples}" for genotype, samples in samples_by_genotype.items()])
                 gt_genotypes = defaultdict(list)
                 for genotype in samples_by_genotype.keys():
-                    for gt in self.genotype_lookup[genotype]:
+                    for gt in genotype_lookup[genotype]:
                         gt_genotypes[gt].append(genotype or 'any')
                 gt_genotype_map = ', '.join([f"{gt}, {gt_genotypes[gt]}" for gt in [-1, 0, 1, 2]])
                 genotype_maps = f'genotype -> map({genotype_sample_map})[genotype], map({gt_genotype_map})'
                 gt_filter = (genotype_maps, 'has(arrayFlatten(arrayMap({value}[ifNull({field}, -1)])), x.sampleId)')
             inheritance_q = Q(calls__array_all={'gt': gt_filter})
 
-        quality_q = self._quality_q(quality_filter, affected_samples, clinvar_override_q)
+        quality_q = self._quality_q(quality_filter, allow_no_call, affected_samples, clinvar_override_q)
 
         return inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples
 
@@ -881,7 +905,7 @@ class EntriesManager(SearchQuerySet):
                 genotype = REF_REF
         return genotype
 
-    def _quality_q(self, quality_filter, affected_samples, clinvar_override_q):
+    def _quality_q(self, quality_filter, allow_no_call, affected_samples, clinvar_override_q):
         quality_filter_conditions = {}
 
         for field, scale, *filters in self.quality_filters:
@@ -891,6 +915,8 @@ class EntriesManager(SearchQuerySet):
             value = quality_filter.get(filter_key)
             if value:
                 or_filters = ['isNull({field})', '{field} >= {value}'] + filters
+                if allow_no_call:
+                    or_filters.append('isNull(x.gt)')
                 quality_filter_conditions[field] = (value / scale, f'or({", ".join(or_filters)})')
 
         if not quality_filter_conditions:

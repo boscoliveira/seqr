@@ -44,13 +44,9 @@ const ES_DATA_MANAGEMENT_PAGES = [
   ...DATA_MANAGEMENT_PAGES,
 ]
 
-const LOCAL_HAIL_SEARCH_DATA_MANAGEMENT_PAGES = [
+const CLICKHOUSE_DATA_MANAGEMENT_PAGES = [
   ...DATA_MANAGEMENT_PAGES,
   { path: 'pipeline_status', component: () => <IframePage title="Loading UI" src="/luigi_ui/static/visualiser/index.html" /> },
-]
-
-const AIRFLOW_HAIL_SEARCH_DATA_MANAGEMENT_PAGES = [
-  ...DATA_MANAGEMENT_PAGES,
   ...TRIGGER_SEARCH_DATA_UPDATE_PAGES,
 ]
 
@@ -58,10 +54,7 @@ const dataManagementPages = (user, elasticsearchEnabled) => {
   if (!user.isDataManager) {
     return PM_DATA_MANAGEMENT_PAGES
   }
-  if (elasticsearchEnabled) {
-    return ES_DATA_MANAGEMENT_PAGES
-  }
-  return user.isAnvil ? AIRFLOW_HAIL_SEARCH_DATA_MANAGEMENT_PAGES : LOCAL_HAIL_SEARCH_DATA_MANAGEMENT_PAGES
+  return elasticsearchEnabled ? ES_DATA_MANAGEMENT_PAGES : CLICKHOUSE_DATA_MANAGEMENT_PAGES
 }
 
 const DataManagement = ({ match, user, pages }) => (
