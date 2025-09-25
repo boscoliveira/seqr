@@ -89,13 +89,12 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
     ref = variant_json.get('ref')
     alt = variant_json.get('alt')
     var_length = variant_json['end'] - variant_json['pos'] if variant_json.get('end') is not None else len(ref) - 1
-    if not variant_json.get('variantId'):
-        variant_json['variantId'] = variant_id
+    variant_id = variant_json.get('variantId', variant_id)
     if variant_json.get('key'):
         update_json = {
             'key': variant_json['key'],
             'genotypes': variant_json.get('genotypes', {}),
-            'dataset_type': variant_dataset_type(variant_json),
+            'dataset_type': variant_dataset_type({'variantId': variant_id, **variant_json}),
         }
     else:
         update_json = {'saved_variant_json': variant_json}
