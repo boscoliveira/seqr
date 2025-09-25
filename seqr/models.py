@@ -841,6 +841,7 @@ class SavedVariant(ModelWithGUID):
     selected_main_transcript_id = models.CharField(max_length=20, null=True)
     saved_variant_json = models.JSONField(default=dict)
     genotypes = models.JSONField(default=dict)
+    gene_ids = ArrayField(models.CharField(max_length=20), null=True, blank=True)
     dataset_type = models.CharField(max_length=13, choices=DATASET_TYPE_CHOICES, null=True, blank=True)
 
     acmg_classification = models.JSONField(null=True) # ACMG based classification
