@@ -135,6 +135,7 @@ export const INHERITANCE_FILTER_JSON_OPTIONS = INHERITANCE_FILTER_OPTIONS.map(
 const CLINVAR_NAME = 'clinvar'
 const CLIVAR_PATH = 'pathogenic'
 const CLINVAR_LIKELY_PATH = 'likely_pathogenic'
+const CLINVAR_CONFLICTING_P_LP = 'conflicting_p_lp'
 const CLINVAR_UNCERTAIN = 'vus_or_conflicting'
 const CLINVAR_OPTIONS = [
   {
@@ -144,6 +145,11 @@ const CLINVAR_OPTIONS = [
   {
     text: 'Likely Pathogenic (LP)',
     value: CLINVAR_LIKELY_PATH,
+  },
+  {
+    description: 'Clinvar variant of with conflicting interpretations, at least one of which is Pathogenic (P) or Likely Pathogenic (LP)',
+    text: 'Conflicting with P/LP',
+    value: CLINVAR_CONFLICTING_P_LP,
   },
   {
     description: 'Clinvar variant of uncertain significance or variant with conflicting interpretations',
@@ -214,14 +220,14 @@ export const HGMD_PATHOGENICITY_FILTER_OPTIONS = [
   {
     text: 'Pathogenic/ Likely Path.',
     value: {
-      [CLINVAR_NAME]: [CLIVAR_PATH, CLINVAR_LIKELY_PATH],
+      [CLINVAR_NAME]: [CLIVAR_PATH, CLINVAR_LIKELY_PATH, CLINVAR_CONFLICTING_P_LP],
       [HGMD_NAME]: [HGMD_DM],
     },
   },
   {
     text: 'Not Benign',
     value: {
-      [CLINVAR_NAME]: [CLIVAR_PATH, CLINVAR_LIKELY_PATH, CLINVAR_UNCERTAIN],
+      [CLINVAR_NAME]: [CLIVAR_PATH, CLINVAR_LIKELY_PATH, CLINVAR_CONFLICTING_P_LP, CLINVAR_UNCERTAIN],
       [HGMD_NAME]: HGMD_OPTIONS.map(({ value }) => value),
     },
   },
