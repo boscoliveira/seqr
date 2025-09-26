@@ -14,7 +14,7 @@ from seqr.views.apis.data_manager_api import elasticsearch_status, delete_index,
 from seqr.views.utils.orm_to_json_utils import _get_json_for_models
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, AirtableTest
 from seqr.utils.search.elasticsearch.es_utils_tests import urllib3_responses
-from seqr.models import Individual, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSample, Project, PhenotypePrioritization
+from seqr.models import Individual, Sample, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSample, Project, PhenotypePrioritization
 from settings import SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL
 
 PROJECT_GUID = 'R0001_1kg'
@@ -2053,7 +2053,10 @@ Loading pipeline should be triggered with:
     def _assert_expected_delete_project(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de'],
+            'info': [
+                'Deactivated search for 7 individuals',
+                'Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de',
+            ],
         })
         self.assertEqual(EntriesSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
         self.assertEqual(ProjectGtStatsSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
@@ -2069,11 +2072,22 @@ Loading pipeline should be triggered with:
             22: (0, 3, 0, 1),
         })
 
+        project_samples = Sample.objects.filter(individual__family__project__guid=PROJECT_GUID, is_active=True)
+        self.assertEqual(project_samples.filter(dataset_type='SNV_INDEL').count(), 0)
+        self.assertEqual(project_samples.count(), 4)
+
     def _assert_expected_delete_family(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg'],
+            'info': [
+                'Deactivated search for 3 individuals',
+                'Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg',
+            ],
         })
+
+        family_samples = Sample.objects.filter(individual__family_id=2, is_active=True)
+        self.assertEqual(family_samples.filter(dataset_type='SV').count(), 0)
+        self.assertEqual(family_samples.count(),4)
 
     def _assert_expected_airtable_errors(self, url):
         responses.replace(
