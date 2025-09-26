@@ -140,7 +140,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     new_variant_keys = set(family_variant_data.keys()) - set(saved_variant_map.keys())
     if new_variant_keys:
         new_variant_data = _search_new_saved_variants(new_variant_keys, user, genome_version) if load_new_variant_data else backend_specific_call(
-            lambda o, _: o, _get_clickhouse_variant_keys,  # TODO need to have gene ids when new variants created (or update after)
+            lambda o, _: o, _get_clickhouse_variant_keys,
         )({k: v for k, v in family_variant_data.items() if k in new_variant_keys}, genome_version)
         new_variant_models = []
         for (family_id, variant_id), variant in new_variant_data.items():
@@ -262,10 +262,7 @@ def _get_clickhouse_variants(samples: Sample.objects, families_by_id: dict[int, 
         genotype_keys = get_clickhouse_genotypes(
             project_guid, family_guids, genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, variant_key_map.keys(), samples,
         )
-        qs = get_annotations_queryset(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, variant_key_map.keys())
-        gene_ids_by_key = dict(qs.values_list(
-            'key', ArrayDistinct(ArrayMap(qs.transcript_field, mapped_expression='x.geneId'), output_field=ArrayField(StringField())),
-        ))
+        gene_ids_by_key = _get_gene_ids_by_key(genome_version, variant_key_map.keys())
         for key, genotypes in genotype_keys.items():
             variant_id = variant_key_map[key]
             chrom, pos, ref, alt = variant_id.split('-')
@@ -277,12 +274,21 @@ def _get_clickhouse_variants(samples: Sample.objects, families_by_id: dict[int, 
     return variants
 
 
+def _get_gene_ids_by_key(genome_version, keys):
+    qs = get_annotations_queryset(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, keys)
+    return dict(qs.values_list(
+        'key', ArrayDistinct(ArrayMap(qs.transcript_field, mapped_expression='x.geneId'), output_field=ArrayField(StringField())),
+    ))
+
+
 def _get_clickhouse_variant_keys(variant_data: dict[tuple[int, str], dict], genome_version: str) -> dict[tuple[int, str], dict]:
     variant_ids = {key[1] for key in variant_data}
     variant_key_map = get_clickhouse_key_lookup(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, list(variant_ids))
+    gene_ids_by_key = _get_gene_ids_by_key(genome_version, variant_key_map.values())
     for (_, variant_id), variant in variant_data.items():
         if variant_id in variant_key_map:
             variant['key'] = variant_key_map[variant_id]
+            variant['gene_ids'] = gene_ids_by_key.get(variant['key'])
     return variant_data
 
 
