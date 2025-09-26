@@ -12,7 +12,7 @@ import {
   getGenesById,
   getHasActiveSearchSampleByFamily,
 } from 'redux/selectors'
-import { FAMILY_DETAIL_FIELDS, getVariantMainGeneId } from 'shared/utils/constants'
+import { FAMILY_DETAIL_FIELDS } from 'shared/utils/constants'
 import { Error404 } from 'shared/components/page/Errors'
 import Family from 'shared/components/panel/family/Family'
 import FamilyReads from 'shared/components/panel/family/FamilyReads'

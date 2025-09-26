@@ -212,7 +212,7 @@ export const getTaggedVariantsByFamily = createSelector(
   getGenesById,
   getVariantTagsByGuid,
   (savedVariants, genesById, variantTagsByGuid) => Object.values(savedVariants).filter(
-    variant => variant.tagGuids.length,
+    variant => variant.tagGuids?.length,
   ).reduce((acc, variant) => {
     const { familyGuids, ...variantDetail } = variant
     variantDetail.tags = variant.tagGuids.map(tagGuid => variantTagsByGuid[tagGuid])
@@ -299,7 +299,7 @@ export const getIndividualTaggedVariants = createSelector(
     const { familyGuid } = individualsByGuid[individualGuid]
     return Object.values(taggedVariants[familyGuid] || []).reduce((acc, variant) => {
       const variantDetail = {
-        ...variant.genotypes[individualGuid],
+        ...(variant.genotypes || {})[individualGuid],
         ...variant,
       }
       return [...acc, ...variant.genes.filter(gene => gene).map(gene => ({
