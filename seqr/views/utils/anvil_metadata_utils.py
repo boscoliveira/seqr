@@ -1,7 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
 
-from clickhouse_backend.models import ArrayField, StringField
 from django.db.models import F, Q, Value, CharField, Aggregate
 from django.db.models.functions import Replace
 from django.contrib.auth.models import User
@@ -9,7 +8,7 @@ from django.contrib.postgres.aggregates import ArrayAgg
 import requests
 from typing import Callable, Iterable
 
-from clickhouse_search.backend.functions import ArrayMap, ArrayFilter
+from clickhouse_search.backend.functions import ArrayFilter
 from clickhouse_search.search import get_annotations_queryset, get_transcripts_queryset
 from matchmaker.models import MatchmakerSubmission
 from reference_data.models import HumanPhenotypeOntology, Omim, GENOME_VERSION_LOOKUP
