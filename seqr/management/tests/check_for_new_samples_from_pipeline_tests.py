@@ -338,6 +338,7 @@ OPENED_RUN_JSON_FILES = [{
 
 def mock_opened_file(index):
     m = mock.MagicMock()
+    m.wait.return_value = 0
     m.stdout = [json.dumps(OPENED_RUN_JSON_FILES[index]).encode()]
     return m
 
