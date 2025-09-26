@@ -75,7 +75,7 @@ export const loadCurrentProjectAnalysisGroups = () => (dispatch, getState) => {
 export const loadProjectLocusLists = () => loadCurrentProjectChildEntities('locus lists', REQUEST_LOCUS_LISTS, RECEIVE_LOCUS_LISTS)
 
 export const loadFamilyVariantSummary = familyGuid => loadFamilyData(
-  familyGuid, 'discoveryTags', 'variant_tag_summary', REQUEST_FAMILY_VARIANT_SUMMARY,
+  familyGuid, 'discoveryGeneIds', 'variant_tag_summary', REQUEST_FAMILY_VARIANT_SUMMARY,
 )
 
 export const loadSavedVariants = ({ familyGuids, variantGuid, tag }) => (dispatch, getState) => {
