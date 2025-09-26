@@ -26,6 +26,7 @@ class SetSavedVariantKeyTest(AnvilAuthenticationTestCase):
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
     def test_command(self, mock_subprocess):
         mock_subprocess.return_value.stdout = self.MOCK_GCNV_DATA
+        mock_subprocess.return_value.wait.return_value = 0
 
         call_command('set_saved_variant_key')
         self.assert_json_logs(user=None, expected=[
@@ -106,6 +107,7 @@ class SetSavedVariantKeyFailedMappingTest(SetSavedVariantKeyTest):
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
     def test_command(self, mock_subprocess):
         mock_subprocess.return_value.stdout = self.MOCK_GCNV_DATA
+        mock_subprocess.return_value.wait.return_value = 0
 
         call_command('set_saved_variant_key')
         self.assert_json_logs(user=None, expected=[
