@@ -4,7 +4,6 @@ from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand
 from django.db.models import F
 import logging
-import re
 
 from clickhouse_search.search import get_clickhouse_key_lookup
 from reference_data.models import GENOME_VERSION_GRCh38, GENOME_VERSION_GRCh37
