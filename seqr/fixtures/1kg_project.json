@@ -2195,7 +2195,7 @@
         "ref": null,
         "alt": null,
         "variant_id": "prefix_19107_DEL",
-        "gene_ids": ["ENSG00000240361", "ENSG00000135953", "ENSG00000223972"],
+        "gene_ids": ["ENSG00000135953", "ENSG00000223972", "ENSG00000240361"],
         "saved_variant_json": {
             "liftedOverGenomeVersion": null,
             "pos": 249045487,
