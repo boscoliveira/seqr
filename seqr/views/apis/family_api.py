@@ -8,7 +8,6 @@ from django.contrib.postgres.aggregates import ArrayAgg
 from django.db.models import Count, Max, Q, F
 from django.db.models.fields.files import ImageFieldFile
 
-from clickhouse_search.search import get_clickhouse_genes
 from matchmaker.models import MatchmakerSubmission
 from reference_data.models import Omim
 from seqr.utils.gene_utils import get_genes_for_variant_display
@@ -58,12 +57,10 @@ def family_page_data(request, family_guid):
 
     additional_fields = backend_specific_call([],['key', 'dataset_type'])
     discovery_variants = family.savedvariant_set.filter(varianttag__variant_tag_type__category=DISCOVERY_CATEGORY).values(
-        'xpos', 'xpos_end', *additional_fields,
-        svType=F('saved_variant_json__svType'), transcripts=F('saved_variant_json__transcripts'),
+        'xpos', 'xpos_end', 'gene_ids', *additional_fields,
+        svType=F('saved_variant_json__svType')
     )
-    gene_ids = backend_specific_call( # TODO
-        _variants_gene_ids, _clickhouse_variants_gene_ids,
-    )(discovery_variants, project.genome_version, request.user)
+    gene_ids = {gene_id for variant in discovery_variants for gene_id in variant['gene_ids']}
     discovery_variant_intervals = [dict(zip(
         ['chrom', 'start', 'end_chrom', 'end', 'svType', 'hasSvType'],
         [*get_chrom_pos(v['xpos']), *get_chrom_pos(v['xpos_end']), v['svType'], (v.get('dataset_type') or '').startswith(Sample.DATASET_TYPE_SV_CALLS)]
@@ -104,27 +101,6 @@ def family_page_data(request, family_guid):
     response['mmeSubmissionsByGuid'] = {s['submissionGuid']: s for s in submissions}
 
     return create_json_response(response)
-
-
-def _variants_gene_ids(variants, *args, **kwargs):
-    return {gene_id for variant in variants for gene_id in (variant['transcripts'] or {}).keys()}
-
-
-def _clickhouse_variants_gene_ids(variants, genome_version, user):
-    keys_by_dataset_type = defaultdict(set)
-    no_key_variants = []
-    for v in variants:
-        if v['key']:
-            keys_by_dataset_type[v['dataset_type']].add(v['key'])
-        else:
-            no_key_variants.append(v)
-    gene_ids = _variants_gene_ids(no_key_variants)
-    for dataset_type, keys in keys_by_dataset_type.items():
-        try:
-            gene_ids.update(get_clickhouse_genes(genome_version, dataset_type, keys))
-        except Exception as e:
-            logger.error(f'Error loading genes from clickhouse: {e}', user)
-    return  gene_ids
 
 
 def _intervals_overlap(interval1, interval2):

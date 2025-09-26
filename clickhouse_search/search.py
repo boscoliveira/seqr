@@ -9,7 +9,7 @@ import json
 
 from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import Array, ArrayFilter, ArrayIntersect, ArraySort, GroupArrayArray, If, Tuple, \
-    ArrayDistinct, ArrayMap
+    ArrayMap
 from clickhouse_search.models import ENTRY_CLASS_MAP, ANNOTATIONS_CLASS_MAP, TRANSCRIPTS_CLASS_MAP, KEY_LOOKUP_CLASS_MAP, \
     BaseClinvar, BaseAnnotationsMitoSnvIndel, BaseAnnotationsGRCh37SnvIndel, BaseAnnotationsSvGcnv
 from reference_data.models import GeneConstraint, Omim, GENOME_VERSION_LOOKUP
@@ -637,13 +637,6 @@ def get_clickhouse_annotations(genome_version, dataset_type, keys):
     qs = get_annotations_queryset(genome_version, dataset_type, keys)
     results = qs.join_seqr_pop().join_clinvar(keys).result_values(skip_entry_fields=True)
     return format_clickhouse_results(results, genome_version)
-
-
-def get_clickhouse_genes(genome_version, dataset_type, keys):
-    results = get_annotations_queryset(genome_version, dataset_type, keys)
-    return results.aggregate(
-        gene_ids=ArrayDistinct(GroupArrayArray(ArrayMap(results.transcript_field, mapped_expression='x.geneId')), output_field=ArrayField(StringField())),
-    )['gene_ids']
 
 
 def get_clickhouse_key_lookup(genome_version, dataset_type, variants_ids, reverse=False):
