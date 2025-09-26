@@ -37,7 +37,10 @@ def populate_variant_gene_ids(apps, schema_editor):
             for i in range(0, len(all_keys), BATCH_SIZE):
                 batch_keys = all_keys[i:i + BATCH_SIZE]
                 clickhouse_qs = get_annotations_queryset(genome_version, dataset_type, batch_keys)
-                gene_ids_expr = ArrayMap(clickhouse_qs.transcript_field, mapped_expression='x.geneId')
+                gene_ids_expr = ArrayMap(
+                    clickhouse_qs.transcript_field, mapped_expression='x.geneId',
+                    output_field=django.contrib.postgres.fields.ArrayField(base_field=models.CharField(max_length=20)),
+                )
                 to_update = []
                 for key, gene_ids in clickhouse_qs.values_list('key', gene_ids_expr):
                     for variant in variants_by_key[key]:
