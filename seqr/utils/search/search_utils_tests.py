@@ -504,7 +504,6 @@ class SearchUtilsTests(SearchTestHelper):
         )
 
 
-@mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', '')
 @mock.patch('seqr.utils.search.elasticsearch.es_utils.ELASTICSEARCH_SERVICE_HOSTNAME', 'testhost')
 class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
     databases = ['default', 'reference_data']
@@ -595,7 +594,6 @@ class ElasticsearchSearchUtilsTests(TestCase, SearchUtilsTests):
         pass
 
 
-@mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', 'testhost')
 class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, SearchUtilsTests):
     databases = '__all__'
     fixtures = ['users', '1kg_project', 'reference_data', 'clickhouse_transcripts']

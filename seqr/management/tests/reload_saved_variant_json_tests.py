@@ -1,7 +1,7 @@
 #-*- coding: utf-8 -*-
 import mock
 
-from django.core.management import call_command, CommandError
+from django.core.management import call_command
 from django.test import TestCase
 
 PROJECT_NAME = '1kg project n\u00e5me with uni\u00e7\u00f8de'
@@ -88,7 +88,6 @@ class ReloadSavedVariantJsonTest(TestCase):
         mock_logger.error.assert_called_with('Error reloading variants in 1kg project n\xe5me with uni\xe7\xf8de: Database error.')
 
 
-@mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', 'testhost')
 class ClickhouseReloadSavedVariantJsonTest(TestCase):
 
     fixtures = ['users', '1kg_project']

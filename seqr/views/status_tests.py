@@ -8,7 +8,6 @@ from seqr.views.status import status_view
 from seqr.utils.search.elasticsearch.es_utils_tests import urllib3_responses
 
 
-@mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', '')
 @mock.patch('seqr.views.status.redis.StrictRedis')
 @mock.patch('seqr.views.status.logger')
 class ElasticsearchStatusTest(TestCase):
