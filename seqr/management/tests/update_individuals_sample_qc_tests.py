@@ -99,6 +99,7 @@ class UpdateIndividualsSampleQC(TestCase):
         # Test 'sample_qc' not in metadata
         self.mock_ls_process.communicate.return_value = b'gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-02-24/metadata.json\n', b''
         self.mock_metadata_file.stdout = [json.dumps({}).encode()]
+        self.mock_metadata_file.wait.return_value = 0
         self.mock_subprocess.side_effect = [self.mock_ls_process, self.mock_metadata_file]
 
         with self.assertRaises(CommandError):

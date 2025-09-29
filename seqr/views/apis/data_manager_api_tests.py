@@ -823,6 +823,7 @@ class DataManagerAPITest(AirtableTest):
         mock_does_file_exist.wait.return_value = 0
         mock_file_iter = mock.MagicMock()
         def _set_file_iter_stdout(rows):
+            mock_file_iter.wait.return_value = 0
             mock_file_iter.stdout = [('\t'.join([str(col) for col in row]) + '\n').encode() for row in rows]
             mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter, mock_does_file_exist]
 
@@ -1757,6 +1758,7 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         self.mock_does_file_exist = mock.MagicMock()
         self.mock_file_iter = mock.MagicMock()
         self.mock_file_iter.stdout = []
+        self.mock_file_iter.wait.return_value = 0
         self.mock_subprocess.side_effect = [self.mock_does_file_exist, self.mock_file_iter]
         self.addCleanup(patcher.stop)
         patcher = mock.patch('seqr.utils.search.add_data_utils.safe_post_to_slack')

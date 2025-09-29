@@ -154,6 +154,7 @@ class AnvilFileUtilsTest(AnvilAuthenticationTestCase, FileUtilsTest):
             mock.call(f'gsutil mv {self._temp_file_path()} {gs_file}', stdout=-1, stderr=-2, shell=True),  # nosec
             mock.call().wait(),
             mock.call(f'gsutil cat {gs_file} | gunzip -c -q - ', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
         ])
 
