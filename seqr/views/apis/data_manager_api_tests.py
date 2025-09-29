@@ -1887,8 +1887,8 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
 
     def _assert_expected_airtable_vcf_id_call(self, required_sample_field=None, additional_vcf_ids='', **kwargs):
         self._assert_expected_airtable_call(
-            required_sample_field, 'R0004_non_analyst_project', **kwargs, additional_fields=['VCFIDWithMismatch'],
-            additional_filter=f"OR(VCFIDWithMismatch='NA21234'{additional_vcf_ids})",
+            required_sample_field, 'R0004_non_analyst_project', **kwargs, additional_fields=['VCFIDWithMismatch', 'SeqrIDWithMismatch'],
+            additional_filter=f"OR(SeqrIDWithMismatch='NA21234'{additional_vcf_ids})",
             additional_pdo_statuses=",SEARCH('Methods (Loading)',ARRAYJOIN(PDOStatus,';')),SEARCH('On hold for phenotips, but ready to load',ARRAYJOIN(PDOStatus,';'))",
         )
 
@@ -1942,7 +1942,7 @@ Loading pipeline should be triggered with:
         body['sampleType'] = 'WGS'
         self.assertEqual(len(responses.calls), 1)
         self._assert_expected_airtable_vcf_id_call(
-            required_sample_field='gCNV_CallsetPath', additional_vcf_ids=",VCFIDWithMismatch='NA21987'",
+            required_sample_field='gCNV_CallsetPath', additional_vcf_ids=",SeqrIDWithMismatch='NA21987'",
         )
 
         responses.calls.reset()
