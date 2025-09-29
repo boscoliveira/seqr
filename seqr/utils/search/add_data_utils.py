@@ -238,3 +238,22 @@ def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids:
         return errors
 
     return validate_expected_samples
+
+
+def get_missing_family_samples(expected_sample_set, record_family_ids, previous_loaded_individuals):
+    families = set(record_family_ids.values())
+    missing_samples_by_family = defaultdict(set)
+    for loaded_individual in previous_loaded_individuals:
+        individual_id = loaded_individual[JsonConstants.INDIVIDUAL_ID_COLUMN]
+        family_id = loaded_individual[JsonConstants.FAMILY_ID_COLUMN]
+        if family_id in families and individual_id not in expected_sample_set:
+            missing_samples_by_family[family_id].add(individual_id)
+
+    return missing_samples_by_family
+
+
+def get_loaded_individual_ids(record_family_ids, previous_loaded_individuals):
+    families = set(record_family_ids.values())
+    return [
+        i['individual_id'] for i in previous_loaded_individuals if i[JsonConstants.FAMILY_ID_COLUMN] in families
+    ]

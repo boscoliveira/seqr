@@ -22,7 +22,7 @@ from seqr.views.utils.pedigree_info_utils import parse_basic_pedigree_table, Jso
 from seqr.views.utils.individual_utils import add_or_update_individuals_and_families
 from seqr.utils.communication_utils import send_html_email
 from seqr.utils.file_utils import list_files
-from seqr.utils.search.add_data_utils import get_loading_samples_validator, trigger_data_loading
+from seqr.utils.search.add_data_utils import get_missing_family_samples, get_loaded_individual_ids, trigger_data_loading
 from seqr.utils.vcf_utils import validate_vcf_and_get_samples, get_vcf_list
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
@@ -244,10 +244,8 @@ def add_workspace_data(request, project_guid):
 def _parse_uploaded_pedigree(request_json, project=None, search_dataset_type=None):
     loaded_sample_types = [] if search_dataset_type else None
     loaded_individual_ids = []
-    validate_expected_samples = get_loading_samples_validator(
-        request_json['vcfSamples'], loaded_individual_ids, loaded_sample_types=loaded_sample_types, sample_source='the pedigree file',
-        missing_family_samples_error='In order to load data for families with previously loaded data, new family samples must be joint called in a single VCF with all previously loaded samples. The following samples were previously loaded in this project but are missing from the VCF:\n',
-    )
+    def validate_expected_samples(*args):
+        return _validate_expected_samples(request_json['vcfSamples'], loaded_sample_types, loaded_individual_ids, *args)
 
     json_records = load_uploaded_file(request_json['uploadedFileId'])
     pedigree_records = parse_basic_pedigree_table(
@@ -256,6 +254,36 @@ def _parse_uploaded_pedigree(request_json, project=None, search_dataset_type=Non
         ], search_dataset_type=search_dataset_type, validate_expected_samples=validate_expected_samples)
 
     return pedigree_records, loaded_individual_ids, loaded_sample_types[0] if loaded_sample_types else None
+
+
+def _validate_expected_samples(vcf_samples, loaded_sample_types, loaded_individual_ids, record_family_ids, previous_loaded_individuals, sample_type):
+    errors = []
+
+    if loaded_sample_types is not None:
+        if sample_type:
+            loaded_sample_types.append(sample_type)
+        else:
+            errors.append('New data cannot be added to this project until the previously requested data is loaded')
+
+    missing_vcf_samples = set(record_family_ids.keys()) - set(vcf_samples)
+    if missing_vcf_samples:
+        errors.append(
+            f'The following samples are included in the pedigree file but are missing from the VCF: {", ".join(sorted(missing_vcf_samples))}',
+        )
+
+    missing_samples_by_family = get_missing_family_samples(vcf_samples, record_family_ids, previous_loaded_individuals)
+    if missing_samples_by_family:
+        missing_family_sample_messages = [
+            f'Family {family_id}: {", ".join(sorted(individual_ids))}'
+            for family_id, individual_ids in missing_samples_by_family.items()
+        ]
+        errors.append('\n'.join([
+            'In order to load data for families with previously loaded data, new family samples must be joint called in a single VCF with all previously loaded samples. The following samples were previously loaded in this project but are missing from the VCF:',
+        ] + sorted(missing_family_sample_messages)))
+
+    loaded_individual_ids += get_loaded_individual_ids(record_family_ids, previous_loaded_individuals)
+
+    return errors
 
 
 def _trigger_add_workspace_data(project, pedigree_records, user, data_path, sample_type, previous_loaded_ids=None, get_pedigree_json=False):
