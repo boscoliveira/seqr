@@ -13,6 +13,7 @@ from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
 from seqr.views.utils.export_utils import write_multiple_files
+from seqr.views.utils.json_utils import _to_title_case
 from seqr.views.utils.pedigree_info_utils import JsonConstants
 from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL, BASE_URL, ANVIL_UI_URL, PIPELINE_RUNNER_SERVER, \
     SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL, SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL, LOADING_DATASETS_DIR
@@ -65,6 +66,22 @@ def update_airtable_loading_tracking_status(project, status, additional_update=N
         update={'Status': status, **(additional_update or {})},
     )
 
+def trigger_delete_families_search(project, family_guids, user=None):
+    search_samples = Sample.objects.filter(is_active=True, individual__family__guid__in=family_guids)
+    info = []
+    if search_samples:
+        updated_families = search_samples.values_list("individual__family__family_id", flat=True).distinct()
+        family_summary = ", ".join(sorted(updated_families))
+        num_updated = search_samples.update(is_active=False)
+        message = f'Disabled search for {num_updated} samples in the following {len(updated_families)} families: {family_summary}'
+        info.append(message)
+        logger.info(message, user)
+
+    variables = {'project_guid': project.guid, 'family_guids': family_guids}
+    _enqueue_pipeline_request('delete_families', variables, user)
+    info.append('Triggered delete family data')
+    return info
+
 def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
                          genome_version: str, data_path: str, user: User, raise_error: bool = False, skip_expect_tdr_metrics: bool = True,
                          skip_check_sex_and_relatedness: bool = True, vcf_sample_id_map=None,
@@ -85,26 +102,14 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
     _upload_data_loading_files(individual_ids, vcf_sample_id_map or {}, user, file_path, raise_error)
     _write_gene_id_file(user)
 
-    response = requests.post(f'{PIPELINE_RUNNER_SERVER}/loading_pipeline_enqueue', json=variables, timeout=60)
-    success = True
-    try:
-        response.raise_for_status()
-        logger.info('Triggered loading pipeline', user, detail=variables)
-    except requests.HTTPError as e:
-        success = False
-        error = str(e)
-        if response.status_code == 409:
-            error = 'Loading pipeline is already running. Wait for it to complete and resubmit'
-            e = ErrorsWarningsException([error])
-        if raise_error:
-            raise e
-        else:
-            logger.warning(f'Error triggering loading pipeline: {error}', user, detail=variables)
-            safe_post_to_slack(
-                SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
-                f'{error_message}: {error}\nLoading pipeline should be triggered with:\n```{json.dumps(variables, indent=4)}```',
-            )
+    error = _enqueue_pipeline_request('loading_pipeline', variables, user, raise_error)
+    if error:
+        safe_post_to_slack(
+            SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL,
+            f'{error_message}: {error}\nLoading pipeline should be triggered with:\n```{json.dumps(variables, indent=4)}```',
+        )
 
+    success = not error
     if success_message and (success or success_slack_channel != SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL):
         safe_post_to_slack(success_slack_channel, '\n\n'.join([
             success_message,
@@ -113,6 +118,24 @@ def trigger_data_loading(projects: list[Project], individual_ids: list[int], sam
         ]))
 
     return success
+
+
+def _enqueue_pipeline_request(name: str, variables: dict, user: User, raise_error: bool = True):
+    response = requests.post(f'{PIPELINE_RUNNER_SERVER}/{name}_enqueue', json=variables, timeout=60)
+    error = None
+    try:
+        response.raise_for_status()
+        logger.info(f'Triggered {_to_title_case(name)}', user, detail=variables)
+    except requests.HTTPError as e:
+        error = str(e)
+        if response.status_code == 409:
+            error = 'Loading pipeline is already running. Wait for it to complete and resubmit'
+            e = ErrorsWarningsException([error])
+        if raise_error:
+            raise e
+        else:
+            logger.warning(f'Error Triggering {_to_title_case(name)}: {error}', user, detail=variables)
+    return error
 
 
 def _loading_dataset_type(sample_type: str, dataset_type: str):
