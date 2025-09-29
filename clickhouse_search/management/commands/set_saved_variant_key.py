@@ -214,7 +214,7 @@ class Command(BaseCommand):
         logger.info('Done')
 
     @staticmethod
-    def _set_variant_keys(variants_ids, dataset_type, genome_version=GENOME_VERSION_GRCh38, variant_id_updates=None):
+    def _set_variant_keys(variants_ids, dataset_type, genome_version=GENOME_VERSION_GRCh38):
         if not variants_ids:
             return set()
         logger.info(f'Finding keys for {len(variants_ids)} {dataset_type} (GRCh{genome_version}) variant ids')
@@ -224,13 +224,8 @@ class Command(BaseCommand):
             return set(variants_ids)
 
         mapped_variant_ids = list(variant_key_map.keys())
-        if variant_id_updates:
-            reverse_lookup = {v: k for k, v in variant_id_updates.items()}
-            mapped_variant_ids = [reverse_lookup[vid] for vid in mapped_variant_ids]
 
         update_fields = ['key', 'dataset_type']
-        if variant_id_updates:
-            update_fields.append('variant_id')
         total_num_updated = 0
         for i in range(0, len(mapped_variant_ids), BATCH_SIZE):
             batch_ids = mapped_variant_ids[i:i + BATCH_SIZE]
@@ -238,8 +233,6 @@ class Command(BaseCommand):
                 family__project__genome_version=genome_version, variant_id__in=batch_ids,
             )
             for variant in saved_variants:
-                if variant_id_updates:
-                    variant.variant_id = variant_id_updates[variant.variant_id]
                 variant.key = variant_key_map[variant.variant_id]
                 variant.dataset_type = dataset_type
             num_updated = SavedVariant.objects.bulk_update(saved_variants, update_fields)
