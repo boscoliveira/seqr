@@ -174,6 +174,7 @@ def _get_pedigree_path(genome_version: str, sample_type: str, dataset_type: str)
     return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{loading_dataset_type}/pedigrees/{sample_type}'
 
 
+# TODO cleanup
 def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids: list[int], sample_source: str,
                                   missing_family_samples_error: str, loaded_sample_types: list[str] = None,
                                   fetch_missing_loaded_samples: Callable = None, fetch_missing_vcf_samples: Callable = None) -> Callable:

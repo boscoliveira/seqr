@@ -15,7 +15,7 @@ from requests.exceptions import ConnectionError as RequestConnectionError
 
 from clickhouse_search.search import delete_clickhouse_project, delete_clickhouse_family
 from seqr.utils.communication_utils import send_project_notification
-from seqr.utils.search.add_data_utils import trigger_data_loading, get_loading_samples_validator
+from seqr.utils.search.add_data_utils import trigger_data_loading, get_missing_family_samples, get_loaded_individual_ids
 from seqr.utils.search.elasticsearch.es_utils import get_elasticsearch_status, delete_es_index
 from seqr.utils.search.utils import clickhouse_only, es_only, InvalidSearchException
 from seqr.utils.file_utils import file_iter, does_file_exist
@@ -373,21 +373,55 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         )
     }
 
+    if airtable_samples:
+        missing_airtable_samples = {sample_id for sample_id in airtable_samples if sample_id not in search_individuals_by_id}
+        if missing_airtable_samples:
+            errors.append(
+                f'The following samples are included in airtable for {project.name} but are missing from seqr: {", ".join(missing_airtable_samples)}')
+
+    previous_loaded_individuals, record_family_ids, _ = get_validated_related_individuals(
+        project, search_individuals_by_id, errors, search_dataset_type=dataset_type, search_sample_type=sample_type,
+        add_missing_parents=False,
+    )
+
+    has_airtable = bool(airtable_samples)
+    expected_sample_set = record_family_ids if has_airtable else vcf_samples
+    missing_samples_by_family = get_missing_family_samples(expected_sample_set, record_family_ids, previous_loaded_individuals.values())
+    loading_samples = set(record_family_ids.keys())
+    get_sample_kwargs = {
+        'user': user, 'dataset_type': dataset_type, 'sample_type': sample_type, 'project_guid': project.guid,
+    }
+    if missing_samples_by_family and has_airtable:
+        try:
+            additional_loaded_samples = {
+                sample['sample_id'] for sample in _get_dataset_type_samples_for_matched_pdos(
+                    AVAILABLE_PDO_STATUSES, **get_sample_kwargs,
+                )
+            }
+            for missing_samples in missing_samples_by_family.values():
+                loading_samples.update(missing_samples.intersection(additional_loaded_samples))
+                missing_samples -= additional_loaded_samples
+            missing_samples_by_family = {
+                family_id: samples for family_id, samples in missing_samples_by_family.items() if samples
+            }
+        except ValueError as e:
+            errors.append(str(e))
+
+        sample_source = 'airtable' if has_airtable else 'the vcf'
+    if missing_samples_by_family:
+        missing_family_sample_messages = [
+            f'Family {family_id}: {", ".join(sorted(individual_ids))}'
+            for family_id, individual_ids in missing_samples_by_family.items()
+        ]
+        errors.append('\n'.join(
+            [f'The following families have previously loaded samples absent from {sample_source}'] +
+            sorted(missing_family_sample_messages)
+        ))
+
     vcf_sample_id_map = {}
-    if not airtable_samples:
-        fetch_missing_loaded_samples = None
-        fetch_missing_vcf_samples = None
-        sample_source = 'the vcf'
-    else:
-        get_sample_kwargs = {
-            'user': user, 'dataset_type': dataset_type, 'sample_type': sample_type, 'project_guid': project.guid,
-        }
-        fetch_missing_loaded_samples = lambda: {
-            sample['sample_id'] for sample in _get_dataset_type_samples_for_matched_pdos(
-                AVAILABLE_PDO_STATUSES, **get_sample_kwargs,
-            )
-        }
-        def fetch_missing_vcf_samples(missing_vcf_samples):
+    missing_vcf_samples = set(loading_samples - set(vcf_samples))
+    if missing_vcf_samples and has_airtable:
+        try:
             samples = _get_dataset_type_samples_for_matched_pdos(
                 LOADABLE_PDO_STATUSES + AVAILABLE_PDO_STATUSES, **get_sample_kwargs, sample_fields=['VCFIDWithMismatch'],
                 additional_sample_filters={'SeqrIDWithMismatch': sorted(missing_vcf_samples)},
@@ -396,25 +430,16 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
                 s['sample_id']: s['VCFIDWithMismatch'] for s in samples
                 if s['sample_id'] in airtable_samples and s['VCFIDWithMismatch'] in vcf_samples
             })
-            return vcf_sample_id_map.keys()
-        sample_source = 'airtable'
+            missing_vcf_samples -= set(vcf_sample_id_map.keys())
+        except ValueError as e:
+            errors.append(str(e))
+    if missing_vcf_samples:
+        errors.insert(
+            0,
+            f'The following samples are included in {sample_source} but are missing from the VCF: {", ".join(sorted(missing_vcf_samples))}',
+        )
 
-        missing_airtable_samples = {sample_id for sample_id in airtable_samples if sample_id not in search_individuals_by_id}
-        if missing_airtable_samples:
-            errors.append(
-                f'The following samples are included in airtable for {project.name} but are missing from seqr: {", ".join(missing_airtable_samples)}')
-
-    loaded_individual_ids = []
-    validate_expected_samples = get_loading_samples_validator(
-        vcf_samples, loaded_individual_ids, sample_source=sample_source,
-        fetch_missing_loaded_samples=fetch_missing_loaded_samples, fetch_missing_vcf_samples=fetch_missing_vcf_samples,
-        missing_family_samples_error= f'The following families have previously loaded samples absent from {sample_source}\n',
-    )
-
-    get_validated_related_individuals(
-        project, search_individuals_by_id, errors, search_dataset_type=dataset_type, search_sample_type=sample_type,
-        validate_expected_samples=validate_expected_samples, add_missing_parents=False,
-    )
+    loaded_individual_ids = get_loaded_individual_ids(record_family_ids, previous_loaded_individuals.values())
 
     return [i['id'] for i in search_individuals_by_id.values()] + loaded_individual_ids, vcf_sample_id_map
 
