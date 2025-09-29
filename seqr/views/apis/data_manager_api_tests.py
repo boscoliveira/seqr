@@ -1953,8 +1953,8 @@ Loading pipeline should be triggered with:
         self.assertDictEqual(response.json(), {
             'warnings': None,
             'errors': [
-                'The following samples are included in airtable but are missing from the VCF: NA21987',
                 'The following families have previously loaded samples absent from airtable\nFamily fam14: NA21234, NA21654',
+                'The following samples are included in airtable but are missing from the VCF: NA21987',
             ],
         })
         self.assertEqual(len(responses.calls), 2)

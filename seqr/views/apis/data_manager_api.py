@@ -384,14 +384,13 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         add_missing_parents=False,
     )
 
-    has_airtable = bool(airtable_samples)
-    expected_sample_set = record_family_ids if has_airtable else vcf_samples
+    expected_sample_set = record_family_ids if airtable_samples else vcf_samples
     missing_samples_by_family = get_missing_family_samples(expected_sample_set, record_family_ids, previous_loaded_individuals.values())
     loading_samples = set(record_family_ids.keys())
     get_sample_kwargs = {
         'user': user, 'dataset_type': dataset_type, 'sample_type': sample_type, 'project_guid': project.guid,
     }
-    if missing_samples_by_family and has_airtable:
+    if missing_samples_by_family and airtable_samples:
         try:
             additional_loaded_samples = {
                 sample['sample_id'] for sample in _get_dataset_type_samples_for_matched_pdos(
@@ -407,7 +406,7 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         except ValueError as e:
             errors.append(str(e))
 
-        sample_source = 'airtable' if has_airtable else 'the vcf'
+    sample_source = 'airtable' if airtable_samples else 'the vcf'
     if missing_samples_by_family:
         missing_family_sample_messages = [
             f'Family {family_id}: {", ".join(sorted(individual_ids))}'
@@ -419,8 +418,8 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         ))
 
     vcf_sample_id_map = {}
-    missing_vcf_samples = set(loading_samples - set(vcf_samples))
-    if missing_vcf_samples and has_airtable:
+    missing_vcf_samples = [] if vcf_samples is None else set(loading_samples - set(vcf_samples))
+    if missing_vcf_samples and airtable_samples:
         try:
             samples = _get_dataset_type_samples_for_matched_pdos(
                 LOADABLE_PDO_STATUSES + AVAILABLE_PDO_STATUSES, **get_sample_kwargs, sample_fields=['VCFIDWithMismatch'],
@@ -434,8 +433,7 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         except ValueError as e:
             errors.append(str(e))
     if missing_vcf_samples:
-        errors.insert(
-            0,
+        errors.append(
             f'The following samples are included in {sample_source} but are missing from the VCF: {", ".join(sorted(missing_vcf_samples))}',
         )
 
