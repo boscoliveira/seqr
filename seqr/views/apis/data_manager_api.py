@@ -430,10 +430,10 @@ def trigger_delete_project(request):
     sample_types = list(
         samples.values_list('sample_type', flat=True).distinct()
     ) if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
-    updated = Sample.bulk_update(user=user, update_json={'is_active': False}, queryset=samples)
+    updated = Sample.bulk_update(user=request.user, update_json={'is_active': False}, queryset=samples)
     info = [f'Deactivated search for {len(updated)} individuals']
     for sample_type in sample_types:
-        info.append(delete_clickhouse_project(project, *args, dataset_type=dataset_type, sample_type=sample_type))
+        info.append(delete_clickhouse_project(project, dataset_type=dataset_type, sample_type=sample_type))
     return create_json_response({'info': info})
 
 
