@@ -726,8 +726,11 @@ class EntriesManager(SearchQuerySet):
     def genome_version(self):
         return self.annotations_model.ANNOTATION_CONSTANTS['genomeVersion']
 
-    def search(self, sample_data, freqs=None, annotations=None, **kwargs):
+    def search(self, sample_data, freqs=None, annotations=None, exclude_keys=None, **kwargs):
         entries = self.filter_locus(**kwargs)
+
+        if exclude_keys:
+            entries = entries.exclude(key__in=exclude_keys)
 
         entries = self._join_annotations(entries)
 

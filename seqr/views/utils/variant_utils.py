@@ -16,7 +16,7 @@ from reference_data.models import TranscriptInfo, Omim, GENOME_VERSION_GRCh38
 from seqr.models import SavedVariant, VariantSearchResults, Family, LocusList, LocusListInterval, LocusListGene, \
     RnaSeqTpm, PhenotypePrioritization, Project, Sample, RnaSample, VariantTag, VariantTagType
 from seqr.utils.search.elasticsearch.es_utils import get_es_variants_for_variant_ids
-from seqr.utils.search.utils import backend_specific_call, parse_variant_id
+from seqr.utils.search.utils import backend_specific_call, variant_dataset_type
 from seqr.utils.gene_utils import get_genes_for_variants
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.xpos_utils import get_xpos
@@ -94,7 +94,7 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
         update_json = {
             'key': variant_json['key'],
             'genotypes': variant_json.get('genotypes', {}),
-            'dataset_type': _dataset_type(variant_id, variant_json),
+            'dataset_type': variant_dataset_type({'variantId': variant_id, **variant_json}),
         }
     else:
         update_json = {'saved_variant_json': variant_json}
@@ -110,13 +110,6 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
         'family_id': family_id,
         'variant_id': variant_id,
     }, update_json
-
-
-def _dataset_type(variant_id, variant):
-    if not parse_variant_id(variant_id):
-        sample_type = Sample.SAMPLE_TYPE_WGS if 'endChrom' in variant else Sample.SAMPLE_TYPE_WES
-        return f'{Sample.DATASET_TYPE_SV_CALLS}_{sample_type}'
-    return Sample.DATASET_TYPE_MITO_CALLS if 'mitomapPathogenic' in variant else Sample.DATASET_TYPE_VARIANT_CALLS
 
 
 def _transcript_sort(gene_id, saved_variant_json):

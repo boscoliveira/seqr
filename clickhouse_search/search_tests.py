@@ -503,6 +503,34 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             [GRCH37_VARIANT], inheritance_mode=inheritance_mode, inheritance_filter={'allowNoCall': True},
         )
 
+    def test_exclude_previous_search_results(self):
+        VariantSearchResults.objects.create(variant_search_id=79516, search_hash='abc1234')
+        self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
+            VARIANT1, VARIANT2, [VARIANT3, VARIANT2], [GCNV_VARIANT4, GCNV_VARIANT3],
+        ]})]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
+
+        self._assert_expected_search(
+            [[MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3],
+            inheritance_mode='recessive', **COMP_HET_ALL_PASS_FILTERS,
+            exclude={'previousSearch': True, 'previousSearchHash': 'abc1234'}, cached_variant_fields=[
+                [{'selectedGeneId': 'ENSG00000277258'}, {'selectedGeneId': 'ENSG00000277258'}],
+                [{'selectedGeneId': 'ENSG00000097046'}, {'selectedGeneId': 'ENSG00000097046'}],
+                {}, {},
+            ],
+        )
+
+        self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
+            [MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3,
+        ]})]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
+        self._assert_expected_search(
+            [VARIANT2, [GCNV_VARIANT3, GCNV_VARIANT4]],
+            inheritance_mode='recessive', cached_variant_fields=[
+                {}, [{'selectedGeneId': 'ENSG00000275023'}, {'selectedGeneId': 'ENSG00000275023'}],
+            ],
+        )
+
     def test_quality_filter(self):
         quality_filter = {'vcf_filter': 'pass'}
         self._assert_expected_search(

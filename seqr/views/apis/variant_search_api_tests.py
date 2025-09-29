@@ -641,16 +641,20 @@ class VariantSearchAPITest(object):
         mock_error_logger.assert_not_called()
 
         # Test no results
+        VariantSearchResults.objects.get(search_hash=SEARCH_HASH).delete()
         mock_get_variants.side_effect = _get_empty_es_variants
         response = self.client.post(url, content_type='application/json', data=json.dumps({
-            'projectFamilies': PROJECT_FAMILIES, 'search': SEARCH
+            'projectFamilies': PROJECT_FAMILIES, 'search': {**SEARCH, 'exclude': {'previousSearch': True}}, 'previousSearchHash': 'abc1234',
         }))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertDictEqual(response_json, {
             'searchedVariants': [],
             'search': {
-                'search': SEARCH,
+                'search': {**SEARCH, 'exclude': {
+                    'previousSearch': True,
+                    'previousSearchHash': 'abc1234',
+                }},
                 'projectFamilies': PROJECT_FAMILIES,
                 'totalResults': 0,
             }

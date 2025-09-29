@@ -1,4 +1,5 @@
 import React from 'react'
+import { FormSpy } from 'react-final-form'
 import styled from 'styled-components'
 import { Form, Grid, Header, List, Loader, Table } from 'semantic-ui-react'
 
@@ -529,6 +530,16 @@ export const QUALITY_PANEL = {
   fieldProps: { control: LazyLabeledSlider, format: val => val || null },
 }
 
+const SUBSCRIPTION = { values: true }
+
+const ExcludeSearchToggle = props => (
+  <FormSpy subscription={SUBSCRIPTION}>
+    {({ values }) => (
+      <InlineToggle {...props} disabled={!values.previousSearchHash} />
+    )}
+  </FormSpy>
+)
+
 const ES_EXCLUDE_FIELDS = [
   {
     ...BASE_LOCUS_FIELD,
@@ -537,6 +548,14 @@ const ES_EXCLUDE_FIELDS = [
   },
 ]
 const EXCLUDE_FIELDS = [
+  {
+    name: 'previousSearch',
+    label: 'Exclude Previous Search Results',
+    labelHelp: 'Exclude any results returned by the current search from the next search results',
+    color: 'grey',
+    component: ExcludeSearchToggle,
+    width: 8,
+  },
   {
     ...CLINVAR_FIELD,
     ...PATHOGENICITY_FIELD_PROPS,
