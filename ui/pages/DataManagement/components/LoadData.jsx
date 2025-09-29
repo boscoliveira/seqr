@@ -55,12 +55,6 @@ const FILE_PATH_FIELD = {
 
 const CALLSET_PAGE_FIELDS = [
   {
-    name: 'skipValidation',
-    label: 'Skip Callset Validation',
-    component: InlineToggle,
-    asFormInput: true,
-  },
-  {
     ...GENOME_VERSION_FIELD,
     component: ButtonRadioGroup,
     validate: validators.required,

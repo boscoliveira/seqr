@@ -14,7 +14,7 @@ from seqr.views.apis.data_manager_api import elasticsearch_status, delete_index,
 from seqr.views.utils.orm_to_json_utils import _get_json_for_models
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, AirtableTest
 from seqr.utils.search.elasticsearch.es_utils_tests import urllib3_responses
-from seqr.models import Individual, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSample, Project, PhenotypePrioritization
+from seqr.models import Individual, Sample, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSample, Project, PhenotypePrioritization
 from settings import SEQR_SLACK_LOADING_NOTIFICATION_CHANNEL
 
 PROJECT_GUID = 'R0001_1kg'
@@ -823,6 +823,7 @@ class DataManagerAPITest(AirtableTest):
         mock_does_file_exist.wait.return_value = 0
         mock_file_iter = mock.MagicMock()
         def _set_file_iter_stdout(rows):
+            mock_file_iter.wait.return_value = 0
             mock_file_iter.stdout = [('\t'.join([str(col) for col in row]) + '\n').encode() for row in rows]
             mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter, mock_does_file_exist]
 
@@ -1377,7 +1378,7 @@ class DataManagerAPITest(AirtableTest):
 
         self._assert_expected_airtable_errors(url)
 
-    def _assert_expected_pm_access(self, get_response, mock_current_gene_version=None):
+    def _assert_expected_pm_access(self, get_response):
         response = get_response()
         self.assertEqual(response.status_code, 200)
         self.login_data_manager_user()
@@ -1403,7 +1404,7 @@ class DataManagerAPITest(AirtableTest):
         mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
         body = {**self.REQUEST_BODY, 'projects': [
             json.dumps(option) for option in self.PROJECT_OPTIONS + [{'projectGuid': 'R0005_not_project'}]
-        ], 'vcfSamples': self.VCF_SAMPLES, 'skipValidation': True}
+        ], 'vcfSamples': self.VCF_SAMPLES, 'skipSRChecks': True}
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'error': 'The following projects are invalid: R0005_not_project'})
@@ -1419,7 +1420,7 @@ class DataManagerAPITest(AirtableTest):
         )
         self.assertDictEqual(response.json(), {'success': True})
 
-        self._assert_expected_load_data_requests(sample_type='WES', skip_validation=True)
+        self._assert_expected_load_data_requests(sample_type='WES', skip_check_sex_and_relatedness=True)
         self._has_expected_ped_files(mock_open, mock_gzip_open, mock_mkdir, 'SNV_INDEL', sample_type='WES', has_remap=bool(self.MOCK_AIRTABLE_KEY))
 
         variables = {
@@ -1431,7 +1432,7 @@ class DataManagerAPITest(AirtableTest):
             'reference_genome': 'GRCh38',
             'callset_path': f'{self.TRIGGER_CALLSET_DIR}/callset.vcf',
             'sample_type': 'WES',
-            'skip_validation': True,
+            'skip_check_sex_and_relatedness': True,
         }
         if self.SKIP_TDR:
             variables['skip_expect_tdr_metrics'] = True
@@ -1445,8 +1446,8 @@ class DataManagerAPITest(AirtableTest):
         responses.calls.reset()
         self.reset_logs()
 
-        del body['skipValidation']
-        del variables['skip_validation']
+        del body['skipSRChecks']
+        del variables['skip_check_sex_and_relatedness']
         body.update({'datasetType': 'SV', 'filePath': f'{self.CALLSET_DIR}/sv_callset.vcf'})
         self._trigger_error(url, body, variables, mock_open, mock_gzip_open, mock_mkdir)
 
@@ -1489,7 +1490,7 @@ class DataManagerAPITest(AirtableTest):
         })
         self.assertEqual(len(responses.calls), 0)
 
-    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_validation=False):
+    def _assert_expected_load_data_requests(self, dataset_type='SNV_INDEL', sample_type='WGS', trigger_error=False, skip_project=False, skip_check_sex_and_relatedness=False):
         projects = [PROJECT_GUID, NON_ANALYST_PROJECT_GUID]
         if skip_project:
             projects = projects[1:]
@@ -1502,8 +1503,8 @@ class DataManagerAPITest(AirtableTest):
         }
         if self.SKIP_TDR:
             body['skip_expect_tdr_metrics'] = True
-        if skip_validation:
-            body['skip_validation'] = True
+        if skip_check_sex_and_relatedness:
+            body['skip_check_sex_and_relatedness'] = True
         self.assertDictEqual(json.loads(responses.calls[-1].request.body), body)
 
     def _trigger_error(self, url, body, variables, mock_open, mock_gzip_open, mock_mkdir):
@@ -1757,6 +1758,7 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         self.mock_does_file_exist = mock.MagicMock()
         self.mock_file_iter = mock.MagicMock()
         self.mock_file_iter.stdout = []
+        self.mock_file_iter.wait.return_value = 0
         self.mock_subprocess.side_effect = [self.mock_does_file_exist, self.mock_file_iter]
         self.addCleanup(patcher.stop)
         patcher = mock.patch('seqr.utils.search.add_data_utils.safe_post_to_slack')
@@ -1887,8 +1889,8 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
 
     def _assert_expected_airtable_vcf_id_call(self, required_sample_field=None, additional_vcf_ids='', **kwargs):
         self._assert_expected_airtable_call(
-            required_sample_field, 'R0004_non_analyst_project', **kwargs, additional_fields=['VCFIDWithMismatch'],
-            additional_filter=f"OR(VCFIDWithMismatch='NA21234'{additional_vcf_ids})",
+            required_sample_field, 'R0004_non_analyst_project', **kwargs, additional_fields=['VCFIDWithMismatch', 'SeqrIDWithMismatch'],
+            additional_filter=f"OR(SeqrIDWithMismatch='NA21234'{additional_vcf_ids})",
             additional_pdo_statuses=",SEARCH('Methods (Loading)',ARRAYJOIN(PDOStatus,';')),SEARCH('On hold for phenotips, but ready to load',ARRAYJOIN(PDOStatus,';'))",
         )
 
@@ -1942,7 +1944,7 @@ Loading pipeline should be triggered with:
         body['sampleType'] = 'WGS'
         self.assertEqual(len(responses.calls), 1)
         self._assert_expected_airtable_vcf_id_call(
-            required_sample_field='gCNV_CallsetPath', additional_vcf_ids=",VCFIDWithMismatch='NA21987'",
+            required_sample_field='gCNV_CallsetPath', additional_vcf_ids=",SeqrIDWithMismatch='NA21987'",
         )
 
         responses.calls.reset()
@@ -2053,7 +2055,10 @@ Loading pipeline should be triggered with:
     def _assert_expected_delete_project(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de'],
+            'info': [
+                'Deactivated search for 7 individuals',
+                'Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de',
+            ],
         })
         self.assertEqual(EntriesSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
         self.assertEqual(ProjectGtStatsSnvIndel.objects.filter(project_guid=PROJECT_GUID).count(), 0)
@@ -2069,11 +2074,22 @@ Loading pipeline should be triggered with:
             22: (0, 3, 0, 1),
         })
 
+        project_samples = Sample.objects.filter(individual__family__project__guid=PROJECT_GUID, is_active=True)
+        self.assertEqual(project_samples.filter(dataset_type='SNV_INDEL').count(), 0)
+        self.assertEqual(project_samples.count(), 4)
+
     def _assert_expected_delete_family(self, response):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
-            'info': ['Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg'],
+            'info': [
+                'Deactivated search for 3 individuals',
+                'Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg',
+            ],
         })
+
+        family_samples = Sample.objects.filter(individual__family_id=2, is_active=True)
+        self.assertEqual(family_samples.filter(dataset_type='SV').count(), 0)
+        self.assertEqual(family_samples.count(),4)
 
     def _assert_expected_airtable_errors(self, url):
         responses.replace(

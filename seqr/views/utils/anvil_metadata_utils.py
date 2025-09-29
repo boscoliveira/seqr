@@ -1,7 +1,6 @@
 from collections import defaultdict
 from datetime import datetime
 
-from clickhouse_backend.models import ArrayField, StringField
 from django.db.models import F, Q, Value, CharField, Aggregate
 from django.db.models.functions import Replace
 from django.contrib.auth.models import User
@@ -9,7 +8,7 @@ from django.contrib.postgres.aggregates import ArrayAgg
 import requests
 from typing import Callable, Iterable
 
-from clickhouse_search.backend.functions import ArrayMap, ArrayFilter
+from clickhouse_search.backend.functions import ArrayFilter
 from clickhouse_search.search import get_annotations_queryset, get_transcripts_queryset
 from matchmaker.models import MatchmakerSubmission
 from reference_data.models import HumanPhenotypeOntology, Omim, GENOME_VERSION_LOOKUP
@@ -411,7 +410,7 @@ def _get_variant_json_by_guid(saved_variants, *args, **kwargs):
     for v in saved_variants:
         main_transcript = _get_variant_main_transcript(v)
         gene_id = main_transcript.get('geneId')
-        gene_ids = [gene_id] if gene_id else v.saved_variant_json.get('transcripts', {}).keys()
+        gene_ids = [gene_id] if gene_id else v.gene_ids
         variant_json_by_guid[v.guid] = {
             **v.saved_variant_json, 'main_transcript': main_transcript, 'gene_id': gene_id, 'gene_ids': gene_ids,
         }
@@ -426,7 +425,7 @@ def _get_clickhouse_variant_json_by_guid(saved_variants, include_clinvar):
     for v in saved_variants:
         if v.key:
             end_chrom, end = get_chrom_pos(v.xpos_end)
-            variant_json_by_guid[v.guid] = {'genotypes': v.genotypes, 'endChrom': end_chrom, 'end': end}
+            variant_json_by_guid[v.guid] = {'genotypes': v.genotypes, 'endChrom': end_chrom, 'end': end, 'gene_ids': v.gene_ids}
             variant_keys_by_search_type[v.genome_version][v.dataset_type][v.key].append((v.guid, v.selected_main_transcript_id))
         else:
             no_key_variants.append(v)
@@ -442,7 +441,7 @@ def _get_clickhouse_variant_json_by_guid(saved_variants, include_clinvar):
 
 def _set_clickhouse_sv_json(variant_json_by_guid, genome_version, dataset_type, key_map, include_clinvar):
     annotations = get_annotations_queryset(genome_version, dataset_type, key_map.keys()).values(
-        'key', svType=F('sv_type'), gene_ids=ArrayMap('sorted_gene_consequences', mapped_expression='x.geneId', output_field=ArrayField(StringField())),
+        'key', svType=F('sv_type'),
     )
     defaults = {'CAID': None, 'gene_id': None, 'main_transcript': {}}
     if include_clinvar:
@@ -486,8 +485,9 @@ def _set_clickhouse_snv_indel_json(variant_json_by_guid, genome_version, dataset
                 **anns,
                 'main_transcript': main_transcript,
                 'gene_id': gene_id,
-                'gene_ids': [gene_id] if gene_id else [transcript['geneId'] for transcript in all_transcripts],
             })
+            if gene_id:
+                variant_json_by_guid[guid]['gene_ids'] = [gene_id]
 
 
 def _get_main_transcripts_expression(field_name, qs, selected_transcripts):

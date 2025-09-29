@@ -95,7 +95,7 @@ CREATE_VARIANT_JSON = {
     'chrom': '2',
     'genotypes': {},
     'genomeVersion': '37',
-    'mainTranscriptId': None,
+    'mainTranscriptId': 'ENST00000450625',
     'populations': {
         'seqr': {'ac': 0, 'hom': 0},
         'exac': {'ac': 0, 'af': 0.0, 'an': 0, 'filter_af': 0.0, 'hemi': 0, 'het': 0, 'hom': 0},
@@ -121,7 +121,25 @@ CREATE_VARIANT_JSON = {
                     'splice_ai_consequence': None,
                     'vest': None},
     'ref': 'AAAG',
-    'transcripts': {},
+    'transcripts': {
+       'ENSG00000177000': [
+           {'aminoAcids': 'L/F', 'canonical': 1, 'codons': 'ttA/ttC', 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000383791.8:c.156A>C', 'hgvsp': 'ENSP00000373301.3:p.Leu52Phe', 'transcriptId': 'ENST00000383791', 'maneSelect': 'NM_004844.5', 'manePlusClinical': None, 'exon': {'index': 2, 'total': 9}, 'intron': None, 'alphamissense': {'pathogenicity': 0.9978}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': 'NM_004844.5', 'biotype': 'protein_coding', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant'], 'transcriptRank': 0},
+           {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000408919.7:c.-384A>C', 'hgvsp': None, 'transcriptId': 'ENST00000408919', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 2, 'total': 9}, 'intron': None, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'refseqTranscriptId': 'NM_001018009.4', 'biotype': 'protein_coding', 'majorConsequence': '5_prime_UTR_variant', 'consequenceTerms': ['5_prime_UTR_variant'], 'transcriptRank': 1, 'utrannotator': {
+               'existingInframeOorfs': 0, 'existingOutofframeOorfs': 1, 'existingUorfs': 10, 'fiveutrConsequence': '5_prime_UTR_stop_codon_loss_variant',
+               'fiveutrAnnotation': {'type': None, 'KozakContext': 'GCGATGC', 'KozakStrength': 'Moderate', 'DistanceToCDS': None, 'CapDistanceToStart': None, 'DistanceToStop': None, 'Evidence': False, 'AltStop': 'True', 'AltStopDistanceToCDS': 310, 'FrameWithCDS': 'outOfFrame', 'StartDistanceToCDS': None, 'newSTOPDistanceToCDS': None, 'alt_type': None, 'alt_type_length': None,'ref_StartDistanceToCDS': None, 'ref_type': None, 'ref_type_length': None},
+           }},
+           {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000426925.5:c.-677A>C', 'hgvsp': None, 'transcriptId': 'ENST00000426925', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 2, 'total': 11}, 'intron': None, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'refseqTranscriptId': None, 'biotype': 'protein_coding', 'majorConsequence': '5_prime_UTR_variant', 'consequenceTerms': ['5_prime_UTR_variant'], 'transcriptRank': 2, 'utrannotator': {
+               'existingInframeOorfs': 0, 'existingOutofframeOorfs': 1, 'existingUorfs': 8,'fiveutrConsequence': '5_prime_UTR_stop_codon_loss_variant',
+                'fiveutrAnnotation': {'type': None, 'KozakContext': 'TCAATGC', 'KozakStrength': 'Weak', 'DistanceToCDS': None, 'CapDistanceToStart': None, 'DistanceToStop': None, 'Evidence': False, 'AltStop': 'True', 'AltStopDistanceToCDS': 588, 'FrameWithCDS': 'inFrame', 'StartDistanceToCDS': None, 'newSTOPDistanceToCDS': None, 'alt_type': None, 'alt_type_length': None, 'ref_StartDistanceToCDS': None, 'ref_type': None, 'ref_type_length': None},
+            }},
+           {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000412806.1:c.138+1722A>C', 'hgvsp': None, 'transcriptId': 'ENST00000412806', 'maneSelect': None, 'manePlusClinical': None, 'exon': None, 'intron': {'index': 1, 'total': 3},'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': None, 'biotype': 'nonsense_mediated_decay', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant'], 'transcriptRank': 3},
+           {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000459627.1:n.298A>C', 'hgvsp': None, 'transcriptId': 'ENST00000459627', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 2, 'total': 3}, 'intron': None, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': None, 'biotype': 'protein_coding_CDS_not_defined', 'majorConsequence': 'non_coding_transcript_exon_variant', 'consequenceTerms': ['non_coding_transcript_exon_variant'], 'transcriptRank': 4},
+           {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000177000', 'hgvsc': 'ENST00000465894.6:n.33A>C', 'hgvsp': None, 'transcriptId': 'ENST00000465894', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 2, 'total': 5}, 'intron': None, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': None, 'biotype': 'protein_coding_CDS_not_defined', 'majorConsequence': 'non_coding_transcript_exon_variant', 'consequenceTerms': ['non_coding_transcript_exon_variant'], 'transcriptRank': 5},
+       ],
+       'ENSG00000277258': [
+           {'aminoAcids': 'L/F', 'canonical': None, 'codons': 'ttA/ttC', 'geneId': 'ENSG00000277258', 'hgvsc': 'ENST00000450625.1:c.156A>C', 'hgvsp': 'ENSP00000389484.1:p.Leu52Phe', 'transcriptId': 'ENST00000450625', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 2, 'total': 5}, 'intron': None, 'alphamissense': {'pathogenicity': 0.9978}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': None, 'biotype': 'nonsense_mediated_decay', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant', 'NMD_transcript_variant'], 'transcriptRank': 6},
+       ]
+    },
     'familyGuids': ['F000001_1', 'F000002_2'],
     'variantId': '2-61413835-AAAG-A',
     'CAID': None,
@@ -385,7 +403,7 @@ class SavedVariantAPITest(object):
         saved_variant = SavedVariant.objects.get(guid=variant_guid, family__guid='F000001_1')
         variant_json = {'xpos': 2061413835}
         variant_json.update(create_variant_json)
-        self._assert_created_variant(saved_variant, variant_json)
+        self._assert_created_variant(saved_variant, variant_json, gene_ids=['ENSG00000277258', 'ENSG00000177000'])
 
         variant_json.update({
             'variantGuid': variant_guid,
@@ -394,6 +412,8 @@ class SavedVariantAPITest(object):
             'selectedMainTranscriptId': None,
             'noteGuids': [],
             'functionalDataGuids': [],
+            'transcripts': mock.ANY,
+            'mainTranscriptId': mock.ANY,
         })
         response_json = response.json()
         response_variant_json = response_json['savedVariantsByGuid'][variant_guid]
@@ -415,9 +435,10 @@ class SavedVariantAPITest(object):
     def _format_create_variant(self, variant_json, **kwargs):
         return variant_json
 
-    def _assert_created_variant(self, saved_variant, variant_json, **kwargs):
+    def _assert_created_variant(self, saved_variant, variant_json, gene_ids=None, **kwargs):
         for field in ['xpos', 'ref', 'alt']:
             self.assertEqual(variant_json.get(field), getattr(saved_variant, field, None))
+        self.assertEqual(saved_variant.gene_ids, gene_ids or [])
 
     def test_create_saved_sv_variant(self):
         # SVs are only supported on build 38
@@ -465,7 +486,7 @@ class SavedVariantAPITest(object):
 
         saved_variant = SavedVariant.objects.get(guid=variant_guid, family__guid='F000001_1')
         variant_json.update({'xpos': 2061413835})
-        self._assert_created_variant(saved_variant, variant_json, dataset_type='SV_WES')
+        self._assert_created_variant(saved_variant, variant_json, dataset_type='SV_WES', gene_ids=['ENSG00000240361'])
         self.assertEqual(saved_variant.xpos_end, 2061414175)
 
         variant_json.update({
@@ -1030,7 +1051,7 @@ class LocalSavedVariantAPITest(AuthenticationTestCase, SavedVariantAPITest):
     SAVED_VARIANT_DETAIL_FIELDS = SAVED_VARIANT_DETAIL_FIELDS
 
     def _assert_created_variant(self, saved_variant, variant_json, **kwargs):
-        super()._assert_created_variant(saved_variant, variant_json)
+        super()._assert_created_variant(saved_variant, variant_json, **kwargs)
         self.assertDictEqual(variant_json, saved_variant.saved_variant_json)
 
 
@@ -1121,7 +1142,7 @@ class AnvilSavedVariantAPITest(AnvilAuthenticationTestCase, SavedVariantAPITest)
         return {**variant_json, 'key': key}
 
     def _assert_created_variant(self, saved_variant, variant_json, dataset_type='SNV_INDEL', **kwargs):
-        super()._assert_created_variant(saved_variant, variant_json)
+        super()._assert_created_variant(saved_variant, variant_json, **kwargs)
         self.assertEqual(variant_json['key'], saved_variant.key)
         self.assertEqual(dataset_type, saved_variant.dataset_type)
         self.assertDictEqual(variant_json['genotypes'], saved_variant.genotypes)

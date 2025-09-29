@@ -528,7 +528,7 @@ class VariantSearchAPITest(object):
             ['12', '48367227', 'TC', 'T', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
              '', '2', 'AIP (None)|Known gene for phenotype (None)|Excluded (None)', 'a later note (None)|test n\xf8te (None)', '', '', '', '', '', '',
              '', '', '', '', '', '', '', '',  '', '', '', ''],
-            ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0',
+            ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.03444932',
              '0.28899795', '0.246152', '20.9', '0.197',
              '2.001', '0.0', '0.1', '0.05', '', '', 'rs1801131', 'ENST00000383791.8:c.156A>C',
              'ENSP00000373301.3:p.Leu52Phe', 'Conflicting_classifications_of_pathogenicity', '1', '2', '', '', '', '', '', 'HG00731', '2', '', '99', '1.0',
@@ -562,7 +562,7 @@ class VariantSearchAPITest(object):
                 ['12', '48367227', 'TC', 'T', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
                  '2', 'AIP (None)|Known gene for phenotype (None)|Excluded (None)', 'a later note (None)|test n\xf8te (None)',
                  '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',],
-                ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0',
+                ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.03444932',
                  '0.28899795', '0.246152', '20.9', '0.197',
                  '2.001', '0.0', '0.1', '0.05', '', '', 'rs1801131', 'ENST00000383791.8:c.156A>C',
                  'ENSP00000373301.3:p.Leu52Phe', 'Conflicting_classifications_of_pathogenicity', '1', '2', '', '', 'HG00731', '2', '', '99', '1.0',
@@ -641,16 +641,20 @@ class VariantSearchAPITest(object):
         mock_error_logger.assert_not_called()
 
         # Test no results
+        VariantSearchResults.objects.get(search_hash=SEARCH_HASH).delete()
         mock_get_variants.side_effect = _get_empty_es_variants
         response = self.client.post(url, content_type='application/json', data=json.dumps({
-            'projectFamilies': PROJECT_FAMILIES, 'search': SEARCH
+            'projectFamilies': PROJECT_FAMILIES, 'search': {**SEARCH, 'exclude': {'previousSearch': True}}, 'previousSearchHash': 'abc1234',
         }))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertDictEqual(response_json, {
             'searchedVariants': [],
             'search': {
-                'search': SEARCH,
+                'search': {**SEARCH, 'exclude': {
+                    'previousSearch': True,
+                    'previousSearchHash': 'abc1234',
+                }},
                 'projectFamilies': PROJECT_FAMILIES,
                 'totalResults': 0,
             }

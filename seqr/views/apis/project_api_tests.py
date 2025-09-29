@@ -41,20 +41,11 @@ MOCK_RECORDS = {'records': [
     {'id': 'recSgwrXNkmlIB5eM', 'fields': {'Status': 'Available in Seqr'}},
 ]}
 
-DISCOVERY_TAG = {
-    'mainTranscriptId': None,
-    'selectedMainTranscriptId': 'ENST00000371839',
-    'transcripts': {
-        'ENSG00000135953': mock.ANY,
-        'ENSG00000240361': mock.ANY,
-    },
-}
 
 class ProjectAPITest(object):
     CREATE_PROJECT_JSON = WORKSPACE_CREATE_PROJECT_JSON
     REQUIRED_FIELDS = ['name', 'genomeVersion', 'workspaceNamespace', 'workspaceName']
     AIRTABLE_TRACKING_URL = f'{MOCK_AIRTABLE_URL}/appUelDNM3BnWaR7M/AnVIL%20Seqr%20Loading%20Requests%20Tracking'
-    DISCOVERY_TAG = DISCOVERY_TAG
 
     @mock.patch('seqr.views.utils.airtable_utils.logger')
     @mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', MOCK_AIRTABLE_URL)
@@ -387,8 +378,7 @@ class ProjectAPITest(object):
         empty_url = reverse(project_families, args=[EMPTY_PROJECT_GUID])
         self._check_empty_project(empty_url, response_keys)
 
-        gene_ids = self._assert_expected_project_families(url, response_keys)
-        self.assertSetEqual(gene_ids, {'ENSG00000135953', 'ENSG00000240361'})
+        self._assert_expected_project_families(url, response_keys)
 
     def _assert_expected_project_families(self, url, response_keys, no_discovery_tags=False):
         response = self.client.get(url)
@@ -401,7 +391,7 @@ class ProjectAPITest(object):
         family_3 = response_json['familiesByGuid']['F000003_3']
         empty_family = response_json['familiesByGuid']['F000013_13']
         family_fields = {
-            'individualGuids', 'discoveryTags', 'caseReviewStatuses', 'caseReviewStatusLastModified', 'hasRequiredMetadata',
+            'individualGuids', 'discoveryGeneIds', 'caseReviewStatuses', 'caseReviewStatusLastModified', 'hasRequiredMetadata',
             'parents', 'hasPhenotypePrioritization', 'hasRna', 'externalData',
         }
         family_fields.update(SUMMARY_FAMILY_FIELDS)
@@ -434,22 +424,17 @@ class ProjectAPITest(object):
         self.assertListEqual(empty_family['externalData'], [])
 
 
-        self.assertListEqual(family_3['discoveryTags'], [])
-        self.assertListEqual(empty_family['discoveryTags'], [])
-        family_1_tags = [] if no_discovery_tags else [{
-            'transcripts': {'ENSG00000135953': [mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY]},
-            'mainTranscriptId': 'ENST00000258436',
-            'selectedMainTranscriptId': None,
-        }]
-        self.assertListEqual(family_1['discoveryTags'], family_1_tags)
-        family_2_tags = [] if no_discovery_tags else [self.DISCOVERY_TAG]
-        self.assertListEqual(response_json['familiesByGuid']['F000002_2']['discoveryTags'], family_2_tags)
+        self.assertListEqual(family_3['discoveryGeneIds'], [])
+        self.assertListEqual(empty_family['discoveryGeneIds'], [])
+        self.assertListEqual(family_1['discoveryGeneIds'], ['ENSG00000135953'])
+        family_2_tags = [] if no_discovery_tags else ['ENSG00000135953']
+        self.assertListEqual(response_json['familiesByGuid']['F000002_2']['discoveryGeneIds'], family_2_tags)
         no_discovery_families = set(response_json['familiesByGuid'].keys()) - {'F000001_1', 'F000002_2'}
         self.assertSetEqual({
-            len(response_json['familiesByGuid'][family_guid]['discoveryTags']) for family_guid in no_discovery_families
+            len(response_json['familiesByGuid'][family_guid]['discoveryGeneIds']) for family_guid in no_discovery_families
         }, {0})
 
-        return set(response_json['genesById'].keys())
+        self.assertSetEqual(set(response_json['genesById'].keys()), {'ENSG00000135953'})
 
     def test_project_individuals(self):
         url = reverse(project_individuals, args=[PROJECT_GUID])
@@ -722,7 +707,6 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
     PROJECT_COLLABORATORS = ANVIL_COLLABORATORS
     PROJECT_COLLABORATOR_GROUPS = None
     HAS_EMPTY_PROJECT = False
-    DISCOVERY_TAG = {**DISCOVERY_TAG, 'mainTranscriptId': 'ENST00000505820'}
 
     def test_create_and_delete_project(self, *args, **kwargs):
         super(AnvilProjectAPITest, self).test_create_and_delete_project(*args, **kwargs)
@@ -798,20 +782,15 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
         self.assertEqual(self.mock_get_ws_access_level.call_count, 5)
 
     def _assert_expected_project_families(self, *args, **kwargs):
-        gene_ids = super()._assert_expected_project_families(*args, **kwargs)
+        super()._assert_expected_project_families(*args, **kwargs)
 
         # Test success when clickhouse is unavailable
         self.reset_logs()
         connections['clickhouse'].close()
-        self.DISCOVERY_TAG = {**DISCOVERY_TAG, 'transcripts': {}}
-        no_clickhouse_gene_ids = super()._assert_expected_project_families(*args, **kwargs, no_discovery_tags=True)
-        self.assertSetEqual(no_clickhouse_gene_ids, set())
+        super()._assert_expected_project_families(*args, **kwargs, no_discovery_tags=True)
         self.assert_json_logs(None, [
             ("Error loading discovery genes from clickhouse: An error occurred in the current transaction. You can't execute queries until the end of the 'atomic' block.", {
                 'severity': 'ERROR',
                 '@type': 'type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent',
             }),
         ])
-
-        return gene_ids
-

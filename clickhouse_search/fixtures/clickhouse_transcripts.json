@@ -113,7 +113,7 @@
           ], null]
         ],
         [
-          [null], null, "protein_coding", 1, null, ["missense_variant"], [null, null], "ENSG00000097046",
+          [0.1], null, "protein_coding", 1, null, ["missense_variant"], [null, null], "ENSG00000097046",
           "ENST00000350997.12:c.375+139G>A", null, [1, 11], [null, []], "missense_variant", null, "NM_013402.7",
           "NM_013402.7", [false], "ENST00000350997", 1, [null, null, null, [
             null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, null

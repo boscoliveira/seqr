@@ -427,6 +427,7 @@ class AnvilWorkspaceAPITest(AnvilAuthenticationTestCase):
         mock_subprocess.side_effect = [mock_file_exist_or_list_subproc, mock_get_header_subproc]
         mock_file_exist_or_list_subproc.communicate.return_value = b'gs://test_bucket/test_path-001.vcf.gz\ngs://test_bucket/test_path-102.vcf.gz\n', None
         mock_get_header_subproc.stdout = BASIC_META + INFO_META + FORMAT_META + HEADER_LINE + DATA_LINES
+        mock_get_header_subproc.wait.return_value = 0
         response = self.client.post(url, content_type='application/json', data=json.dumps(REQUEST_BODY_SHARDED_DATA_PATH))
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json(), {'fullDataPath': 'gs://test_bucket/test_path-*.vcf.gz', 'vcfSamples': ['HG00735', 'NA19675_1', 'NA19679']})

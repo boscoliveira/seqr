@@ -12,7 +12,7 @@ import {
   getGenesById,
   getHasActiveSearchSampleByFamily,
 } from 'redux/selectors'
-import { FAMILY_DETAIL_FIELDS, getVariantMainGeneId } from 'shared/utils/constants'
+import { FAMILY_DETAIL_FIELDS } from 'shared/utils/constants'
 import { Error404 } from 'shared/components/page/Errors'
 import Family from 'shared/components/panel/family/Family'
 import FamilyReads from 'shared/components/panel/family/FamilyReads'
@@ -40,8 +40,8 @@ SearchLink.propTypes = {
 }
 
 const DiscoveryGenes = React.memo(({ family, genesById }) => {
-  const discoveryGenes = (family.discoveryTags || []).map(
-    tag => (genesById[getVariantMainGeneId(tag)] || {}).geneSymbol,
+  const discoveryGenes = (family.discoveryGeneIds || []).map(
+    geneId => (genesById[geneId] || {}).geneSymbol,
   ).filter(val => val)
   return discoveryGenes.length > 0 ? (
     <span>
@@ -59,7 +59,7 @@ DiscoveryGenes.propTypes = {
 const BaseVariantDetail = (
   { project, family, hasActiveVariantSample, compact, genesById, tagTypeCounts, load, loading },
 ) => (
-  <DataLoader load={load} contentId={family.familyGuid} content={family.discoveryTags} loading={loading}>
+  <DataLoader load={load} contentId={family.familyGuid} content={family.discoveryGeneIds} loading={loading}>
     <VariantTagTypeBar
       height={15}
       width="calc(100% - 2.5em)"

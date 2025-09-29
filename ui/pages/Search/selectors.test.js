@@ -20,7 +20,7 @@ test('getIntitialSearch', () => {
 
   expect(getIntitialSearch(NO_SEARCH_STATE, { match: { params: {} } })).toEqual(null)
 
-  expect(getIntitialSearch(STATE, { match: { params: { searchHash: SEARCH_HASH } } })).toEqual(SEARCH)
+  expect(getIntitialSearch(STATE, { match: { params: { searchHash: SEARCH_HASH } } })).toEqual({ ...SEARCH, previousSearchHash: SEARCH_HASH })
 
   expect(getIntitialSearch(
     NO_SEARCH_STATE, { match: { params: { projectGuid: PROJECT_GUID } } })

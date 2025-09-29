@@ -9,7 +9,7 @@ import json
 
 from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import Array, ArrayFilter, ArrayIntersect, ArraySort, GroupArrayArray, If, Tuple, \
-    ArrayDistinct, ArrayMap
+    ArrayMap
 from clickhouse_search.models import ENTRY_CLASS_MAP, ANNOTATIONS_CLASS_MAP, TRANSCRIPTS_CLASS_MAP, KEY_LOOKUP_CLASS_MAP, \
     BaseClinvar, BaseAnnotationsMitoSnvIndel, BaseAnnotationsGRCh37SnvIndel, BaseAnnotationsSvGcnv
 from reference_data.models import GeneConstraint, Omim, GENOME_VERSION_LOOKUP
@@ -18,7 +18,6 @@ from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.search.constants import MAX_VARIANTS, XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY, \
     PRIORITIZED_GENE_SORT, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS, RECESSIVE
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
-from settings import CLICKHOUSE_SERVICE_HOSTNAME
 
 logger = SeqrLogger(__name__)
 
@@ -35,6 +34,8 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     family_guid = None
     inheritance_mode = search.get('inheritance_mode')
     has_comp_het = inheritance_mode in {RECESSIVE, COMPOUND_HET}
+    exclude_keys = search.pop('exclude_keys', None) or {}
+    exclude_key_pairs = search.pop('exclude_key_pairs', None) or {}
     for dataset_type, sample_data in sample_data_by_dataset_type.items():
         logger.info(f'Loading {dataset_type} data for {len(set(sample_data["family_guids"]))} families', user)
 
@@ -45,13 +46,13 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
 
         dataset_results = []
         if inheritance_mode != COMPOUND_HET:
-            result_q = _get_search_results_queryset(entry_cls, annotations_cls, sample_data, skip_individual_guid=is_multi_project, **search)
+            result_q = _get_search_results_queryset(entry_cls, annotations_cls, sample_data, skip_individual_guid=is_multi_project, exclude_keys=exclude_keys.get(dataset_type), **search)
             dataset_results += _evaluate_results(result_q)
         if has_comp_het:
             comp_het_sample_data = sample_data
             if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(genome_version, **search):
                 comp_het_sample_data = _no_affected_male_families(sample_data, user)
-            result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, skip_individual_guid=is_multi_project, **search)
+            result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), skip_individual_guid=is_multi_project, **search)
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
         if is_multi_project:
@@ -61,7 +62,7 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     if has_comp_het and Sample.DATASET_TYPE_VARIANT_CALLS in sample_data_by_dataset_type and any(
         dataset_type.startswith(Sample.DATASET_TYPE_SV_CALLS) for dataset_type in sample_data_by_dataset_type
     ):
-        results += _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, **search)
+        results += _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, exclude_key_pairs, **search)
 
     cache_results = get_clickhouse_cache_results(results, sort, family_guid)
     previous_search_results.update(cache_results)
@@ -84,7 +85,7 @@ def _evaluate_results(result_q, is_comp_het=False):
         raise InvalidSearchException('This search returned too many results')
     return results
 
-def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, annotations=None, annotations_secondary=None, inheritance_mode=None, **search_kwargs):
+def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, exclude_key_pairs, annotations=None, annotations_secondary=None, inheritance_mode=None, **search_kwargs):
     if annotations_secondary:
         annotations = {
             **annotations,
@@ -125,7 +126,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
         sv_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][sv_dataset_type]
         sv_q = sv_annotations_cls.objects.subquery_join(sv_entries).search(**search_kwargs, annotations=annotations)
 
-        result_q = _get_comp_het_results_queryset(annotations_cls, snv_indel_q, sv_q, len(families))
+        result_q = _get_comp_het_results_queryset(annotations_cls, snv_indel_q, sv_q, len(families), exclude_key_pairs.get(f'{Sample.DATASET_TYPE_VARIANT_CALLS},{sv_dataset_type}'))
         dataset_results = _evaluate_results(result_q, is_comp_het=True)
         if skip_individual_guid:
             _add_individual_guids(dataset_results, sv_sample_data)
@@ -134,7 +135,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
     return results
 
 
-def _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, **search_kwargs):
+def _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, **search_kwargs):
     entries = entry_cls.objects.search(
         sample_data, **search_kwargs, inheritance_mode=COMPOUND_HET, annotations=annotations, annotate_carriers=True,
     )
@@ -144,10 +145,10 @@ def _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, sample_
         annotations=annotations_secondary or annotations, **search_kwargs,
     )
 
-    return _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, len(set(sample_data['family_guids'])))
+    return _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, len(set(sample_data['family_guids'])), exclude_key_pairs)
 
 
-def _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, num_families):
+def _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, num_families, exclude_key_pairs):
     results = annotations_cls.objects.search_compound_hets(primary_q, secondary_q)
 
     if results.has_annotation('primary_carriers') and results.has_annotation('secondary_carriers'):
@@ -207,9 +208,12 @@ def _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, num_
             **genotype_expressions,
         )
 
-    return results.annotate(
+    pair_results = results.annotate(
         pair_key=ArraySort(Array('primary_key', 'secondary_key')),
-    ).distinct('pair_key').values_list(
+    ).distinct('pair_key')
+    if exclude_key_pairs:
+        pair_results = pair_results.exclude(pair_key__in=exclude_key_pairs)
+    return pair_results.values_list(
         'pair_key',
         _result_as_tuple(results, 'primary_'),
         _result_as_tuple(results, 'secondary_'),
@@ -637,28 +641,6 @@ def get_clickhouse_annotations(genome_version, dataset_type, keys):
     qs = get_annotations_queryset(genome_version, dataset_type, keys)
     results = qs.join_seqr_pop().join_clinvar(keys).result_values(skip_entry_fields=True)
     return format_clickhouse_results(results, genome_version)
-
-
-def get_clickhouse_genes(genome_version, dataset_type, keys):
-    results = get_annotations_queryset(genome_version, dataset_type, keys)
-    return results.aggregate(
-        gene_ids=ArrayDistinct(GroupArrayArray(ArrayMap(results.transcript_field, mapped_expression='x.geneId')), output_field=ArrayField(StringField())),
-    )['gene_ids']
-
-
-def get_clickhouse_keys_for_gene(gene_id, genome_version, dataset_type, keys):
-    results = get_annotations_queryset(genome_version, dataset_type, keys)
-    return list(results.filter(
-        **{f'{results.transcript_field}__array_exists': {'geneId': (f"'{gene_id}'",)}},
-    ).values_list('key', flat=True))
-
-
-def get_all_clickhouse_keys_for_gene(gene_model, genome_version):
-    entry_cls = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
-    return list(entry_cls.objects.filter_locus(require_gene_filter=True, genes={gene_model.gene_id: {
-        'id': gene_model.id,
-        **{f'{field}Grch{genome_version}': getattr(gene_model, f'{field}_grch{genome_version}') for field in ['chrom', 'start', 'end']}},
-    }).values_list('key', flat=True).distinct())
 
 
 def get_clickhouse_key_lookup(genome_version, dataset_type, variants_ids, reverse=False):

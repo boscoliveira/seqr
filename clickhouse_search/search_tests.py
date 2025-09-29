@@ -24,7 +24,6 @@ from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
 
 
-@mock.patch('clickhouse_search.search.CLICKHOUSE_SERVICE_HOSTNAME', 'localhost')
 class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper, TestCase):
     databases = '__all__'
     fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_search', 'clickhouse_transcripts']
@@ -498,6 +497,40 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             ],
         )
 
+        self._set_grch37_search()
+        self._assert_expected_search([], inheritance_mode=inheritance_mode)
+        self._assert_expected_search(
+            [GRCH37_VARIANT], inheritance_mode=inheritance_mode, inheritance_filter={'allowNoCall': True},
+        )
+
+    def test_exclude_previous_search_results(self):
+        VariantSearchResults.objects.create(variant_search_id=79516, search_hash='abc1234')
+        self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
+            VARIANT1, VARIANT2, [VARIANT3, VARIANT2], [GCNV_VARIANT4, GCNV_VARIANT3],
+        ]})]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
+
+        self._assert_expected_search(
+            [[MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3],
+            inheritance_mode='recessive', **COMP_HET_ALL_PASS_FILTERS,
+            exclude={'previousSearch': True, 'previousSearchHash': 'abc1234'}, cached_variant_fields=[
+                [{'selectedGeneId': 'ENSG00000277258'}, {'selectedGeneId': 'ENSG00000277258'}],
+                [{'selectedGeneId': 'ENSG00000097046'}, {'selectedGeneId': 'ENSG00000097046'}],
+                {}, {},
+            ],
+        )
+
+        self.mock_redis.get.side_effect = [None, json.dumps({'all_results': [
+            [MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], GCNV_VARIANT3, MITO_VARIANT3,
+        ]})]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
+        self._assert_expected_search(
+            [VARIANT2, [GCNV_VARIANT3, GCNV_VARIANT4]],
+            inheritance_mode='recessive', cached_variant_fields=[
+                {}, [{'selectedGeneId': 'ENSG00000275023'}, {'selectedGeneId': 'ENSG00000275023'}],
+            ],
+        )
+
     def test_quality_filter(self):
         quality_filter = {'vcf_filter': 'pass'}
         self._assert_expected_search(
@@ -571,16 +604,31 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             {},
         ]
 
+        quality_filter['min_gq'] = 50
+        self._assert_expected_search(
+            [VARIANT1, selected_family_3_variant, MITO_VARIANT1, MITO_VARIANT3], quality_filter=quality_filter,
+            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'vus_or_conflicting']},
+            cached_variant_fields=cached_variant_fields[:1] + cached_variant_fields[2:],
+        )
+
         self._assert_expected_search(
             [VARIANT1, VARIANT2, selected_family_3_variant, MITO_VARIANT1, MITO_VARIANT3], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'vus_or_conflicting']}, cached_variant_fields=cached_variant_fields,
+            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
+            cached_variant_fields=cached_variant_fields,
         )
 
         self._assert_expected_search(
             [VARIANT2, selected_family_3_variant, MITO_VARIANT1], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic']}, cached_variant_fields=cached_variant_fields[1:],
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp']}, cached_variant_fields=cached_variant_fields[1:],
         )
-#
+
+        self._set_grch37_search()
+        quality_filter = {'min_gq': 1, 'min_ab': 10}
+        self._assert_expected_search([], quality_filter=quality_filter, annotations=None, pathogenicity=None)
+        self._assert_expected_search(
+            [GRCH37_VARIANT], quality_filter=quality_filter, inheritance_filter={'allowNoCall': True},
+        )
+
     def test_location_search(self):
         self._assert_expected_search(
             [MULTI_FAMILY_VARIANT, VARIANT4], **LOCATION_SEARCH, cached_variant_fields=[
@@ -790,14 +838,14 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
 
         annotations = {'splice_ai': '0.0'}  # Ensures no variants are filtered out by annotation/path filters
         self._assert_expected_search(
-            [VARIANT1, VARIANT2, VARIANT4, MITO_VARIANT1],
+            [VARIANT1, VARIANT4, MITO_VARIANT1],
             freqs={'gnomad_genomes': {'af': 0.01, 'hh': 10}, 'gnomad_mito': {'af': 0.01}},
             annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'likely_pathogenic', 'vus_or_conflicting']},
         )
 
         self._assert_expected_search(
             [VARIANT2, VARIANT4, MITO_VARIANT1], freqs={'gnomad_genomes': {'af': 0.01}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
         )
 
     def test_annotations_filter(self):
@@ -808,6 +856,8 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         self._assert_expected_search(
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
         )
+
+        self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
 
         exclude = {'clinvar': pathogenicity['clinvar'][1:]}
         pathogenicity['clinvar'] = pathogenicity['clinvar'][:1]
@@ -1188,6 +1238,12 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             [VARIANT2, MULTI_FAMILY_VARIANT], in_silico={'gnomad_noncoding': 0.5, 'requireScore': True},
         )
 
+        self._assert_expected_search(
+            [VARIANT1, VARIANT2, MULTI_FAMILY_VARIANT, GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4, MITO_VARIANT1, MITO_VARIANT2, MITO_VARIANT3],
+            in_silico={'alphamissense': 0.5},
+        )
+        self._assert_expected_search([VARIANT2], in_silico={'alphamissense': 0.5, 'requireScore': True})
+
         sv_in_silico = {'strvctvre': 0.1, 'requireScore': True}
         self._assert_expected_search(
             [GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4], in_silico=sv_in_silico,
@@ -1238,7 +1294,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         )
 
         self._assert_expected_search(
-            [VARIANT2, MITO_VARIANT1, MITO_VARIANT2, VARIANT4, VARIANT1, MITO_VARIANT3, VARIANT3, GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4],
+            [MITO_VARIANT1, MITO_VARIANT2, VARIANT4, VARIANT1, VARIANT2, MITO_VARIANT3, VARIANT3, GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4],
             sort='gnomad',
         )
 
@@ -1267,7 +1323,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         )
 
         self._assert_expected_search(
-            [VARIANT2, VARIANT1, MULTI_FAMILY_VARIANT, VARIANT4, GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4, MITO_VARIANT1, MITO_VARIANT2, MITO_VARIANT3], sort='alphamissense',
+            [VARIANT2, VARIANT4, VARIANT1, MULTI_FAMILY_VARIANT, GCNV_VARIANT1, GCNV_VARIANT2, GCNV_VARIANT3, GCNV_VARIANT4, MITO_VARIANT1, MITO_VARIANT2, MITO_VARIANT3], sort='alphamissense',
         )
 
         sort = 'in_omim'

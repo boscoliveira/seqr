@@ -7,7 +7,7 @@ from pyliftover.liftover import LiftOver
 from clickhouse_search.search import get_clickhouse_variants, format_clickhouse_results, \
     get_clickhouse_cache_results, clickhouse_variant_lookup, get_clickhouse_variant_by_id
 from reference_data.models import GENOME_VERSION_GRCh38, GENOME_VERSION_GRCh37
-from seqr.models import Sample, Individual, Project
+from seqr.models import Sample, Individual, Project, VariantSearchResults
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.redis_utils import safe_redis_get_json, safe_redis_get_wildcard_json, safe_redis_set_json
 from seqr.utils.search.constants import XPOS_SORT_KEY, PRIORITIZED_GENE_SORT, RECESSIVE, COMPOUND_HET, \
@@ -17,7 +17,7 @@ from seqr.utils.search.elasticsearch.es_utils import ping_elasticsearch, \
     get_es_variants, get_es_variants_for_variant_ids, process_es_previously_loaded_results, process_es_previously_loaded_gene_aggs, \
     es_backend_enabled, ping_kibana, ES_EXCEPTION_ERROR_MAP, ES_EXCEPTION_MESSAGE_MAP, ES_ERROR_LOG_EXCEPTIONS
 from seqr.utils.gene_utils import parse_locus_list_items
-from seqr.utils.xpos_utils import get_xpos, format_chrom, MIN_POS, MAX_POS
+from seqr.utils.xpos_utils import get_xpos, format_chrom
 
 logger = SeqrLogger(__name__)
 
@@ -293,6 +293,13 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
         if duplicates:
             raise InvalidSearchException(f'ClinVar pathogenicity {", ".join(sorted(duplicates))} is both included and excluded')
 
+    exclude.pop('previousSearch', None)
+    exclude_previous_hash = exclude.pop('previousSearchHash', None)
+    if exclude_previous_hash:
+        parsed_search.update(backend_specific_call(
+            lambda *args: {}, _get_clickhouse_exclude_keys,
+        )(exclude_previous_hash, user, genome_version))
+
     for annotation_key in ['annotations', 'annotations_secondary']:
         if parsed_search.get(annotation_key):
             parsed_search[annotation_key] = {k: v for k, v in parsed_search[annotation_key].items() if v}
@@ -321,6 +328,34 @@ def _query_variants(search_model, user, previous_search_results, genome_version,
     safe_redis_set_json(cache_key, previous_search_results, expire=timedelta(weeks=2))
 
     return variant_results, previous_search_results.get('total_results')
+
+
+def _get_clickhouse_exclude_keys(search_hash, user, genome_version):
+    previous_search_model = VariantSearchResults.objects.get(search_hash=search_hash)
+    cached_results = _get_any_sort_cached_results(previous_search_model)
+    if not cached_results:
+        cached_results = {}
+        _query_variants(previous_search_model, user, cached_results, genome_version)
+    results = cached_results['all_results']
+    exclude_keys = defaultdict(list)
+    exclude_key_pairs = defaultdict(list)
+    for variant in results:
+        if isinstance(variant, list):
+            dt1= variant_dataset_type(variant[0])
+            dt2 = variant_dataset_type(variant[1])
+            dataset_type = dt1 if dt1 == dt2 else ','.join(sorted([dt1, dt2]))
+            exclude_key_pairs[dataset_type].append(sorted([variant[0]['key'], variant[1]['key']]))
+        else:
+            dataset_type = variant_dataset_type(variant)
+            exclude_keys[dataset_type].append(variant['key'])
+    return {'exclude_keys': dict(exclude_keys), 'exclude_key_pairs': dict(exclude_key_pairs)}
+
+
+def variant_dataset_type(variant):
+    if not parse_variant_id(variant['variantId']):
+        sample_type = Sample.SAMPLE_TYPE_WGS if 'endChrom' in variant else Sample.SAMPLE_TYPE_WES
+        return f'{Sample.DATASET_TYPE_SV_CALLS}_{sample_type}'
+    return Sample.DATASET_TYPE_MITO_CALLS if 'mitomapPathogenic' in variant else Sample.DATASET_TYPE_VARIANT_CALLS
 
 
 def get_variant_query_gene_counts(search_model, user):

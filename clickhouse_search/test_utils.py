@@ -128,7 +128,7 @@ VARIANT2 = {
        'topmed': {'af': 0.246152, 'ac': 65154, 'an': 264690, 'hom': 8775, 'het': 47604},
        'exac': {'af': 0.29499999, 'ac': 35805, 'an': 121372, 'hom': 5872, 'hemi': 0, 'het': 24061, 'filter_af': 0.41530353},
        'gnomad_exomes': {'af': 0.28899795, 'ac': 72672, 'an': 251462, 'hom': 11567, 'hemi': 0, 'filter_af': 0.4116475},
-       'gnomad_genomes': {'af': 0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'filter_af': 0},
+       'gnomad_genomes': {'af': 0.03444932, 'ac': 927, 'an': 26912, 'hom': 0, 'hemi': 0, 'filter_af': 0.04027665},
     },
     'predictions': {
        'cadd': 20.9,
@@ -298,7 +298,7 @@ VARIANT4 = {
     'transcripts': {
         'ENSG00000097046': [
             {'aminoAcids': None, 'canonical': None, 'codons': None, 'geneId': 'ENSG00000097046', 'hgvsc': 'ENST00000466716.5:c.-264+1G>A', 'hgvsp': None, 'transcriptId': 'ENST00000466716', 'maneSelect': None, 'manePlusClinical': None, 'exon': None, 'intron': {'index': 1, 'total': 3}, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': ['5UTR_SPLICE']}, 'spliceregion': {'extended_intronic_splice_region_variant': True}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': None, 'biotype': 'protein_coding', 'majorConsequence': 'splice_donor_variant', 'consequenceTerms': ['splice_donor_variant'],  'transcriptRank': 0},
-            {'aminoAcids': None, 'canonical': 1, 'codons': None, 'geneId': 'ENSG00000097046', 'hgvsc': 'ENST00000350997.12:c.375+139G>A', 'hgvsp': None, 'transcriptId': 'ENST00000350997', 'maneSelect': 'NM_013402.7', 'manePlusClinical': None, 'exon': None, 'intron': {'index': 1, 'total': 11}, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': 'NM_013402.7', 'biotype': 'protein_coding', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant'], 'transcriptRank': 1},
+            {'aminoAcids': None, 'canonical': 1, 'codons': None, 'geneId': 'ENSG00000097046', 'hgvsc': 'ENST00000350997.12:c.375+139G>A', 'hgvsp': None, 'transcriptId': 'ENST00000350997', 'maneSelect': 'NM_013402.7', 'manePlusClinical': None, 'exon': None, 'intron': {'index': 1, 'total': 11}, 'alphamissense': {'pathogenicity': 0.1}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': 'NM_013402.7', 'biotype': 'protein_coding', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant'], 'transcriptRank': 1},
             {'aminoAcids': 'T/I', 'canonical': None, 'codons': 'aCc/aTc', 'geneId': 'ENSG00000097046', 'hgvsc': 'ENST00000257261.10:c.131C>T', 'hgvsp': 'ENSP00000257261.6:p.Thr44Ile', 'transcriptId': 'ENST00000257261', 'maneSelect': None, 'manePlusClinical': None, 'exon': {'index': 1, 'total': 12}, 'intron': None, 'alphamissense': {'pathogenicity': None}, 'loftee': {'isLofNagnag': None, 'lofFilters': None}, 'spliceregion': {'extended_intronic_splice_region_variant': False}, 'utrannotator': {'existingInframeOorfs': None, 'existingOutofframeOorfs': None, 'existingUorfs': None, 'fiveutrAnnotation': None, 'fiveutrConsequence': None}, 'refseqTranscriptId': 'NM_001281501.1', 'biotype': 'protein_coding', 'majorConsequence': 'missense_variant', 'consequenceTerms': ['missense_variant'], 'transcriptRank': 2},
         ],
     },
@@ -388,12 +388,12 @@ GRCH37_VARIANT = {
             'familyGuid': 'F000002_2', 'numAlt': 2, 'dp': 16, 'gq': 48, 'ab': 1, 'filters': ['VQSRTrancheSNP99.90to99.95'],
         }, 'I000006_hg00733': {
             'sampleId': 'HG00733', 'sampleType': 'WES', 'individualGuid': 'I000006_hg00733',
-            'familyGuid': 'F000002_2', 'numAlt': 1, 'dp': 49, 'gq': 99, 'ab': 0.65306,
+            'familyGuid': 'F000002_2', 'numAlt': None, 'dp': None, 'gq': 0, 'ab': None,
             'filters': ['VQSRTrancheSNP99.90to99.95'],
         },
     },
     'populations': {
-        'seqr': {'ac': 3, 'hom': 1},
+        'seqr': {'ac': 2, 'hom': 1},
         'topmed': {'af': 0.52131897, 'ac': 65461, 'an': 125568, 'hom': 16156, 'het': 33149},
         'exac': {'af': 0.63, 'ac': 66593, 'an': 104352, 'hom': 22162, 'hemi': 0, 'het': 22269, 'filter_af': 0.81987739},
         'gnomad_exomes': {'af': 0.63542193, 'ac': 137532, 'an': 216442, 'hom': 45869, 'hemi': 0, 'filter_af': 0.82261163},
@@ -1250,7 +1250,7 @@ CACHED_CONSEQUENCES_BY_KEY = {1: [], 2: [{
     'fiveutrConsequence': None,
     'geneId': 'ENSG00000097046',
 }, {
-    'alphamissensePathogenicity': None,
+    'alphamissensePathogenicity': 0.1,
     'canonical': 1,
     'consequenceTerms': ['missense_variant'],
     'extendedIntronicSpliceRegionVariant': False,

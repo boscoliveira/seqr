@@ -14,7 +14,8 @@ from seqr.models import Sample
 from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFECTED, UNAFFECTED, MALE_SEXES, \
     X_LINKED_RECESSIVE, REF_REF, REF_ALT, ALT_ALT, HAS_ALT, HAS_REF, SPLICE_AI_FIELD, SCREEN_KEY, UTR_ANNOTATOR_KEY, \
     EXTENDED_SPLICE_KEY, MOTIF_FEATURES_KEY, REGULATORY_FEATURES_KEY, CLINVAR_KEY, HGMD_KEY, NEW_SV_FIELD, \
-    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, PATH_FREQ_OVERRIDE_CUTOFF, \
+    EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_LIKELY_PATH_FILTER, \
+    CLINVAR_CONFLICTING_P_LP, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
@@ -41,6 +42,36 @@ class SearchQuerySet(QuerySet):
             *self.clinvar_fields.keys(),
             output_field=NamedTupleField(list(self.clinvar_fields.values()), null_if_empty=True, null_empty_arrays=True),
         )
+
+    @classmethod
+    def _clinvar_path_q(cls, pathogenicity):
+        clinvar_path_filters = [
+            f for f in (pathogenicity or {}).get(CLINVAR_KEY) or [] if f in CLINVAR_PATH_SIGNIFICANCES
+        ]
+        return cls._clinvar_filter_q(clinvar_path_filters) if clinvar_path_filters else None
+
+    @classmethod
+    def _clinvar_filter_q(cls, clinvar_filters):
+        ranges = [[None, None]]
+        for path_filter, start, end in CLINVAR_PATH_RANGES:
+            if path_filter in clinvar_filters:
+                ranges[-1][1] = end
+                if ranges[-1][0] is None:
+                    ranges[-1][0] = start
+            elif ranges[-1] != [None, None]:
+                ranges.append([None, None])
+        ranges = [r for r in ranges if r[0] is not None]
+
+        clinvar_qs = [cls._clinvar_range_q(path_range) for path_range in ranges]
+
+        if CLINVAR_CONFLICTING_P_LP in clinvar_filters:
+            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
+            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: (max_path, "{field} <= '{value}'")}))
+
+        clinvar_q = clinvar_qs[0]
+        for q in clinvar_qs[1:]:
+            clinvar_q |= q
+        return clinvar_q
 
     def _seqr_pop_fields(self, seqr_populations):
         sample_types = [
@@ -393,15 +424,21 @@ class AnnotationsQuerySet(SearchQuerySet):
         return results
 
     def _filter_in_silico(self, results, in_silico=None, **kwargs):
+        in_silico = in_silico or {}
+        require_score = in_silico.get('requireScore', False)
+
         in_silico_q = None
-        for score, value in (in_silico or {}).items():
+        if in_silico.get('alphamissense'):
+            in_silico_q = self._alphamissense_q(in_silico['alphamissense'], require_score)
+
+        for score, value in in_silico.items():
             score_q = self._get_in_silico_score_q(score, value)
             if in_silico_q is None:
                 in_silico_q = score_q
             elif score_q:
                 in_silico_q |= score_q
 
-        if in_silico_q and not in_silico.get('requireScore', False):
+        if in_silico_q and not require_score:
             in_silico_q |= Q(**{f'predictions__{score}__isnull': True for score in in_silico.keys() if score in self.prediction_fields})
 
         if in_silico_q:
@@ -420,6 +457,14 @@ class AnnotationsQuerySet(SearchQuerySet):
             return Q(**{f'{score_column}__gte': float(value)})
         except ValueError:
             return Q(**{score_column: value})
+
+    def _alphamissense_q(self, value, require_score):
+        if not ('alphamissensePathogenicity' in self.transcript_fields and value):
+            return None
+        q = Q(**{f'{self.transcript_field}__array_exists': {'alphamissensePathogenicity': (value, '{value} <= {field}')}})
+        if not require_score:
+            q |= Q(**{f'{self.transcript_field}__array_all': {'alphamissensePathogenicity': (None, 'isNull({field})')}})
+        return q
 
     def filter_annotations(self, results, annotations=None, pathogenicity=None, exclude=None, genes=None, intervals=None, exclude_locations=False, padded_interval_end=None,  **kwargs):
         transcript_field = self.transcript_field
@@ -591,34 +636,13 @@ class AnnotationsQuerySet(SearchQuerySet):
             return ('{field}__classification__range', (min_class, max_class))
         return ('{field}__classification__gt', min_class)
 
-    @classmethod
-    def _clinvar_filter_q(cls, clinvar_filters, _get_range_q=None):
-        ranges = [[None, None]]
-        for path_filter, start, end in CLINVAR_PATH_RANGES:
-            if path_filter in clinvar_filters:
-                ranges[-1][1] = end
-                if ranges[-1][0] is None:
-                    ranges[-1][0] = start
-            elif ranges[-1] != [None, None]:
-                ranges.append([None, None])
-        ranges = [r for r in ranges if r[0] is not None]
-
-        clinvar_qs = [(_get_range_q or cls._clinvar_range_q)(path_range) for path_range in ranges]
-        clinvar_q = clinvar_qs[0]
-        for q in clinvar_qs[1:]:
-            clinvar_q |= q
-        return clinvar_q
-
-    @classmethod
-    def _clinvar_range_q(cls, path_range):
+    @staticmethod
+    def _clinvar_range_q(path_range):
         return Q(clinvar__0__range=path_range, clinvar_key__isnull=False)
 
-    @classmethod
-    def _clinvar_path_q(cls, pathogenicity, _get_range_q=None):
-        clinvar_path_filters = [
-            f for f in (pathogenicity or {}).get(CLINVAR_KEY) or [] if f in CLINVAR_PATH_SIGNIFICANCES
-        ]
-        return cls._clinvar_filter_q(clinvar_path_filters, _get_range_q=_get_range_q) if clinvar_path_filters else None
+    @staticmethod
+    def _clinvar_conflicting_path_filter(conflicting_filter):
+        return Q(clinvar__5__array_exists=conflicting_filter, clinvar_key__isnull=False)
 
     def explode_gene_id(self, gene_id_key):
         consequence_field = self.GENE_CONSEQUENCE_FIELD if self.has_annotation(self.GENE_CONSEQUENCE_FIELD) else self.transcript_field
@@ -702,8 +726,11 @@ class EntriesManager(SearchQuerySet):
     def genome_version(self):
         return self.annotations_model.ANNOTATION_CONSTANTS['genomeVersion']
 
-    def search(self, sample_data, freqs=None, annotations=None, **kwargs):
+    def search(self, sample_data, freqs=None, annotations=None, exclude_keys=None, **kwargs):
         entries = self.filter_locus(**kwargs)
+
+        if exclude_keys:
+            entries = entries.exclude(key__in=exclude_keys)
 
         entries = self._join_annotations(entries)
 
@@ -752,6 +779,14 @@ class EntriesManager(SearchQuerySet):
     def _has_clinvar(self):
         return hasattr(self.model, 'clinvar_join')
 
+    @staticmethod
+    def _clinvar_range_q(path_range):
+        return Q(clinvar_join__pathogenicity__range=path_range)
+
+    @staticmethod
+    def _clinvar_conflicting_path_filter(conflicting_filter):
+        return Q(clinvar_join__conflicting_pathogenicities__array_exists=conflicting_filter)
+
     def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, skip_individual_guid=False, **kwargs):
        project_guids = sample_data['project_guids']
        project_filter = Q(project_guid__in=project_guids) if len(project_guids) > 1 else Q(project_guid=project_guids[0])
@@ -783,12 +818,10 @@ class EntriesManager(SearchQuerySet):
        quality_filter = qualityFilter or {}
        individual_genotype_filter = (inheritance_filter or {}).get('genotype')
        if inheritance_mode or individual_genotype_filter or quality_filter:
-            clinvar_override_q = AnnotationsQuerySet._clinvar_path_q(
-               pathogenicity, _get_range_q=lambda path_range: Q(clinvar_join__pathogenicity__range=path_range),
-            ) if self._has_clinvar() else None
+            clinvar_override_q = self._clinvar_path_q(pathogenicity) if self._has_clinvar() else None
             inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples = self._get_inheritance_quality_qs(
                sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q,
-                annotate_carriers, custom_affected=(inheritance_filter or {}).get('affected') or {},
+                annotate_carriers, inheritance_filter=inheritance_filter or {},
             )
             if quality_filter.get('vcf_filter'):
                 q = Q(filters__len=0)
@@ -799,20 +832,9 @@ class EntriesManager(SearchQuerySet):
                 entries = entries.annotate(carriers=self._carriers_expression(unaffected_samples))
 
        if multi_sample_type_families:
-           if gt_filter:
-               inheritance_q |= multi_sample_type_family_q
-               entries = self._annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples)
-           elif inheritance_q is not None:
-               entries = entries.annotate(passes_inheritance=inheritance_q)
-               inheritance_q = Q(passes_inheritance=True) | multi_sample_type_family_q
-           else:
-                entries = entries.annotate(passes_inheritance=Value(True))
-
-           if quality_q is None:
-               entries = entries.annotate(passes_quality=Value(True))
-           else:
-               entries = entries.annotate(passes_quality=quality_q)
-               quality_q = Q(passes_quality=True) | multi_sample_type_family_q
+           entries, inheritance_q, quality_q = self._get_multi_sample_type_family_call_qs(
+               entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, family_missing_type_samples,
+           )
 
        if inheritance_q is not None:
            entries = entries.filter(inheritance_q)
@@ -821,11 +843,13 @@ class EntriesManager(SearchQuerySet):
 
        return self._annotate_calls(entries, sample_data, annotate_hom_alts, skip_individual_guid, multi_sample_type_families)
 
-    def _get_inheritance_quality_qs(self, sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q, annotate_carriers, custom_affected):
+    def _get_inheritance_quality_qs(self, sample_data, multi_sample_type_families, inheritance_mode, individual_genotype_filter, quality_filter, clinvar_override_q, annotate_carriers, inheritance_filter):
         samples_by_genotype = defaultdict(list)
         affected_samples = []
         unaffected_samples = []
         family_missing_type_samples = defaultdict(lambda: defaultdict(list))
+        custom_affected = inheritance_filter.get('affected') or {}
+        allow_no_call = inheritance_filter.get('allowNoCall')
         for sample in sample_data['samples']:
             affected = custom_affected.get(sample['individual_guid']) or sample['affected']
             genotype = self._sample_genotype(sample, affected, inheritance_mode, individual_genotype_filter)
@@ -849,22 +873,30 @@ class EntriesManager(SearchQuerySet):
                 'sampleId': (affected_samples, 'has({value}, {field})'),
             })
         elif samples_by_genotype:
-            if all(len(self.genotype_lookup[genotype]) == 1 for genotype in samples_by_genotype.keys()):
-                samples_by_gt = {self.genotype_lookup[genotype][0]: samples for genotype, samples in samples_by_genotype.items()}
+            genotype_lookup = self.genotype_lookup
+            if allow_no_call and inheritance_mode:
+                unaffected_genotype = self.INHERITANCE_FILTERS.get(inheritance_mode, {}).get(UNAFFECTED)
+                if unaffected_genotype and -1 not in genotype_lookup[unaffected_genotype]:
+                    genotype_lookup = {**genotype_lookup, unaffected_genotype: [-1] + genotype_lookup[unaffected_genotype]}
+                if inheritance_mode == X_LINKED_RECESSIVE and -1 not in genotype_lookup[REF_REF]:
+                    genotype_lookup = {**genotype_lookup, REF_REF: [-1] + genotype_lookup[REF_REF]}
+
+            if all(len(genotype_lookup[genotype]) == 1 for genotype in samples_by_genotype.keys()):
+                samples_by_gt = {genotype_lookup[genotype][0]: samples for genotype, samples in samples_by_genotype.items()}
                 gt_filter_map = ', '.join([f"{gt}, {samples_by_gt.get(gt, [])}" for gt in [-1, 0, 1, 2]])
                 gt_filter = (gt_filter_map, 'has(map({value})[ifNull({field}, -1)], x.sampleId)')
             else:
                 genotype_sample_map = ', '.join([f"'{genotype or 'any'}', {samples}" for genotype, samples in samples_by_genotype.items()])
                 gt_genotypes = defaultdict(list)
                 for genotype in samples_by_genotype.keys():
-                    for gt in self.genotype_lookup[genotype]:
+                    for gt in genotype_lookup[genotype]:
                         gt_genotypes[gt].append(genotype or 'any')
                 gt_genotype_map = ', '.join([f"{gt}, {gt_genotypes[gt]}" for gt in [-1, 0, 1, 2]])
                 genotype_maps = f'genotype -> map({genotype_sample_map})[genotype], map({gt_genotype_map})'
                 gt_filter = (genotype_maps, 'has(arrayFlatten(arrayMap({value}[ifNull({field}, -1)])), x.sampleId)')
             inheritance_q = Q(calls__array_all={'gt': gt_filter})
 
-        quality_q = self._quality_q(quality_filter, affected_samples, clinvar_override_q)
+        quality_q = self._quality_q(quality_filter, allow_no_call, affected_samples, clinvar_override_q)
 
         return inheritance_q, quality_q, gt_filter, family_missing_type_samples, unaffected_samples
 
@@ -878,7 +910,7 @@ class EntriesManager(SearchQuerySet):
                 genotype = REF_REF
         return genotype
 
-    def _quality_q(self, quality_filter, affected_samples, clinvar_override_q):
+    def _quality_q(self, quality_filter, allow_no_call, affected_samples, clinvar_override_q):
         quality_filter_conditions = {}
 
         for field, scale, *filters in self.quality_filters:
@@ -888,6 +920,8 @@ class EntriesManager(SearchQuerySet):
             value = quality_filter.get(filter_key)
             if value:
                 or_filters = ['isNull({field})', '{field} >= {value}'] + filters
+                if allow_no_call:
+                    or_filters.append('isNull(x.gt)')
                 quality_filter_conditions[field] = (value / scale, f'or({", ".join(or_filters)})')
 
         if not quality_filter_conditions:
@@ -905,6 +939,24 @@ class EntriesManager(SearchQuerySet):
             quality_q |= clinvar_override_q
 
         return quality_q
+
+    def _get_multi_sample_type_family_call_qs(self, entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, family_missing_type_samples):
+        if gt_filter:
+            inheritance_q |= multi_sample_type_family_q
+            entries = self._annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples)
+        elif inheritance_q is not None:
+            entries = entries.annotate(passes_inheritance=inheritance_q)
+            inheritance_q = Q(passes_inheritance=True) | multi_sample_type_family_q
+        else:
+            entries = entries.annotate(passes_inheritance=Value(True))
+
+        if quality_q is None:
+            entries = entries.annotate(passes_quality=Value(True))
+        else:
+            entries = entries.annotate(passes_quality=quality_q)
+            quality_q = Q(passes_quality=True) | multi_sample_type_family_q
+
+        return entries, inheritance_q, quality_q
 
     @staticmethod
     def _annotate_failed_family_samples(entries, gt_filter, family_missing_type_samples):

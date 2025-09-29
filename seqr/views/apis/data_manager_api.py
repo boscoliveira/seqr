@@ -353,7 +353,7 @@ def load_data(request):
 
     success = trigger_data_loading(
         projects_by_guid.values(), individual_ids, sample_type, dataset_type, request_json['genomeVersion'],
-        _callset_path(request_json), user=request.user, skip_validation=request_json.get('skipValidation', False),
+        _callset_path(request_json), user=request.user,
         skip_check_sex_and_relatedness=request_json.get('skipSRChecks', False), vcf_sample_id_map=vcf_sample_id_map,
         raise_error=is_local, skip_expect_tdr_metrics=is_local, success_message=success_message, error_message=error_message,
     )
@@ -389,8 +389,8 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
         }
         def fetch_missing_vcf_samples(missing_vcf_samples):
             samples = _get_dataset_type_samples_for_matched_pdos(
-                LOADABLE_PDO_STATUSES + AVAILABLE_PDO_STATUSES, **get_sample_kwargs,
-                additional_sample_filters={'VCFIDWithMismatch': sorted(missing_vcf_samples)},
+                LOADABLE_PDO_STATUSES + AVAILABLE_PDO_STATUSES, **get_sample_kwargs, sample_fields=['VCFIDWithMismatch'],
+                additional_sample_filters={'SeqrIDWithMismatch': sorted(missing_vcf_samples)},
             )
             vcf_sample_id_map.update({
                 s['sample_id']: s['VCFIDWithMismatch'] for s in samples
@@ -425,7 +425,8 @@ def trigger_delete_project(request):
     request_json = json.loads(request.body)
     project_guid = request_json.pop('project')
     project = Project.objects.get(guid=project_guid)
-    return _trigger_data_update(delete_clickhouse_project, request_json, project)
+    samples = Sample.objects.filter(individual__family__project=project)
+    return _trigger_data_update(delete_clickhouse_project, request.user, samples, request_json, project)
 
 
 @data_manager_required
@@ -434,15 +435,18 @@ def trigger_delete_family(request):
     request_json = json.loads(request.body)
     family_guid = request_json.pop('family')
     project = Project.objects.get(family__guid=family_guid)
-    return _trigger_data_update(delete_clickhouse_family, request_json, project, family_guid)
+    samples = Sample.objects.filter(individual__family__guid=family_guid)
+    return _trigger_data_update(delete_clickhouse_family, request.user, samples, request_json, project, family_guid)
 
 
-def _trigger_data_update(clickhouse_func, request_json, project, *args):
+def _trigger_data_update(clickhouse_func, user, samples, request_json, project, *args):
     dataset_type = request_json.get('datasetType')
-    sample_types = Sample.objects.filter(
-        individual__family__project=project, dataset_type=dataset_type, is_active=True,
-    ).values_list('sample_type', flat=True).distinct() if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
-    info = []
+    samples = samples.filter(dataset_type=dataset_type, is_active=True)
+    sample_types = list(
+        samples.values_list('sample_type', flat=True).distinct()
+    ) if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
+    updated = Sample.bulk_update(user=user, update_json={'is_active': False}, queryset=samples)
+    info = [f'Deactivated search for {len(updated)} individuals']
     for sample_type in sample_types:
         info.append(clickhouse_func(project, *args, dataset_type=dataset_type, sample_type=sample_type))
     return create_json_response({'info': info})

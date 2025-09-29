@@ -1018,7 +1018,7 @@ class IndividualAPITest(object):
             'OR4G11P', '', '', '', 'Heterozygous', '', 'unknown', 'Broad_NA20889_1_248367227', '', 'Candidate',
             'IRIDA syndrome', 'MONDO:0008788', 'Autosomal dominant', 'Full', '', '', 'SR-ES', '', '', '', '', '', '', '',
         ])
-        self._set_metadata_file_iter(mock_subprocess, genetic_findings_table)
+        mock_subprocess.return_value.stdout.__iter__.return_value = [b'Bucket is a requester pays bucket but no user project provided']
 
         url = reverse(import_gregor_metadata, args=[PM_REQUIRED_PROJECT_GUID])
         self.check_pm_login(url)
@@ -1027,6 +1027,13 @@ class IndividualAPITest(object):
             'workspaceNamespace': 'my-seqr-billing', 'workspaceName': 'anvil-1kg project nåme with uniçøde',
             'sampleType': 'exome',
         }
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 500)
+        self.assertDictEqual(response.json(), {'error': 'Run command failed: Bucket is a requester pays bucket but no user project provided'})
+
+        mock_subprocess.reset_mock()
+        self._set_metadata_file_iter(mock_subprocess, genetic_findings_table)
+        mock_subprocess.return_value.wait.return_value = 0
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
@@ -1146,7 +1153,7 @@ class IndividualAPITest(object):
         ).order_by('family_id', 'variant_id').distinct().values(
             'guid', 'variant_id', 'xpos', 'family__guid', 'saved_variant_json__genomeVersion',
             'saved_variant_json__transcripts', 'saved_variant_json__genotypes', 'saved_variant_json__mainTranscriptId',
-            'saved_variant_json__hgvsc', 'key', 'dataset_type', 'genotypes'
+            'saved_variant_json__hgvsc', 'key', 'dataset_type', 'genotypes', 'gene_ids',
         )
         self.assertEqual(len(saved_variants), 4)
         self.assertDictEqual(saved_variants[0], {
@@ -1162,6 +1169,7 @@ class IndividualAPITest(object):
             'key': 100,
             'dataset_type': 'SNV_INDEL',
             'genotypes': mock.ANY,
+            'gene_ids': ['ENSG00000240361', 'ENSG00000135953'],
         })
         self.assertEqual(len(saved_variants[0]['genotypes']), 2)
         self.assertDictEqual(saved_variants[1], {
@@ -1179,6 +1187,7 @@ class IndividualAPITest(object):
             'key': None,
             'dataset_type': None,
             'genotypes': {},
+            'gene_ids': ['ENSG00000240361'],
         })
         new_family_genotypes = {new_family_individual_guid: {'numAlt': 2}}
         self.assertDictEqual(saved_variants[2], {
@@ -1194,6 +1203,7 @@ class IndividualAPITest(object):
             'key': 100,
             'dataset_type': 'SNV_INDEL',
             'genotypes': new_family_genotypes,
+            'gene_ids': ['ENSG00000135953'],
         })
 
         variant_tags = VariantTag.objects.filter(variant_tag_type__name='GREGoR Finding')
@@ -1224,14 +1234,19 @@ class IndividualAPITest(object):
 
         mock_subprocess.assert_has_calls([
             mock.call('gsutil cat gs://test_bucket/data_tables/experiment_dna_short_read.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
             mock.call('gsutil cat gs://test_bucket/data_tables/experiment.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
             mock.call('gsutil cat gs://test_bucket/data_tables/participant.tsv', stdout=-1, stderr=-2, shell=True), # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
             mock.call('gsutil cat gs://test_bucket/data_tables/phenotype.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
             mock.call('gsutil cat gs://test_bucket/data_tables/genetic_findings.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call().wait(),
             mock.call().stdout.__iter__(),
         ])
 
