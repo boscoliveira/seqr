@@ -1153,7 +1153,7 @@ class IndividualAPITest(object):
         ).order_by('family_id', 'variant_id').distinct().values(
             'guid', 'variant_id', 'xpos', 'family__guid', 'saved_variant_json__genomeVersion',
             'saved_variant_json__transcripts', 'saved_variant_json__genotypes', 'saved_variant_json__mainTranscriptId',
-            'saved_variant_json__hgvsc', 'key', 'dataset_type', 'genotypes'
+            'saved_variant_json__hgvsc', 'key', 'dataset_type', 'genotypes', 'gene_ids',
         )
         self.assertEqual(len(saved_variants), 4)
         self.assertDictEqual(saved_variants[0], {
@@ -1169,6 +1169,7 @@ class IndividualAPITest(object):
             'key': 100,
             'dataset_type': 'SNV_INDEL',
             'genotypes': mock.ANY,
+            'gene_ids': ['ENSG00000240361', 'ENSG00000135953'],
         })
         self.assertEqual(len(saved_variants[0]['genotypes']), 2)
         self.assertDictEqual(saved_variants[1], {
@@ -1186,6 +1187,7 @@ class IndividualAPITest(object):
             'key': None,
             'dataset_type': None,
             'genotypes': {},
+            'gene_ids': ['ENSG00000240361'],
         })
         new_family_genotypes = {new_family_individual_guid: {'numAlt': 2}}
         self.assertDictEqual(saved_variants[2], {
@@ -1201,6 +1203,7 @@ class IndividualAPITest(object):
             'key': 100,
             'dataset_type': 'SNV_INDEL',
             'genotypes': new_family_genotypes,
+            'gene_ids': ['ENSG00000135953'],
         })
 
         variant_tags = VariantTag.objects.filter(variant_tag_type__name='GREGoR Finding')

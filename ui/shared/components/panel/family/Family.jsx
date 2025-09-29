@@ -129,7 +129,7 @@ const FAMILY_FIELD_RENDER_LOOKUP = {
   [FAMILY_FIELD_DISCOVERY_MONDO_ID]: {
     ...MONDO_FIELD,
     internal: true,
-    canEditFamily: ({ discoveryTags }) => discoveryTags?.length > 0,
+    canEditFamily: ({ discoveryGeneIds }) => discoveryGeneIds?.length > 0,
   },
   [FAMILY_FIELD_OMIM_NUMBERS]: {
     canEditFamily: ({ postDiscoveryOmimOptions }) => Object.keys(postDiscoveryOmimOptions || {}).length > 0,

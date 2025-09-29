@@ -199,10 +199,8 @@ class FamilyAPITest(object):
                 'end': 14409,
             }]},
         }
-        self._assert_expected_family2_data(omim_options, url.replace(FAMILY_GUID, FAMILY_GUID2), response_keys, family_fields)
 
-    def _assert_expected_family2_data(self, omim_options, family_2_url, response_keys, family_fields):
-        response = self.client.get(family_2_url)
+        response = self.client.get(url.replace(FAMILY_GUID, FAMILY_GUID2))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
         self.assertSetEqual(set(response_json.keys()), response_keys)
@@ -231,12 +229,8 @@ class FamilyAPITest(object):
         self.assertSetEqual(set(response_json.keys()), response_keys)
 
         family = response_json['familiesByGuid'][FAMILY_GUID]
-        self.assertSetEqual(set(family.keys()), {'familyGuid', 'discoveryTags'})
-        self.assertListEqual(family['discoveryTags'], [{
-            'transcripts': {'ENSG00000135953': [mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY, mock.ANY]},
-            'mainTranscriptId': 'ENST00000258436',
-            'selectedMainTranscriptId': None,
-        }])
+        self.assertSetEqual(set(family.keys()), {'familyGuid', 'discoveryGeneIds'})
+        self.assertListEqual(family['discoveryGeneIds'], ['ENSG00000135953'])
 
         project = response_json['projectsByGuid'][PROJECT_GUID]
         self.assertSetEqual(set(project.keys()), {'variantTagTypes', 'variantFunctionalTagTypes'})
@@ -708,16 +702,3 @@ class AnvilFamilyAPITest(AnvilAuthenticationTestCase, FamilyAPITest):
 
     EXTERNAL_ANVIL_CAN_DELETE = True
 
-    def _assert_expected_family2_data(self, omim_options, *args, **kwargs):
-        super()._assert_expected_family2_data(omim_options, *args, **kwargs)
-
-        # test graceful handling when clickhouse is down
-        self.reset_logs()
-        connections['clickhouse'].close()
-        super()._assert_expected_family2_data({}, *args, **kwargs)
-        self.assert_json_logs(self.analyst_user, [
-            ("Error loading genes from clickhouse: An error occurred in the current transaction. You can't execute queries until the end of the 'atomic' block.", {
-                'severity': 'ERROR',
-                '@type': 'type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent',
-            }),
-        ])

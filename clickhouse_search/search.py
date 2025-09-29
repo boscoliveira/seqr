@@ -9,7 +9,7 @@ import json
 
 from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import Array, ArrayFilter, ArrayIntersect, ArraySort, GroupArrayArray, If, Tuple, \
-    ArrayDistinct, ArrayMap
+    ArrayMap
 from clickhouse_search.models import ENTRY_CLASS_MAP, ANNOTATIONS_CLASS_MAP, TRANSCRIPTS_CLASS_MAP, KEY_LOOKUP_CLASS_MAP, \
     BaseClinvar, BaseAnnotationsMitoSnvIndel, BaseAnnotationsGRCh37SnvIndel, BaseAnnotationsSvGcnv
 from reference_data.models import GeneConstraint, Omim, GENOME_VERSION_LOOKUP
@@ -641,28 +641,6 @@ def get_clickhouse_annotations(genome_version, dataset_type, keys):
     qs = get_annotations_queryset(genome_version, dataset_type, keys)
     results = qs.join_seqr_pop().join_clinvar(keys).result_values(skip_entry_fields=True)
     return format_clickhouse_results(results, genome_version)
-
-
-def get_clickhouse_genes(genome_version, dataset_type, keys):
-    results = get_annotations_queryset(genome_version, dataset_type, keys)
-    return results.aggregate(
-        gene_ids=ArrayDistinct(GroupArrayArray(ArrayMap(results.transcript_field, mapped_expression='x.geneId')), output_field=ArrayField(StringField())),
-    )['gene_ids']
-
-
-def get_clickhouse_keys_for_gene(gene_id, genome_version, dataset_type, keys):
-    results = get_annotations_queryset(genome_version, dataset_type, keys)
-    return list(results.filter(
-        **{f'{results.transcript_field}__array_exists': {'geneId': (f"'{gene_id}'",)}},
-    ).values_list('key', flat=True))
-
-
-def get_all_clickhouse_keys_for_gene(gene_model, genome_version):
-    entry_cls = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
-    return list(entry_cls.objects.filter_locus(require_gene_filter=True, genes={gene_model.gene_id: {
-        'id': gene_model.id,
-        **{f'{field}Grch{genome_version}': getattr(gene_model, f'{field}_grch{genome_version}') for field in ['chrom', 'start', 'end']}},
-    }).values_list('key', flat=True).distinct())
 
 
 def get_clickhouse_key_lookup(genome_version, dataset_type, variants_ids, reverse=False):

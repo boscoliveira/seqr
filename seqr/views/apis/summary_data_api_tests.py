@@ -628,6 +628,7 @@ class SummaryDataAPITest(AirtableTest):
         self.assertEqual(new_saved_variant.family_id, 2)
         self.assertEqual(new_saved_variant.ref, 'GAGA')
         self.assertEqual(new_saved_variant.alt, 'G')
+        self.assertListEqual(new_saved_variant.gene_ids, ['ENSG00000135953', 'ENSG00000228198'])
 
     def _has_expected_metadata_response(self, response, expected_individuals, has_airtable=False, has_duplicate=False):
         self.assertEqual(response.status_code, 200)

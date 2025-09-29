@@ -12,6 +12,7 @@
         "ref": "C",
         "alt": "T",
         "variant_id": "19-1912634-C-T",
+        "gene_ids": ["ENSG00000240361"],
         "saved_variant_json": {
             "liftedOverGenomeVersion": "37",
             "pos": 1912634,
@@ -57,6 +58,7 @@
         "ref": "G",
         "alt": "T",
         "variant_id": "19-1912633-G-T",
+        "gene_ids": ["ENSG00000135953"],
         "saved_variant_json": {
             "liftedOverGenomeVersion": "37",
             "pos": 1912633,
@@ -105,6 +107,7 @@
         "ref": "G",
         "alt": "C",
         "variant_id": "19-1912632-G-C",
+        "gene_ids": ["ENSG00000135953"],
         "saved_variant_json": {
             "pos": 1912632,
             "end": 1912632,
@@ -145,6 +148,7 @@
         "genotypes": {
             "I000018_na21234": {"sampleId": "NA20885", "numAlt": 2, "dp": 3943, "hl": 1.0, "mitoCn": 214, "contamination": 0.0, "filters": ["artifact_prone_site"]}
         },
+        "gene_ids": ["ENSG00000198727"],
         "saved_variant_json": {
             "variantId": "M-14783-T-C", "chrom": "M", "pos": 14783, "ref": "T", "alt": "C", "xpos": 25000014783,
             "genomeVersion": "38", "liftedOverGenomeVersion": "37", "liftedOverChrom": "MT", "liftedOverPos": 14783,
@@ -178,6 +182,7 @@
         "genotypes": {
             "I000018_na21234": { "cn": 1, "sampleId": "NA20885", "numAlt": -1,  "defragged": false, "qs": 33, "numExon": 2}
         },
+        "gene_ids": ["ENSG00000240361", "ENSG00000135953", "ENSG00000223972"],
         "saved_variant_json": {
             "liftedOverGenomeVersion": null,
             "pos": 249045487,

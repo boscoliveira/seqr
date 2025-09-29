@@ -98,6 +98,10 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
         }
     else:
         update_json = {'saved_variant_json': variant_json}
+    if 'transcripts' in variant_json:
+        update_json['gene_ids'] = sorted(variant_json['transcripts'].keys(), key=lambda gene_id: _transcript_sort(gene_id, variant_json))
+    elif 'gene_ids' in variant_json:
+        update_json['gene_ids'] = variant_json['gene_ids']
     return {
         'xpos': xpos,
         'xpos_end': xpos + var_length,
@@ -106,6 +110,13 @@ def parse_saved_variant_json(variant_json, family_id, variant_id=None,):
         'family_id': family_id,
         'variant_id': variant_id,
     }, update_json
+
+
+def _transcript_sort(gene_id, saved_variant_json):
+    gene_transcripts = saved_variant_json['transcripts'][gene_id]
+    main_transcript_id = saved_variant_json.get('mainTranscriptId')
+    is_main_gene = bool(main_transcript_id) and any(t.get('transcriptId') == main_transcript_id for t in gene_transcripts)
+    return (not is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
 
 
 def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False):
@@ -140,15 +151,11 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
         ).annotate(saved_variant_ids=ArrayAgg('saved_variants__id', ordering='id'))
     }
 
-    variant_genes_by_id = backend_specific_call(
-        _get_saved_variant_genes, _get_clickhouse_saved_variant_genes,
-    )(saved_variant_map.values(), genome_version)
-
     update_tags = []
     num_new = 0
     for key, variant in family_variant_data.items():
         updated_tag = _set_updated_tags(
-            key, get_metadata(variant), variant['support_vars'], saved_variant_map, existing_tags, tag_type, user, variant_genes_by_id,
+            key, get_metadata(variant), variant['support_vars'], saved_variant_map, existing_tags, tag_type, user,
         )
         if updated_tag:
             update_tags.append(updated_tag)
@@ -162,7 +169,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
 
 def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_var_ids: list[str],
                       saved_variant_map: dict[tuple[int, str], SavedVariant], existing_tags: dict[tuple[int, ...], VariantTag],
-                      tag_type: VariantTagType, user: User, variant_genes_by_id: dict[str, list[str]]):
+                      tag_type: VariantTagType, user: User):
     variant = saved_variant_map[key]
     existing_tag = existing_tags.get(tuple([variant.id]))
     updated_tag = None
@@ -180,11 +187,11 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
             VariantTag, {'variant_tag_type': tag_type, 'metadata': json.dumps(metadata)}, user)
         tag.saved_variants.add(variant)
 
-    variant_genes = variant_genes_by_id.get(key[1], set())
+    variant_genes = set(variant.gene_ids or [])
     support_vars = []
     for support_id in support_var_ids:
         support_v = saved_variant_map[(key[0], support_id)]
-        if variant_genes.intersection(variant_genes_by_id.get(support_id, set())):
+        if variant_genes.intersection(set(support_v.gene_ids)):
             support_vars.append(support_v)
     if support_vars:
         variants = [variant] + support_vars
@@ -195,27 +202,6 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
             existing_tags[variant_id_key] = True
 
     return updated_tag
-
-
-def _get_saved_variant_genes(variant_models, *args, **kwargs):
-    return {v.variant_id: set(v.saved_variant_json['transcripts'].keys()) for v in variant_models}
-
-
-def _get_clickhouse_saved_variant_genes(variant_models, genome_version):
-    variant_genes_by_id = {}
-    key_id_map = {}
-    for v in variant_models:
-        if v.key:
-            key_id_map[v.key] = v.variant_id
-        else:
-            variant_genes_by_id[v.variant_id] = set(v.saved_variant_json['transcripts'].keys())
-    qs = get_annotations_queryset(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, key_id_map.keys())
-    variant_genes_by_id.update({
-        key_id_map[key]: set(gene_ids) for key, gene_ids in qs.values_list(
-            'key', ArrayDistinct(ArrayMap(qs.transcript_field, mapped_expression='x.geneId'), output_field=ArrayField(StringField())),
-        )
-    })
-    return variant_genes_by_id
 
 
 def _search_new_saved_variants(family_variant_ids: set[tuple[int, str]], user: User, genome_version: str) -> dict[tuple[int, str], dict]:
@@ -269,22 +255,33 @@ def _get_clickhouse_variants(samples: Sample.objects, families_by_id: dict[int, 
         genotype_keys = get_clickhouse_genotypes(
             project_guid, family_guids, genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, variant_key_map.keys(), samples,
         )
+        gene_ids_by_key = _get_gene_ids_by_key(genome_version, variant_key_map.keys())
         for key, genotypes in genotype_keys.items():
             variant_id = variant_key_map[key]
             chrom, pos, ref, alt = variant_id.split('-')
             variants.append({
                 'key': key, 'variantId': variant_id, 'chrom': chrom, 'pos': int(pos), 'ref': ref, 'alt': alt,
                 'genotypes': genotypes, 'familyGuids': sorted({g['familyGuid'] for g in genotypes.values()}),
+                'gene_ids': gene_ids_by_key.get(key),
             })
     return variants
+
+
+def _get_gene_ids_by_key(genome_version, keys):
+    qs = get_annotations_queryset(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, keys)
+    return dict(qs.values_list(
+        'key', ArrayDistinct(ArrayMap(qs.transcript_field, mapped_expression='x.geneId'), output_field=ArrayField(StringField())),
+    ))
 
 
 def _get_clickhouse_variant_keys(variant_data: dict[tuple[int, str], dict], genome_version: str) -> dict[tuple[int, str], dict]:
     variant_ids = {key[1] for key in variant_data}
     variant_key_map = get_clickhouse_key_lookup(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, list(variant_ids))
+    gene_ids_by_key = _get_gene_ids_by_key(genome_version, variant_key_map.values())
     for (_, variant_id), variant in variant_data.items():
         if variant_id in variant_key_map:
             variant['key'] = variant_key_map[variant_id]
+            variant['gene_ids'] = gene_ids_by_key.get(variant['key'])
     return variant_data
 
 

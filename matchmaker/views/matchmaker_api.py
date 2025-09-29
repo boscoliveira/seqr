@@ -2,10 +2,9 @@ import json
 import requests
 from datetime import datetime
 from django.core.mail.message import EmailMessage
-from django.db.models import prefetch_related_objects, Q, F, Value, CharField
+from django.db.models import prefetch_related_objects, Q, Value, CharField
 from django.db.models.functions import Coalesce
 
-from clickhouse_search.search import get_transcripts_by_key
 from matchmaker.models import MatchmakerResult, MatchmakerContactNotes, MatchmakerSubmission, MatchmakerSubmissionGenes, \
     MatchmakerIncomingQuery
 from matchmaker.matchmaker_utils import get_mme_genes_phenotypes_for_results, parse_mme_patient, \
@@ -15,12 +14,11 @@ from seqr.models import Individual, SavedVariant
 from seqr.utils.communication_utils import safe_post_to_slack
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
-from seqr.utils.search.utils import backend_specific_call
 from seqr.utils.xpos_utils import get_chrom_pos
 from seqr.views.utils.json_to_orm_utils import update_model_from_json, get_or_create_model_from_json, \
     create_model_from_json
 from seqr.views.utils.json_utils import create_json_response
-from seqr.views.utils.orm_to_json_utils import _get_json_for_model, get_json_for_saved_variants_with_tags, \
+from seqr.views.utils.orm_to_json_utils import _get_json_for_model, get_json_for_saved_variants, \
     get_json_for_matchmaker_submission, get_json_for_matchmaker_submissions
 from seqr.views.utils.permissions_utils import check_mme_permissions, check_project_permissions, analyst_required, \
     has_project_permissions, login_and_policies_required, get_project_and_check_permissions
@@ -50,42 +48,28 @@ def get_individual_mme_matches(request, submission_guid):
 
     results = MatchmakerResult.objects.filter(submission=submission)
 
-    response_json = get_json_for_saved_variants_with_tags(
-        SavedVariant.objects.filter(family=submission.individual.family), genome_version=project.genome_version, additional_values={
-            'genomeVersion': Coalesce('saved_variant_json__genomeVersion', Value(project.genome_version), output_field=CharField()),
-            'transcripts': F('saved_variant_json__transcripts'),
-        }, additional_model_fields=backend_specific_call([], ['key', 'genotypes']),
-    )
-
-    variants = response_json['savedVariantsByGuid'].values()
-    backend_specific_call(lambda *args: None, _add_clickhouse_transcripts)(
-        variants, project.genome_version, request.user,
-    )
-
-    gene_ids = set()
-    for variant in variants:
-        chrom, pos = get_chrom_pos(variant['xpos'])
-        variant.update({'chrom': chrom, 'pos': pos})
-        gene_ids.update(list(variant.get('transcripts', {}).keys()))
-
     hpo_terms_by_id = get_hpo_terms_by_id(
         {feature['id'] for feature in (submission.features or []) if feature.get('id')})
     phenotypes = parse_mme_features(submission.features, hpo_terms_by_id)
-    response_json.update(_get_submission_detail_response(submission, phenotypes))
+    response_json = _get_submission_detail_response(submission, phenotypes)
+
+    gene_variants = response_json['mmeSubmissionsByGuid'][submission.guid]['geneVariants']
+    gene_ids = {gv['geneId'] for gv in gene_variants}
+    variant_guids = {gv['variantGuid'] for gv in gene_variants}
+
+    variants = get_json_for_saved_variants(
+        SavedVariant.objects.filter(guid__in=variant_guids), genome_version=project.genome_version, additional_values={
+            'genomeVersion': Coalesce('saved_variant_json__genomeVersion', Value(project.genome_version), output_field=CharField()),
+        },
+    )
+    response_json['savedVariantsByGuid'] = {}
+    for variant in variants:
+        chrom, pos = get_chrom_pos(variant['xpos'])
+        variant.update({'chrom': chrom, 'pos': pos})
+        response_json['savedVariantsByGuid'][variant['variantGuid']] = variant
 
     return _parse_mme_results(
         submission, results, request.user, additional_genes=gene_ids, response_json=response_json)
-
-
-def _add_clickhouse_transcripts(variants, genome_version, user):
-    keys = {variant['key'] for variant in variants}
-    try:
-        transcripts_by_key = get_transcripts_by_key(genome_version, keys)
-    except Exception as e:
-        logger.error(f'Error loading transcripts from clickhouse: {e}', user)
-        transcripts_by_key = {}
-    for variant in variants:
-        variant['transcripts'] = transcripts_by_key.get(variant['key'], {})
 
 
 @login_and_policies_required

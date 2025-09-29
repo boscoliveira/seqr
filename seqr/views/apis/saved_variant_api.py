@@ -5,7 +5,7 @@ from clickhouse_backend.models import ArrayField, StringField
 from django.db.models import Q, F
 
 from clickhouse_search.backend.functions import ArrayFilter, ArrayMap
-from clickhouse_search.search import get_annotations_queryset, get_transcripts_queryset
+from clickhouse_search.search import get_transcripts_queryset
 from seqr.models import SavedVariant, VariantTagType, VariantTag, VariantNote, VariantFunctionalData,\
     Family, GeneNote, Project
 from seqr.utils.search.elasticsearch.es_utils import update_project_saved_variant_json
@@ -137,26 +137,20 @@ def _create_variant_note(saved_variants, note_json, user, genome_version):
 
 
 def _variant_gene_id(variant, genome_version):
-    main_transcript_id = variant.selected_main_transcript_id or variant.saved_variant_json.get('mainTranscriptId')
-    if main_transcript_id:
+    if variant.selected_main_transcript_id and len(variant.gene_ids) > 1:
         return next(
             gene_id for gene_id, transcripts in variant.saved_variant_json['transcripts'].items()
-            if any(t['transcriptId'] == main_transcript_id for t in transcripts))
-    return next(gene_id for gene_id in sorted(variant.saved_variant_json['transcripts']))
+            if any(t['transcriptId'] == variant.selected_main_transcript_id for t in transcripts))
+    return variant.gene_ids[0]
 
 
 def _clickhouse_variant_gene_id(variant, genome_version):
-    if not variant.key:
+    if not (variant.key and variant.selected_main_transcript_id) or len(variant.gene_ids) == 1:
         return _variant_gene_id(variant, genome_version)
-    if variant.selected_main_transcript_id:
-        qs = get_transcripts_queryset(genome_version, [variant.key]).annotate(gene_ids=ArrayMap(
-            ArrayFilter('transcripts', conditions=[{'transcriptId': (variant.selected_main_transcript_id, "{field} = '{value}'")}]),
-            mapped_expression='x.geneId', output_field=ArrayField(StringField()),
-        )).annotate(gene_id=F('gene_ids__0'))
-    else:
-        annotations = get_annotations_queryset(genome_version, variant.dataset_type, [variant.key])
-        qs = annotations.annotate(gene_id=F(f'{annotations.transcript_field}__0__geneId'))
-    return qs.values_list('gene_id', flat=True)[0]
+    return get_transcripts_queryset(genome_version, [variant.key]).annotate(gene_ids=ArrayMap(
+        ArrayFilter('transcripts', conditions=[{'transcriptId': (variant.selected_main_transcript_id, "{field} = '{value}'")}]),
+        mapped_expression='x.geneId', output_field=ArrayField(StringField()),
+    )).values_list(F('gene_ids__0'), flat=True)[0]
 
 
 @login_and_policies_required

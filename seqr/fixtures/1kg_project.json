@@ -1844,6 +1844,7 @@
         "ref": "GAGA",
         "alt": "G",
         "variant_id": "21-3343353-GAGA-G",
+        "gene_ids": ["ENSG00000135953"],
         "saved_variant_json": {
             "variantId": "21-3343353-GAGA-G",
             "clinvar": {"clinicalSignificance": "", "alleleId": null, "variationId": null, "goldStars": null},
@@ -1895,6 +1896,7 @@
                 "numAlt": 1
             }
         },
+        "gene_ids": ["ENSG00000240361", "ENSG00000135953"],
         "saved_variant_json": {
             "clinvar": {
                 "pathogenicity": "Uncertain_significance",
@@ -2006,6 +2008,7 @@
         "ref": "G",
         "alt": "A",
         "variant_id": "1-46859832-G-A",
+        "gene_ids": ["ENSG00000197530"],
         "saved_variant_json": {
             "clinvar": {"clinicalSignificance": "", "alleleId": null, "variationId": null, "goldStars": null},
             "liftedOverGenomeVersion": "38",
@@ -2046,6 +2049,7 @@
         "ref": "G",
         "alt": "CA",
         "variant_id": "1-1562437-G-CA",
+        "gene_ids": ["ENSG00000197530"],
         "saved_variant_json": {
             "clinvar": {"clinicalSignificance": "", "alleleId": null, "variationId": null, "goldStars": null},
             "liftedOverGenomeVersion": "38",
@@ -2136,6 +2140,7 @@
             "I000002_na19675": {"sampleId": "NA19675", "ab": 0.5555556, "ad": null, "gq": 99, "dp": 9, "pl": null, "numAlt": 1},
             "I000017_na20889": {"sampleId": "NA20885", "ab": 0.0, "ad": "71,0", "gq": 99.0, "dp": "71", "pl": "0,213,1918", "numAlt": 1}
         },
+        "gene_ids": ["ENSG00000240361", "ENSG00000135953"],
         "saved_variant_json": {
             "clinvar": {
                 "pathogenicity": "Uncertain_significance",
@@ -2190,6 +2195,7 @@
         "ref": null,
         "alt": null,
         "variant_id": "prefix_19107_DEL",
+        "gene_ids": ["ENSG00000135953", "ENSG00000223972", "ENSG00000240361"],
         "saved_variant_json": {
             "liftedOverGenomeVersion": null,
             "pos": 249045487,
