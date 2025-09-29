@@ -130,14 +130,15 @@ const getIntitialProjectFamilies = createProjectFamiliesSelector(
 )
 
 export const getIntitialSearch = createSelector(
+  getCurrentSearchHash,
   getCurrentSearchParams,
   getIntitialProjectFamilies,
-  (searchParams, projectFamilies) => {
+  (previousSearchHash, searchParams, projectFamilies) => {
     if (searchParams) {
-      return searchParams
+      return { ...searchParams, previousSearchHash }
     }
 
-    return projectFamilies ? { projectFamilies: [projectFamilies] } : null
+    return projectFamilies ? { projectFamilies: [projectFamilies], previousSearchHash } : null
   },
 )
 

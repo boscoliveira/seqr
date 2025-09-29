@@ -279,9 +279,9 @@ class SearchUtilsTests(SearchTestHelper):
 
         self._test_invalid_search_params(query_variants)
 
-    def _test_expected_search_call(self, mock_get_variants, results_cache, search_fields=None, has_gene_search=False,
+    def _get_expected_search_call(self, results_cache, search_fields=None, has_gene_search=False,
                                    rs_ids=None, variant_ids=None, parsed_variant_ids=None, inheritance_mode='de_novo',
-                                   dataset_type=None, secondary_dataset_type=None, omitted_sample_guids=None,
+                                   dataset_type=None, secondary_dataset_type=None, exclude_keys=None, exclude_key_pairs=None,
                                    exclude_locations=False, exclude=None, annotations=None, annotations_secondary=None, single_gene_search=False, **kwargs):
         genes = intervals = None
         has_included_gene_search = has_gene_search and not exclude_locations
@@ -315,8 +315,16 @@ class SearchUtilsTests(SearchTestHelper):
             expected_search['annotations'] = annotations
         if annotations_secondary is not None:
             expected_search['annotations_secondary'] = annotations_secondary
+        if exclude_keys is not None:
+            expected_search['exclude_keys'] = exclude_keys
+        if exclude_key_pairs is not None:
+            expected_search['exclude_key_pairs'] = exclude_key_pairs
 
-        mock_get_variants.assert_called_with(mock.ANY, expected_search, self.user, results_cache, '37', **kwargs)
+        return (mock.ANY, expected_search, self.user, results_cache, '37'), kwargs, genes
+
+    def _test_expected_search_call(self, mock_get_variants, *args, has_gene_search=False, exclude_locations=False, omitted_sample_guids=None, **kwargs):
+        call_args, call_kwargs, genes = self._get_expected_search_call(*args, has_gene_search=has_gene_search, exclude_locations=exclude_locations, **kwargs)
+        mock_get_variants.assert_called_with(*call_args, **call_kwargs)
         self._assert_expected_search_samples(mock_get_variants, omitted_sample_guids, has_gene_search and not exclude_locations)
 
         if genes:
@@ -341,16 +349,17 @@ class SearchUtilsTests(SearchTestHelper):
 
 
     def test_query_variants(self, mock_get_variants):
+        parsed_variants = [{**v, 'key': (i+1) * 1000 } for i, v in enumerate(PARSED_VARIANTS)]
         def _mock_get_variants(families, search, user, previous_search_results, genome_version, **kwargs):
-            previous_search_results['all_results'] = PARSED_VARIANTS
+            previous_search_results['all_results'] =parsed_variants
             previous_search_results['total_results'] = 5
-            return PARSED_VARIANTS
+            return parsed_variants
         mock_get_variants.side_effect = _mock_get_variants
 
         variants, total = query_variants(self.results_model, user=self.user)
-        self.assertListEqual(variants, PARSED_VARIANTS)
+        self.assertListEqual(variants, parsed_variants)
         self.assertEqual(total, 5)
-        results_cache = {'all_results': PARSED_VARIANTS, 'total_results': 5}
+        results_cache = {'all_results': parsed_variants, 'total_results': 5}
         self.assert_cached_results(results_cache)
         self._test_expected_search_call(
             mock_get_variants, results_cache, sort='xpos', page=1, num_results=100, skip_genotype_filter=False,
@@ -465,6 +474,25 @@ class SearchUtilsTests(SearchTestHelper):
             search_fields=['annotations'], annotations_secondary=screen_annotations,
             omitted_sample_guids=['S000145_hg00731', 'S000146_hg00732', 'S000148_hg00733'],
         )
+
+        self.set_cache(None)
+        mock_get_variants.reset_mock()
+        self.search_model.search = {
+            'inheritance': {'mode': 'any_affected'},
+            'exclude': {'previousSearch': True, 'previousSearchHash': 'abc1234', 'clinvar': ['benign']},
+        }
+        previous_search_model = VariantSearch.objects.create(search={'inheritance': {'mode': 'de_novo'}})
+        previous_results_model = VariantSearchResults.objects.create(variant_search=previous_search_model, search_hash='abc1234')
+        previous_results_model.families.set(self.families)
+        query_variants(self.results_model, user=self.user)
+        self._test_exclude_previous_search(
+            mock_get_variants, results_cache, sort='xpos', page=1, num_results=100, skip_genotype_filter=False,
+            inheritance_mode='any_affected', exclude={'clinvar': ['benign']}, search_fields=['exclude'],
+        )
+
+    def _test_exclude_previous_search(self, mock_get_variants, *args, num_searches=1, **kwargs):
+        self._test_expected_search_call(mock_get_variants, *args, **kwargs)
+        self.assertEqual(mock_get_variants.call_count, num_searches)
 
     def test_cached_query_variants(self):
         self.set_cache({'total_results': 4, 'all_results': self.CACHED_VARIANTS})
@@ -623,6 +651,28 @@ class ClickhouseSearchUtilsTests(DifferentDbTransactionSupportMixin, TestCase, S
     @mock.patch('seqr.utils.search.utils.get_clickhouse_variants')
     def test_query_variants(self, mock_call):
         super().test_query_variants(mock_call)
+
+    def _test_exclude_previous_search(self, mock_get_variants, *args, **kwargs):
+        super()._test_exclude_previous_search(
+            mock_get_variants, *args, **kwargs,
+            exclude_key_pairs={}, exclude_keys={'MITO': [1000, 2000]}, num_searches=2,
+        )
+        call_args, call_kwargs, _ = self._get_expected_search_call(*args, inheritance_mode='de_novo', sort=None, num_results=100)
+        mock_get_variants.assert_has_calls([mock.call(*call_args, **call_kwargs)])
+
+        # Test when previous results are cached
+        mock_get_variants.reset_mock()
+        self.mock_redis.get.side_effect = [
+            None,
+            json.dumps({'all_results': [VARIANT1, [VARIANT1, VARIANT2], [VARIANT1, SV_VARIANT1], VARIANT2, [VARIANT4, VARIANT3], SV_VARIANT1]}),
+        ]
+        self.mock_redis.keys.side_effect = [[], ['search_results__abc1234__gnomad']]
+        query_variants(self.results_model, user=self.user)
+        super()._test_exclude_previous_search(
+            mock_get_variants, *args, **kwargs, num_searches=1,
+            exclude_key_pairs={'SNV_INDEL': [[1, 2], [3, 4]], 'SNV_INDEL,SV_WGS': [[1, 12]]},
+            exclude_keys={'SNV_INDEL': [1, 2], 'SV_WGS': [12]},
+        )
 
     def test_cached_query_variants(self):
         Project.objects.filter(id=1).update(genome_version='38')
