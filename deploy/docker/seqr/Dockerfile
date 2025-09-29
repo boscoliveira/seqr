@@ -1,4 +1,4 @@
-FROM python:3.9-slim-bullseye as build
+FROM python:3.11-slim-bullseye as build
 
 LABEL maintainer="Broad TGG"
 
