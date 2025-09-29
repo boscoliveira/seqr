@@ -1,9 +1,11 @@
 # _seqr_ Changes
 
 ## dev
-* Store gene ids on SavedVariant model (REQUIRES DB MIGRATION)
 
 ## 9/18/25
+* Store gene ids on SavedVariant model (REQUIRES DB MIGRATION)
+
+## 9/29/25
 * Deprecate hail backend support
 
 ## 8/7/25
