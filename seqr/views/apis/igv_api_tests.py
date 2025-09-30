@@ -75,8 +75,10 @@ class IgvAPITest(AnvilAuthenticationTestCase):
         mock_set_redis.assert_not_called()
         mock_subprocess.assert_not_called()
 
+    @mock.patch('seqr.utils.file_utils.os.path.isfile')
     @mock.patch('seqr.utils.file_utils.open')
-    def test_proxy_local_to_igv(self, mock_open, mock_subprocess):
+    def test_proxy_local_to_igv(self, mock_open, mock_isfile, mock_subprocess):
+        mock_isfile.side_effect = [False, True, False, True]
         mock_subprocess.return_value.stdout = STREAMING_READS_CONTENT
         mock_open.return_value.__enter__.return_value.__iter__.return_value = STREAMING_READS_CONTENT
 

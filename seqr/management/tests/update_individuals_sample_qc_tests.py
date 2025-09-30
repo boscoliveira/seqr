@@ -82,6 +82,8 @@ class UpdateIndividualsSampleQC(TestCase):
         self.mock_subprocess = patcher.start()
         self.addCleanup(patcher.stop)
         self.mock_ls_process = mock.MagicMock()
+        self.mock_does_exist_process = mock.MagicMock()
+        self.mock_does_exist_process.wait.return_value = 0
         self.mock_metadata_file = mock.MagicMock()
         super().setUp()
 
@@ -100,14 +102,14 @@ class UpdateIndividualsSampleQC(TestCase):
         self.mock_ls_process.communicate.return_value = b'gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-02-24/metadata.json\n', b''
         self.mock_metadata_file.stdout = [json.dumps({}).encode()]
         self.mock_metadata_file.wait.return_value = 0
-        self.mock_subprocess.side_effect = [self.mock_ls_process, self.mock_metadata_file]
+        self.mock_subprocess.side_effect = [self.mock_ls_process, self.mock_does_exist_process, self.mock_metadata_file]
 
         with self.assertRaises(CommandError):
             call_command('update_individuals_sample_qc', 'SNV_INDEL', 'GRCh38', 'manual__2025-02-24')
 
         # Test valid case
         self.mock_metadata_file.stdout = [json.dumps(METADATA_JSON).encode()]
-        self.mock_subprocess.side_effect = [self.mock_ls_process, self.mock_metadata_file]
+        self.mock_subprocess.side_effect = [self.mock_ls_process, self.mock_does_exist_process, self.mock_metadata_file]
         call_command('update_individuals_sample_qc', 'SNV_INDEL', 'GRCh38', 'manual__2025-02-24')
 
         # Individual model properly updated with sample qc results
