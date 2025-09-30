@@ -322,6 +322,8 @@ class AnvilWorkspaceAPITest(AnvilAuthenticationTestCase):
         mock_subprocess.assert_called_with('gsutil ls gs://test_bucket/test_path.vcf.gz', stdout=-1, stderr=-2, shell=True)  # nosec
         mock_file_logger.info.assert_has_calls([
             mock.call('==> gsutil ls gs://test_bucket/test_path.vcf.gz', self.manager_user),
+        ])
+        mock_file_logger.warning.assert_has_calls([
             mock.call('File not found', self.manager_user),
         ])
 

@@ -1786,7 +1786,7 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         self.mock_subprocess.side_effect = subprocess_side_effect
         return [
             (f'==> gsutil ls gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz', None),
-            ('CommandException: One or more URLs matched no objects', None),
+            ('CommandException: One or more URLs matched no objects', {'severity': 'WARNING'}),
         ]
 
     def _set_file_found(self):

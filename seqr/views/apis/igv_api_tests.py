@@ -55,7 +55,7 @@ class IgvAPITest(AnvilAuthenticationTestCase):
         ])
         mock_ls_subprocess.wait.assert_called_once()
         mock_access_token_subprocess.wait.assert_called_once()
-        mock_file_logger.info.assert_any_call(
+        mock_file_logger.warning.assert_any_call(
             'CommandException: One or more URLs matched no objects.', self.collaborator_user)
 
         mock_get_redis.reset_mock()
