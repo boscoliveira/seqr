@@ -50,7 +50,7 @@ COPY ./ui/ .
 
 RUN npm run build
 
-FROM python:3.9-slim-bullseye as runtime
+FROM python:3.11-slim-bullseye as runtime
 
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 RUN apt-get update && apt-get install -y --no-install-recommends \
