@@ -11,6 +11,7 @@ class SubmitFormPage extends React.PureComponent {
     fields: PropTypes.arrayOf(PropTypes.object),
     header: PropTypes.string,
     url: PropTypes.string,
+    formClass: PropTypes.func,
   }
 
   state = { uploadStats: {} }
@@ -29,12 +30,12 @@ class SubmitFormPage extends React.PureComponent {
   }
 
   render() {
-    const { header, fields } = this.props
+    const { header, fields, formClass } = this.props
     const { uploadStats } = this.state
     return (
       <div>
         <Header size="medium" textAlign="center" content={header} />
-        <UploadFormPage fields={fields} uploadStats={uploadStats} onSubmit={this.onSubmit} />
+        {React.createElement(formClass || UploadFormPage, { fields, uploadStats, onSubmit: this.onSubmit })}
       </div>
     )
   }
