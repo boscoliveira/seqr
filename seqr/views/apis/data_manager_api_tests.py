@@ -1772,12 +1772,13 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
     def _set_file_not_found(self, file_name=None, sample_guid=None, list_files=False, has_mv_commands=False):
         self.mock_file_iter.stdout = []
         self.mock_does_file_exist.wait.return_value = 1
+        subprocess_side_effect = [self.mock_does_file_exist]
         error = b'CommandException: One or more URLs matched no objects'
         if list_files:
             self.mock_does_file_exist.communicate.return_value = (b'', error)
+            subprocess_side_effect.append(self.mock_does_file_exist)
         else:
             self.mock_does_file_exist.stdout = [error]
-        subprocess_side_effect = [self.mock_does_file_exist]
         if has_mv_commands:
             mock_mv = mock.MagicMock()
             mock_mv.wait.return_value = 0
@@ -1805,9 +1806,10 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
     def _add_file_list_iter(self, file_list, stdout):
         formatted_files = '\n'.join([f'{self.CALLSET_DIR}/{file}' for file in file_list])
         self.mock_does_file_exist.communicate.return_value = (f'{formatted_files}\n'.encode('utf-8'), b'')
+        self.mock_does_file_exist.wait.return_value = 0
         self.mock_file_iter.stdout += [row.encode('utf-8') for row in stdout]
         self.mock_subprocess.side_effect = [
-            self.mock_does_file_exist, self.mock_file_iter, self.mock_does_file_exist, self.mock_file_iter,
+            self.mock_does_file_exist, self.mock_does_file_exist,  self.mock_file_iter, self.mock_does_file_exist, self.mock_does_file_exist, self.mock_file_iter,
         ]
 
     def _get_expected_read_file_subprocess_calls(self, file_name, sample_guid):

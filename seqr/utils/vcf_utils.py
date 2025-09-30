@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 
 from seqr.utils.middleware import ErrorsWarningsException
-from seqr.utils.file_utils import file_iter, list_files
+from seqr.utils.file_utils import file_iter, does_file_exist, list_files
 from seqr.utils.search.constants import VCF_FILE_EXTENSIONS
 from seqr.models import Sample
 
@@ -76,9 +76,9 @@ def _get_vcf_meta_info(line):
 def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None, dataset_type=None):
     allowed_exts = DATA_TYPE_FILE_EXTS.get(dataset_type)
 
-    vcf_filename = _validate_valid_vcf_name(data_path, user, path_name, allowed_exts)
+    vcf_filename = _validate_valid_vcf_name(data_path, user, allowed_exts)
 
-    if allowed_exts and vcf_filename.endswith(allowed_exts):
+    if vcf_filename is None:
         return None
 
     byte_range = None if vcf_filename.endswith('.vcf') else (0, BLOCK_SIZE)
@@ -119,7 +119,7 @@ def _get_vcf_header_line(vcf_file, meta):
                     meta[meta_info['field']].update({meta_info['id']: meta_info['type']})
 
 
-def _validate_valid_vcf_name(data_path, user, path_name, allowed_exts):
+def _validate_valid_vcf_name(data_path, user, allowed_exts):
     file_extensions = (allowed_exts or ()) + VCF_FILE_EXTENSIONS
     if not data_path.endswith(file_extensions):
         raise ErrorsWarningsException([
@@ -131,6 +131,10 @@ def _validate_valid_vcf_name(data_path, user, path_name, allowed_exts):
         files = list_files(data_path, user)
         if files:
             file_to_check = files[0]
+    elif allowed_exts and data_path.endswith(allowed_exts):
+        if not does_file_exist(data_path, user=user):
+            raise ErrorsWarningsException([f'Data file or path {data_path} is not found.'])
+        file_to_check = None
 
     return file_to_check
 
