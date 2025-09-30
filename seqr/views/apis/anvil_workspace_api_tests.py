@@ -813,7 +813,7 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
         self.mock_subprocess.assert_has_calls([
             mock.call(f'gsutil mv {TEMP_PATH}/* {gs_path}',  stdout=-1, stderr=-2, shell=True), # nosec
             mock.call().wait(),
-            mock.call(f'gsutil ls gs://seqr-loading-temp/v3.1/db_id_to_gene_id.csv.gz', stdout=-1, stderr=-2, shell=True),  # nosec
+            mock.call('gsutil ls gs://seqr-loading-temp/v3.1/db_id_to_gene_id.csv.gz', stdout=-1, stderr=-2, shell=True),  # nosec
             mock.call().wait(),
             mock.call().stdout.__iter__(),
             mock.call(f'gsutil mv {TEMP_PATH}/* gs://seqr-loading-temp/v3.1/',  stdout=-1, stderr=-2, shell=True), # nosec
