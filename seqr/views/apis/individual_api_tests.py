@@ -999,17 +999,19 @@ class IndividualAPITest(object):
         response = self.client.post(url, data={'f': f})
         self._is_expected_individuals_metadata_upload(response)
 
-    def _set_metadata_file_iter(self, mock_subprocess, genetic_findings_table):
-        mock_subprocess.return_value.stdout.__iter__.side_effect = [
-            iter(['\t'.join(row).encode() for row in file]) for file in [
-                EXPERIMENT_TABLE, EXPERIMENT_LOOKUP_TABLE, LOAD_PARTICIPANT_TABLE, PHENOTYPE_TABLE,
-                genetic_findings_table,
+    def _set_metadata_file_iter(self, genetic_findings_table):
+        self.gs_files.update({
+            f'{file_name}.tsv': iter(['\t'.join(row).encode() for row in file]) for file_name, file in [
+                ('experiment_dna_short_read', EXPERIMENT_TABLE),
+                ('experiment', EXPERIMENT_LOOKUP_TABLE),
+                ('participant', LOAD_PARTICIPANT_TABLE),
+                ('phenotype', PHENOTYPE_TABLE),
+                ('genetic_findings', genetic_findings_table),
             ]
-        ]
+        })
 
     @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
-    @mock.patch('seqr.utils.file_utils.subprocess.Popen')
-    def test_import_gregor_metadata(self, mock_subprocess):
+    def test_import_gregor_metadata(self):
         genetic_findings_table = deepcopy(GENETIC_FINDINGS_TABLE)
         genetic_findings_table[2] = genetic_findings_table[2][:11] + genetic_findings_table[4][11:14] + \
                                     genetic_findings_table[2][14:]
@@ -1018,22 +1020,28 @@ class IndividualAPITest(object):
             'OR4G11P', '', '', '', 'Heterozygous', '', 'unknown', 'Broad_NA20889_1_248367227', '', 'Candidate',
             'IRIDA syndrome', 'MONDO:0008788', 'Autosomal dominant', 'Full', '', '', 'SR-ES', '', '', '', '', '', '', '',
         ])
-        mock_subprocess.return_value.stdout.__iter__.return_value = [b'Bucket is a requester pays bucket but no user project provided']
+        self.mock_subprocess.wait.return_value = 1
+        self.gs_files['experiment_dna_short_read.tsv'] = [b'Bucket is a requester pays bucket but no user project provided']
 
         url = reverse(import_gregor_metadata, args=[PM_REQUIRED_PROJECT_GUID])
         self.check_pm_login(url)
 
+        self.reset_logs()
         body = {
             'workspaceNamespace': 'my-seqr-billing', 'workspaceName': 'anvil-1kg project nåme with uniçøde',
             'sampleType': 'exome',
         }
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 500)
-        self.assertDictEqual(response.json(), {'error': 'Run command failed: Bucket is a requester pays bucket but no user project provided'})
+        self.assertDictEqual(response.json(), {'error': 'Could not access file gs://test_bucket/data_tables/experiment_dna_short_read.tsv'})
+        self.assert_json_logs(self.pm_user, [
+            ('==> gsutil ls gs://test_bucket/data_tables/experiment_dna_short_read.tsv', None),
+            ('Bucket is a requester pays bucket but no user project provided', {'severity': 'WARNING'}),
+        ])
 
-        mock_subprocess.reset_mock()
-        self._set_metadata_file_iter(mock_subprocess, genetic_findings_table)
-        mock_subprocess.return_value.wait.return_value = 0
+        self.mock_subprocess.reset_mock()
+        self._set_metadata_file_iter(genetic_findings_table)
+        self.mock_subprocess.wait.return_value = 0
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
@@ -1232,28 +1240,10 @@ class IndividualAPITest(object):
             json.loads(new_family_tag.metadata), {'gene_known_for_phenotype': 'Known', 'condition_id': 'MONDO:0044970', 'GREGoR_variant_classification': 'Curation in progress'},
         )
 
-        mock_subprocess.assert_has_calls([
-            mock.call('gsutil cat gs://test_bucket/data_tables/experiment_dna_short_read.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
-            mock.call().wait(),
-            mock.call().stdout.__iter__(),
-            mock.call('gsutil cat gs://test_bucket/data_tables/experiment.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
-            mock.call().wait(),
-            mock.call().stdout.__iter__(),
-            mock.call('gsutil cat gs://test_bucket/data_tables/participant.tsv', stdout=-1, stderr=-2, shell=True), # nosec
-            mock.call().wait(),
-            mock.call().stdout.__iter__(),
-            mock.call('gsutil cat gs://test_bucket/data_tables/phenotype.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
-            mock.call().wait(),
-            mock.call().stdout.__iter__(),
-            mock.call('gsutil cat gs://test_bucket/data_tables/genetic_findings.tsv', stdout=-1, stderr=-2, shell=True),  # nosec
-            mock.call().wait(),
-            mock.call().stdout.__iter__(),
-        ])
-
         # Test behavior on reload
         SavedVariant.objects.get(guid=saved_variants[2]['guid']).delete()
         genetic_findings_table[2][10] = 'PPX123'
-        self._set_metadata_file_iter(mock_subprocess, genetic_findings_table)
+        self._set_metadata_file_iter(genetic_findings_table)
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 200)
         response_json = response.json()
@@ -1396,12 +1386,13 @@ class AnvilIndividualAPITest(AnvilAuthenticationTestCase, IndividualAPITest):
 
     def _mock_subprocess(self, command, **kwargs):
         command_args = re.match(
-            r'gsutil (?P<cmd>cat|mv)(?P<local_path> \S+)? gs://seqr-scratch-temp/(?P<gs_path>\S+)', command,
+            r'gsutil (?P<cmd>cat|mv|ls)(?P<local_path> \S+)? gs://(?P<gs_bucket>\S+)/(?P<gs_path>\S+)', command,
         ).groupdict()
         file_name = command_args['gs_path']
         if command_args['cmd'] == 'mv':
             src_path = command_args['local_path'].strip()
             self.assertEqual(src_path.split('/')[-1], file_name)
+            self.assertEqual(command_args['gs_bucket'], 'seqr-scratch-temp')
             with gzip.open(src_path) as f:
                 self.gs_files[file_name] = f.readlines()
         else:
