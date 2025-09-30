@@ -458,7 +458,8 @@ VCF_SAMPLES = [
     'ABC123', 'NA19675_1', 'NA19678', 'NA19679', 'HG00731', 'HG00732', 'HG00733', 'NA20874', 'NA21234', 'NA21987',
 ]
 
-PIPELINE_RUNNER_URL = 'http://pipeline-runner:6000/loading_pipeline_enqueue'
+PIPELINE_RUNNER_HOST = 'http://pipeline-runner:6000'
+PIPELINE_RUNNER_URL = f'{PIPELINE_RUNNER_HOST}/loading_pipeline_enqueue'
 
 
 @mock.patch('seqr.views.apis.data_manager_api.LOADING_DATASETS_DIR', '/local_datasets')
@@ -1593,11 +1594,13 @@ class DataManagerAPITest(AirtableTest):
 
     @responses.activate
     def test_trigger_delete_family(self):
+        responses.add(responses.POST, f'{PIPELINE_RUNNER_HOST}/delete_families_enqueue', status=200)
+
         url = reverse(trigger_delete_family)
         self.check_data_manager_login(url)
 
         Project.objects.filter(guid=PROJECT_GUID).update(genome_version='38')
-        response = self.client.post(url, content_type='application/json', data=json.dumps({'family': 'F000002_2', 'datasetType': 'SV'}))
+        response = self.client.post(url, content_type='application/json', data=json.dumps({'family': 'F000002_2'}))
         self._assert_expected_delete_family(response)
 
     def _assert_expected_delete_project(self, response):
@@ -1694,7 +1697,7 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
 
     def _assert_success_notification(self, variables):
         self.maxDiff = None
-        self.assert_json_logs(self.pm_user, [('Triggered loading pipeline', {'detail': variables})])
+        self.assert_json_logs(self.pm_user, [('Triggered Loading Pipeline', {'detail': variables})])
 
     def _trigger_error(self, url, body, variables, mock_open, mock_gzip_open, mock_mkdir):
         super()._trigger_error(url, body, variables, mock_open, mock_gzip_open, mock_mkdir)
@@ -1915,7 +1918,7 @@ Loading pipeline is triggered with:
             'callset_path': variables['callset_path'].replace('callset.vcf', 'sv_callset.vcf'),
         }
         self.assert_json_logs(self.data_manager_user, [
-            (f'Error triggering loading pipeline: {error}', {'severity': 'WARNING', 'detail': variables}),
+            (f'Error Triggering Loading Pipeline: {error}', {'severity': 'WARNING', 'detail': variables}),
         ], offset=6)
 
         error_message = f"""ERROR triggering internal WES SV loading: {error}
@@ -2082,14 +2085,13 @@ Loading pipeline should be triggered with:
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {
             'info': [
-                'Deactivated search for 3 individuals',
-                'Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg',
+                'Disabled search for 7 samples in the following 1 families: 2',
+                'Triggered delete family data',
             ],
         })
 
         family_samples = Sample.objects.filter(individual__family_id=2, is_active=True)
-        self.assertEqual(family_samples.filter(dataset_type='SV').count(), 0)
-        self.assertEqual(family_samples.count(),4)
+        self.assertEqual(family_samples.count(),0)
 
     def _assert_expected_airtable_errors(self, url):
         responses.replace(
