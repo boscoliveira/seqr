@@ -4,7 +4,7 @@ import re
 from collections import defaultdict
 
 from seqr.utils.middleware import ErrorsWarningsException
-from seqr.utils.file_utils import file_iter, does_file_exist, list_files
+from seqr.utils.file_utils import file_iter, list_files
 from seqr.utils.search.constants import VCF_FILE_EXTENSIONS
 from seqr.models import Sample
 
@@ -76,7 +76,7 @@ def _get_vcf_meta_info(line):
 def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None, dataset_type=None):
     allowed_exts = DATA_TYPE_FILE_EXTS.get(dataset_type)
 
-    vcf_filename = _validate_vcf_exists(data_path, user, path_name, allowed_exts)
+    vcf_filename = _validate_valid_vcf_name(data_path, user, path_name, allowed_exts)
 
     if allowed_exts and vcf_filename.endswith(allowed_exts):
         return None
@@ -84,7 +84,9 @@ def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None
     byte_range = None if vcf_filename.endswith('.vcf') else (0, BLOCK_SIZE)
     meta = defaultdict(dict)
     try:
-        header_line = next(_get_vcf_header_line(file_iter(vcf_filename, byte_range=byte_range), meta))
+        header_line = next(_get_vcf_header_line(file_iter(vcf_filename, byte_range=byte_range, skip_check_exists=True), meta))
+    except FileNotFoundError:
+        raise ErrorsWarningsException([f'Data file or path {path_name or data_path} is not found.'], [])
     except StopIteration:
         raise ErrorsWarningsException(['No header found in the VCF file.'], [])
     except UnicodeDecodeError:
@@ -117,23 +119,18 @@ def _get_vcf_header_line(vcf_file, meta):
                     meta[meta_info['field']].update({meta_info['id']: meta_info['type']})
 
 
-def _validate_vcf_exists(data_path, user, path_name, allowed_exts):
+def _validate_valid_vcf_name(data_path, user, path_name, allowed_exts):
     file_extensions = (allowed_exts or ()) + VCF_FILE_EXTENSIONS
     if not data_path.endswith(file_extensions):
         raise ErrorsWarningsException([
             'Invalid VCF file format - file path must end with {}'.format(' or '.join(file_extensions))
         ])
 
-    file_to_check = None
+    file_to_check = data_path
     if '*' in data_path:
         files = list_files(data_path, user)
         if files:
             file_to_check = files[0]
-    elif does_file_exist(data_path, user=user):
-        file_to_check = data_path
-
-    if not file_to_check:
-        raise ErrorsWarningsException(['Data file or path {} is not found.'.format(path_name or data_path)])
 
     return file_to_check
 

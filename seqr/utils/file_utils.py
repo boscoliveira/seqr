@@ -57,6 +57,8 @@ def list_files(wildcard_path, user, check_subfolders=False, allow_missing=True):
 
 
 def file_iter(file_path, byte_range=None, raw_content=False, user=None, **kwargs):
+    if not does_file_exist(file_path, user=user):
+        raise FileNotFoundError()
     if is_google_bucket_file_path(file_path):
         for line in _google_bucket_file_iter(file_path, byte_range=byte_range, raw_content=raw_content, user=user, **kwargs):
             yield line
