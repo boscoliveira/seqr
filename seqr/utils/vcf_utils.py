@@ -84,7 +84,7 @@ def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None
     byte_range = None if vcf_filename.endswith('.vcf') else (0, BLOCK_SIZE)
     meta = defaultdict(dict)
     try:
-        header_line = next(_get_vcf_header_line(file_iter(vcf_filename, byte_range=byte_range, skip_check_exists=True), meta))
+        header_line = next(_get_vcf_header_line(file_iter(vcf_filename, byte_range=byte_range, user=user), meta))
     except FileNotFoundError:
         raise ErrorsWarningsException([f'Data file or path {path_name or data_path} is not found.'], [])
     except StopIteration:
