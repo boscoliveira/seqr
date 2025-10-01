@@ -5,6 +5,7 @@ import { Grid } from 'semantic-ui-react'
 import { validators } from 'shared/components/form/FormHelpers'
 import FormWrapper from 'shared/components/form/FormWrapper'
 import { AlignedCheckboxGroup } from 'shared/components/form/Inputs'
+import { AwesomeBarFormInput } from 'shared/components/page/AwesomeBar'
 import SubmitFormPage from 'shared/components/page/SubmitFormPage'
 import {
   GENOME_VERSION_FIELD,
@@ -52,6 +53,15 @@ const CONSEQUENCE_FILEDS = [
 
 const FIELDS = [
   { validate: validators.required, ...GENOME_VERSION_FIELD },
+  {
+    name: 'geneId',
+    label: 'Gene',
+    control: AwesomeBarFormInput,
+    categories: ['genes'],
+    fluid: true,
+    placeholder: 'Search for gene',
+    validate: validators.required,
+  },
   ...CONSEQUENCE_FILEDS,
 ]
 
