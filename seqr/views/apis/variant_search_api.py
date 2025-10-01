@@ -15,7 +15,7 @@ import re
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory, Sample
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
-    variant_lookup, parse_variant_id
+    variant_lookup, parse_variant_id, clickhouse_only
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
 from seqr.utils.search.utils import InvalidSearchException
 from seqr.utils.xpos_utils import get_xpos
@@ -549,6 +549,15 @@ def _flatten_variants(variants):
         else:
             flattened_variants.append(variant)
     return flattened_variants
+
+
+@clickhouse_only
+@login_and_policies_required
+def gene_variant_lookup(request):
+    search_json = json.loads(request.body)
+    gene_id = search_json.pop('geneId')
+    genome_version = search_json.pop('genomeVersion')
+    return create_json_response(search_json)
 
 
 @login_and_policies_required
