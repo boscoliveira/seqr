@@ -43,7 +43,6 @@ const FAMILY_FIELDS = [
     placeholder: 'Search for a family',
     validate: validators.required,
   },
-  DATASET_TYPE_FIELD,
 ]
 
 const TriggerSearchDataUpdateForm = ({ entity, fields }) => (

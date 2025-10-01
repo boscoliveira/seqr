@@ -667,11 +667,6 @@ def delete_clickhouse_project(project, dataset_type, sample_type=None):
     return f'Deleted all {dataset_type} search data for project {project.name}'
 
 
-def delete_clickhouse_family(project, family_guid, dataset_type, sample_type=None):
-    dataset_type = _clickhouse_dataset_type(dataset_type, sample_type)
-    return f'Clickhouse does not support deleting individual families from project. Manually delete {dataset_type} data for {family_guid} in project {project.guid}'
-
-
 SV_DATASET_TYPES = {
     Sample.SAMPLE_TYPE_WGS: Sample.DATASET_TYPE_SV_CALLS,
     Sample.SAMPLE_TYPE_WES: 'GCNV',
