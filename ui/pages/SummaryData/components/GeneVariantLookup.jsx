@@ -18,6 +18,22 @@ import {
 } from 'shared/utils/constants'
 import { snakecaseToTitlecase } from 'shared/utils/stringUtils'
 
+const OTHER_CONSEQUENCES = [
+  'transcript_ablation',
+  '5_prime_UTR_variant',
+  '3_prime_UTR_variant',
+  'non_coding_transcript_exon_variant__canonical',
+  'NMD_transcript_variant',
+]
+
+const groupOptions = (group) => {
+  const options = GROUPED_VEP_CONSEQUENCES[group]
+  if (group === VEP_GROUP_OTHER) {
+    return options.filter(({ value }) => OTHER_CONSEQUENCES.includes(value))
+  }
+  return options
+}
+
 const CONSEQUENCE_FILEDS = [
   VEP_GROUP_NONSENSE,
   VEP_GROUP_ESSENTIAL_SPLICE_SITE,
@@ -29,7 +45,7 @@ const CONSEQUENCE_FILEDS = [
   name: `annotations.${group}`,
   component: AlignedCheckboxGroup,
   groupLabel: snakecaseToTitlecase(group),
-  options: GROUPED_VEP_CONSEQUENCES[group],
+  options: groupOptions(group),
   format: value => value || [],
   inline: true,
 }))
