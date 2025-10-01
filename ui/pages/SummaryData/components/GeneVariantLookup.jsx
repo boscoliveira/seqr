@@ -31,27 +31,28 @@ const CONSEQUENCE_FILEDS = [
   groupLabel: snakecaseToTitlecase(group),
   options: GROUPED_VEP_CONSEQUENCES[group],
   format: value => value || [],
-  maxOptionsPerColumn: 7,
+  inline: true,
 }))
 
 const FIELDS = [
-  ...CONSEQUENCE_FILEDS,
   { validate: validators.required, ...GENOME_VERSION_FIELD },
+  ...CONSEQUENCE_FILEDS,
 ]
 
 const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
   <Grid divided="vertically">
     <Grid.Row>
-      <Grid.Column width={4} />
-      <Grid.Column width={8}>
+      <Grid.Column width={2} />
+      <Grid.Column width={14}>
         <FormWrapper
           onSubmit={onSubmit}
           fields={fields}
           noModal
           showErrorPanel
+          verticalAlign="top"
         />
       </Grid.Column>
-      <Grid.Column width={4} />
+      <Grid.Column width={2} />
     </Grid.Row>
     <Grid.Row>
       <Grid.Column width={16}>

@@ -338,7 +338,7 @@ const chunkArray = (arr, maxChunkSize) => {
 }
 
 export const CheckboxGroup = React.memo((props) => {
-  const { value, label, groupLabel, onChange, maxOptionsPerColumn, ...baseProps } = props
+  const { value, label, groupLabel, onChange, maxOptionsPerColumn, inline, ...baseProps } = props
   const options = props.options.map(styledOption)
   const numSelected = options.filter(opt => value.includes(opt.value)).length
   const optionGroups = maxOptionsPerColumn && options.length > maxOptionsPerColumn ?
@@ -375,7 +375,7 @@ export const CheckboxGroup = React.memo((props) => {
       </List.Item>
     </List>
   )
-  return optionLists.length > 1 ?
+  return (optionLists.length > 1 || inline) ?
     [mainList, ...optionLists.slice(1)].map(c => <Form.Field inline>{c}</Form.Field>) : mainList
 })
 
@@ -387,6 +387,7 @@ CheckboxGroup.propTypes = {
   groupLabel: PropTypes.node,
   horizontalGrouped: PropTypes.bool,
   maxOptionsPerColumn: PropTypes.number,
+  inline: PropTypes.bool,
 }
 
 export const AlignedCheckboxGroup = styled(CheckboxGroup)`

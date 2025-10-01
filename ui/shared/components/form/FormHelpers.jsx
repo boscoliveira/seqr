@@ -13,6 +13,7 @@ export const StyledForm = styled(({ hasSubmitButton, inline, ...props }) => <For
   .field.inline {
     display: inline-block;
     padding-right: 1em;
+    ${props => (props.verticalAlign ? `vertical-align: ${props.verticalAlign};` : '')}
   }
   
   .inline.fields .field:last-child {
