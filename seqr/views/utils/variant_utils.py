@@ -317,7 +317,7 @@ def _requires_transcript_metadata(variant):
     return variant.get('genomeVersion') != GENOME_VERSION_GRCh38 or variant.get('chrom', '').startswith('M')
 
 
-def _saved_variant_genes_transcripts(variants):
+def _variants_reference_data_response(variants):
     family_genes = defaultdict(set)
     gene_ids = set()
     transcript_ids = set()
@@ -348,7 +348,17 @@ def _saved_variant_genes_transcripts(variants):
         )
     } if transcript_ids else None
 
-    return genes, transcripts, family_genes, projects
+    response = {'genesById': genes}
+
+    if transcripts:
+        response['transcriptsById'] = transcripts
+
+    if any(genome_version == OMIM_GENOME_VERSION for genome_version in genome_versions):
+        response['omimIntervals'] = _get_omim_intervals(variants)
+
+    backend_specific_call(lambda response: response, _add_sample_count_stats)(response)
+
+    return response, family_genes, projects
 
 
 def get_omim_intervals_query(variants):
@@ -453,7 +463,8 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
     if not variants:
         return response
 
-    genes, transcripts, family_genes, projects = _saved_variant_genes_transcripts(variants)
+    reference_response, family_genes, projects = _variants_reference_data_response(variants)
+    response.update(reference_response)
 
     project = list(projects)[0] if len(projects) == 1 else None
 
@@ -463,21 +474,15 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
         discovery_tags, discovery_response = get_json_for_discovery_tags(response['savedVariantsByGuid'].values(), request.user)
         response.update(discovery_response)
 
-    if transcripts:
-        response['transcriptsById'] = transcripts
     response['locusListsByGuid'] = _add_locus_lists(
-        projects, genes, add_list_detail=add_locus_list_detail, user=request.user)
+        projects, response['genesById'], add_list_detail=add_locus_list_detail, user=request.user)
 
     if discovery_tags:
         _add_discovery_tags(variants, discovery_tags)
-    response['genesById'] = genes
-
-    if any(p.genome_version == OMIM_GENOME_VERSION for p in projects):
-        response['omimIntervals'] = _get_omim_intervals(variants)
 
     response['mmeSubmissionsByGuid'] = _mme_response_context(response['savedVariantsByGuid'])
 
-    rna_tpm = _set_response_gene_scores(response, family_genes, genes.keys()) if include_individual_gene_scores else None
+    rna_tpm = _set_response_gene_scores(response, family_genes, response['genesById'].keys()) if include_individual_gene_scores else None
 
     if add_all_context or request.GET.get(LOAD_PROJECT_TAG_TYPES_CONTEXT_PARAM) == 'true':
         project_fields = {'projectGuid': 'guid'}
@@ -502,8 +507,6 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
             if family_guid not in response['familiesByGuid']:
                 response['familiesByGuid'][family_guid] = {}
             response['familiesByGuid'][family_guid].update(data)
-
-    backend_specific_call(lambda response: response, _add_sample_count_stats)(response)
 
     return response
 
