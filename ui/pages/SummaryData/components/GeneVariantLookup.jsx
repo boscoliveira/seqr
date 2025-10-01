@@ -8,6 +8,7 @@ import { AlignedCheckboxGroup } from 'shared/components/form/Inputs'
 import { AwesomeBarFormInput } from 'shared/components/page/AwesomeBar'
 import SubmitFormPage from 'shared/components/page/SubmitFormPage'
 import {
+  GENE_SEARCH_FREQUENCIES,
   GENOME_VERSION_FIELD,
   GROUPED_VEP_CONSEQUENCES,
   VEP_GROUP_NONSENSE,
@@ -36,7 +37,7 @@ const groupOptions = (group) => {
 }
 
 const validateAnnotations = (value, { annotations }) => (
-  value || Object.values(annotations || {}).some(val => val.length) ? undefined : 'At least on consequence is required'
+  value || Object.values(annotations || {}).some(val => val.length) ? undefined : 'At least one consequence filter is required'
 )
 
 const CONSEQUENCE_FILEDS = [
@@ -70,12 +71,25 @@ const FIELDS = [
   ...CONSEQUENCE_FILEDS,
 ]
 
+const INITIAL_VALUES = { freqs: GENE_SEARCH_FREQUENCIES }
+
 const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
   <Grid divided="vertically">
     <Grid.Row>
-      <Grid.Column width={2} />
+      <Grid.Column width={16} textAlign="center">
+        <i>
+          Lookup up all rare variants is seqr in a given gene, regardless of whether or not they are in your projects.
+          <br />
+          Variants are only returned if they have a gnomAD Allele Frequency &lt; 3%
+          and have a seqr global Allele Count &lt; 3000.
+        </i>
+      </Grid.Column>
+    </Grid.Row>
+    <Grid.Row>
+      <Grid.Column width={1} />
       <Grid.Column width={14}>
         <FormWrapper
+          initialValues={INITIAL_VALUES}
           onSubmit={onSubmit}
           fields={fields}
           noModal
@@ -83,7 +97,7 @@ const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
           verticalAlign="top"
         />
       </Grid.Column>
-      <Grid.Column width={2} />
+      <Grid.Column width={1} />
     </Grid.Row>
     <Grid.Row>
       <Grid.Column width={16}>
