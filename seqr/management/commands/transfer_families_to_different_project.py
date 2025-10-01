@@ -1,25 +1,11 @@
 from django.core.management.base import BaseCommand
 
-from clickhouse_search.search import delete_clickhouse_family
-from seqr.models import Project, Family, VariantTag, VariantTagType, Sample
+from seqr.models import Project, Family, VariantTag, VariantTagType
 from seqr.utils.search.utils import backend_specific_call
+from seqr.utils.search.add_data_utils import trigger_delete_families_search
 
 import logging
 logger = logging.getLogger(__name__)
-
-
-def _disable_search(families, from_project):
-    search_samples = Sample.objects.filter(is_active=True, individual__family__in=families)
-    if search_samples:
-        updated_families = search_samples.values_list("individual__family__family_id", flat=True).distinct()
-        updated_family_dataset_types = list(search_samples.values_list('individual__family__guid', 'dataset_type', 'sample_type').distinct())
-        family_summary = ", ".join(sorted(updated_families))
-        num_updated = search_samples.update(is_active=False)
-        logger.info(
-            f'Disabled search for {num_updated} samples in the following {len(updated_families)} families: {family_summary}'
-        )
-        for update in updated_family_dataset_types:
-            logger.info(delete_clickhouse_family(from_project, *update))
 
 
 class Command(BaseCommand):
@@ -49,7 +35,7 @@ class Command(BaseCommand):
             ]
             logger.info(f'Skipping {num_found - len(families)} families with analysis groups in the project: {", ".join(group_families)}')
 
-        backend_specific_call(lambda *args: None, _disable_search)(families, from_project)
+        backend_specific_call(lambda *args: None, trigger_delete_families_search)(from_project, list(families.values_list('guid', flat=True)))
 
         for variant_tag_type in VariantTagType.objects.filter(project=from_project):
             variant_tags = VariantTag.objects.filter(saved_variants__family__in=families, variant_tag_type=variant_tag_type)

@@ -910,7 +910,7 @@ Loading pipeline is triggered with:
             self.manager_user, detail={f'{project.guid}_pedigree': sample_data})
         self.mock_api_logger.error.assert_not_called()
         self.mock_add_data_utils_logger.warning.assert_called_with(
-            'Error triggering loading pipeline: Loading pipeline is already running. Wait for it to complete and resubmit',
+            'Error Triggering Loading Pipeline: Loading pipeline is already running. Wait for it to complete and resubmit',
             self.manager_user, detail=variables,
         )
         self.mock_airtable_logger.error.assert_called_with(

@@ -13,9 +13,9 @@ from django.http.response import HttpResponse
 from django.views.decorators.csrf import csrf_exempt
 from requests.exceptions import ConnectionError as RequestConnectionError
 
-from clickhouse_search.search import delete_clickhouse_project, delete_clickhouse_family
+from clickhouse_search.search import delete_clickhouse_project
 from seqr.utils.communication_utils import send_project_notification
-from seqr.utils.search.add_data_utils import trigger_data_loading, get_loading_samples_validator
+from seqr.utils.search.add_data_utils import trigger_data_loading, get_loading_samples_validator, trigger_delete_families_search
 from seqr.utils.search.elasticsearch.es_utils import get_elasticsearch_status, delete_es_index
 from seqr.utils.search.utils import clickhouse_only, es_only, InvalidSearchException
 from seqr.utils.file_utils import file_iter, does_file_exist
@@ -424,9 +424,17 @@ def _get_valid_search_individuals(project, airtable_samples, vcf_samples, datase
 def trigger_delete_project(request):
     request_json = json.loads(request.body)
     project_guid = request_json.pop('project')
+    dataset_type = request_json.get('datasetType')
     project = Project.objects.get(guid=project_guid)
-    samples = Sample.objects.filter(individual__family__project=project)
-    return _trigger_data_update(delete_clickhouse_project, request.user, samples, request_json, project)
+    samples = Sample.objects.filter(individual__family__project=project, dataset_type=dataset_type, is_active=True)
+    sample_types = list(
+        samples.values_list('sample_type', flat=True).distinct()
+    ) if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
+    updated = Sample.bulk_update(user=request.user, update_json={'is_active': False}, queryset=samples)
+    info = [f'Deactivated search for {len(updated)} individuals']
+    for sample_type in sample_types:
+        info.append(delete_clickhouse_project(project, dataset_type=dataset_type, sample_type=sample_type))
+    return create_json_response({'info': info})
 
 
 @data_manager_required
@@ -436,19 +444,7 @@ def trigger_delete_family(request):
     family_guid = request_json.pop('family')
     project = Project.objects.get(family__guid=family_guid)
     samples = Sample.objects.filter(individual__family__guid=family_guid)
-    return _trigger_data_update(delete_clickhouse_family, request.user, samples, request_json, project, family_guid)
-
-
-def _trigger_data_update(clickhouse_func, user, samples, request_json, project, *args):
-    dataset_type = request_json.get('datasetType')
-    samples = samples.filter(dataset_type=dataset_type, is_active=True)
-    sample_types = list(
-        samples.values_list('sample_type', flat=True).distinct()
-    ) if dataset_type == Sample.DATASET_TYPE_SV_CALLS else [None]
-    updated = Sample.bulk_update(user=user, update_json={'is_active': False}, queryset=samples)
-    info = [f'Deactivated search for {len(updated)} individuals']
-    for sample_type in sample_types:
-        info.append(clickhouse_func(project, *args, dataset_type=dataset_type, sample_type=sample_type))
+    info = trigger_delete_families_search(project, [family_guid], request.user)
     return create_json_response({'info': info})
 
 
