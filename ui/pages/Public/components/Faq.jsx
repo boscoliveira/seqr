@@ -119,7 +119,7 @@ const FAQS = [
           Yes! Please create a seqr account and test out basic functionality using the demonstration project.
           <br /><br />
 
-          The seqr login process requires that you register your email address in the NHGRI&quot;s Genomic Data Science
+          The seqr login process requires that you register your email address in the NHGRI&apos;s Genomic Data Science
           Analysis, Visualization, and Informatics Lab-Space (AnVIL*). This requires a Google account, either a Gmail
           account or registering your non-Gmail email account with Google. <br /><br />
 
@@ -143,7 +143,7 @@ const FAQS = [
           </List>
 
           *If you would prefer to use your institutional or other non-Gmail email address, you can follow &nbsp;
-          <a href="https://anvilproject.org/learn/account-setup/obtaining-a-google-id" target="_blank" rel="noreferrer">this link</a>
+          <a href="https://support.terra.bio/hc/en-us/articles/360029186611-How-to-set-up-a-Terra-account-with-a-non-Google-email" target="_blank" rel="noreferrer">this link</a>
           &nbsp; for instructions on how to create an account that is associated with your non-Gmail, institutional
           email address, then proceed with the instructions above.
         </div>
@@ -183,7 +183,7 @@ const FAQS = [
           </List>
 
           *Si prefiere usar su dirección de correo electrónico institucional u otra que no sea de Gmail, puede seguir
-          &nbsp;<a href="https://anvilproject.org/learn/account-setup/obtaining-a-google-id" target="_blank" rel="noreferrer">este enlace</a>
+          &nbsp;<a href="https://support.terra.bio/hc/en-us/articles/360029186611-How-to-set-up-a-Terra-account-with-a-non-Google-email" target="_blank" rel="noreferrer">este enlace</a>
           &nbsp;para obtener instrucciones sobre cómo crear una cuenta que esté asociada con su dirección de correo
           electrónico institucional que no sea de Gmail, luego continúe con las instrucciones anteriores.
         </div>
@@ -207,7 +207,7 @@ const FAQS = [
 
           To learn more about generating a joint called vcf, please refer to this &nbsp;
           <a href={VCF_DOCUMENTATION_URL} target="_blank" rel="noreferrer">
-            documentation
+            documentation.
           </a>
         </div>
       ),
@@ -253,7 +253,7 @@ const FAQS = [
     [ENGLISH]: {
       header: 'Q. Which browsers are supported for seqr?',
       content: `seqr is only supported in Google Chrome. While it may sometimes function in other browsers, to ensure 
-      reliable behavior you should only use seqr in Chrome`,
+      reliable behavior you should only use seqr in Chrome.`,
     },
     [SPANISH]: {
       header: 'P: ¿Cuáles navegadores son compatibles con seqr?',
