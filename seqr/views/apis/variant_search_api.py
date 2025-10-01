@@ -12,8 +12,10 @@ from django.shortcuts import redirect
 from math import ceil
 import re
 
+from clickhouse_search.search import clickhouse_variant_gene_lookup
 from reference_data.models import GENOME_VERSION_GRCh37, GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, SavedVariant, VariantSearch, VariantSearchResults, ProjectCategory, Sample
+from seqr.utils.gene_utils import get_gene
 from seqr.utils.search.utils import query_variants, get_single_variant, get_variant_query_gene_counts, get_search_samples, \
     variant_lookup, parse_variant_id, clickhouse_only
 from seqr.utils.search.constants import XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY
@@ -555,9 +557,14 @@ def _flatten_variants(variants):
 @login_and_policies_required
 def gene_variant_lookup(request):
     search_json = json.loads(request.body)
-    gene_id = search_json.pop('geneId')
     genome_version = search_json.pop('genomeVersion')
-    return create_json_response(search_json)
+    gene_id = search_json.pop('geneId')
+    gene = get_gene(gene_id, request.user)
+
+    results = clickhouse_variant_gene_lookup(request.user, gene, genome_version, search_json)
+    #  TODO variation of get_variants_response
+
+    return create_json_response({'searchedVariants': results})
 
 
 @login_and_policies_required

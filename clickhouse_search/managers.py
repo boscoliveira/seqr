@@ -749,6 +749,8 @@ class EntriesManager(SearchQuerySet):
         if (annotations or {}).get(NEW_SV_FIELD) and 'newCall' in self.call_fields:
             entries = entries.filter(calls__array_exists={'newCall': (None, '{field}')})
 
+        if not sample_data:
+            return self._annotate_calls(entries, **kwargs)
         return self._search_call_data(entries, sample_data, **kwargs)
 
     def _join_annotations(self, entries):
@@ -979,7 +981,7 @@ class EntriesManager(SearchQuerySet):
             )
         return entries
 
-    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_individual_guid=False, multi_sample_type_families=None):
+    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_individual_guid=False, multi_sample_type_families=None, skip_entry_fields=False, **kwargs):
         if annotate_hom_alts:
             entries = entries.annotate(has_hom_alt=Q(calls__array_exists={'gt': (2,)}))
 
@@ -998,12 +1000,14 @@ class EntriesManager(SearchQuerySet):
         if self._has_clinvar():
              fields += ['clinvar', 'clinvar_key']
         if multi_sample_type_families or sample_data is None or len(set(sample_data['family_guids'])) > 1:
-            genotype_sample_data = None if skip_individual_guid else sample_data
-            entries = entries.values(*fields).annotate(
-                familyGuids=ArraySort(ArrayDistinct(GroupArray('family_guid'))),
-                **{'genotypes' if genotype_sample_data else 'familyGenotypes': GroupArrayArray(self.genotype_expression(genotype_sample_data))},
-                **{col: GroupArrayArray(col) for col in genotype_override_annotations}
-            )
+            entries = entries.values(*fields)
+            if not skip_entry_fields:
+                genotype_sample_data = None if skip_individual_guid else sample_data
+                entries = entries.annotate(
+                    familyGuids=ArraySort(ArrayDistinct(GroupArray('family_guid'))),
+                    **{'genotypes' if genotype_sample_data else 'familyGenotypes': GroupArrayArray(self.genotype_expression(genotype_sample_data))},
+                    **{col: GroupArrayArray(col) for col in genotype_override_annotations}
+                )
             if 'carriers' in entries.query.annotations:
                 map_field = models.MapField(models.StringField(), models.ArrayField(models.StringField()))
                 if multi_sample_type_families:
