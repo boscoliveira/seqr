@@ -800,10 +800,12 @@ class AirtableCheckNewSamplesTest(AnvilAuthenticationTestCase, CheckNewSamplesTe
         ('Fetched 2 AnVIL Seqr Loading Requests Tracking records from airtable', None),
     ]
     VALIDATION_LOGS = [
+        '==> gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/validation_errors.json',
         '==> gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/validation_errors.json',
         'Fetching AnVIL Seqr Loading Requests Tracking records 0-2 from airtable',
         'Fetched 1 AnVIL Seqr Loading Requests Tracking records from airtable',
         '==> gsutil mv /mock/tmp/* gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/',
+        '==> gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/validation_errors.json',
         '==> gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/validation_errors.json',
         '==> gsutil mv /mock/tmp/* gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/',
     ]
@@ -892,22 +894,30 @@ The following users have been notified: test_user_manager@test.com""")
     def _set_loading_files(self):
         responses.calls.reset()
         self.mock_subprocess.reset_mock()
-        self.mock_subprocess.side_effect = [self.mock_ls_process] + [
-            mock_opened_file(i) for i in range(len(OPENED_RUN_JSON_FILES) - 1)
-        ] + [self.mock_mv_process, mock_opened_file(-1), self.mock_mv_process]
+        subprocesses = [self.mock_ls_process]
+        for i in range(len(OPENED_RUN_JSON_FILES) - 1):
+            subprocesses += [self.mock_mv_process, mock_opened_file(i)]
+        subprocesses += [self.mock_mv_process, self.mock_mv_process,  mock_opened_file(-1), self.mock_mv_process]
+        self.mock_subprocess.side_effect = subprocesses
 
     def _assert_expected_loading_file_calls(self, single_call):
         calls = [
             ('gsutil ls gs://seqr-hail-search-data/v3.1/*/*/runs/*/*', -1),
+            ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/auto__2023-08-09/metadata.json', -2),
             ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/auto__2023-08-09/metadata.json', -2),
         ]
         if not single_call:
             calls += [
+                ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh37/SNV_INDEL/runs/manual__2023-11-02/metadata.json', -2),
                 ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh37/SNV_INDEL/runs/manual__2023-11-02/metadata.json', -2),
+                ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/MITO/runs/auto__2024-08-12/metadata.json', -2),
                 ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/MITO/runs/auto__2024-08-12/metadata.json', -2),
+                ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/GCNV/runs/auto__2024-09-14/metadata.json', -2),
                 ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/GCNV/runs/auto__2024-09-14/metadata.json', -2),
+                ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/validation_errors.json', -2),
                 ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/validation_errors.json', -2),
                 ('gsutil mv /mock/tmp/* gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-14/', -2),
+                ('gsutil ls gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/validation_errors.json', -2),
                 ('gsutil cat gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/validation_errors.json', -2),
                 ('gsutil mv /mock/tmp/* gs://seqr-hail-search-data/v3.1/GRCh38/SNV_INDEL/runs/manual__2025-01-24/', -2),
             ]
@@ -916,7 +926,8 @@ The following users have been notified: test_user_manager@test.com""")
         )
 
     def _additional_loading_logs(self, data_type, version):
-        return [(f'==> gsutil cat gs://seqr-hail-search-data/v3.1/{data_type.replace("SV", "GCNV")}/runs/{version}/metadata.json', None)]
+        return [(f'==> gsutil ls gs://seqr-hail-search-data/v3.1/{data_type.replace("SV", "GCNV")}/runs/{version}/metadata.json', None),
+                (f'==> gsutil cat gs://seqr-hail-search-data/v3.1/{data_type.replace("SV", "GCNV")}/runs/{version}/metadata.json', None)]
 
     def _assert_expected_airtable_calls(self, has_success_run, single_call):
         # Test request tracking updates for validation errors

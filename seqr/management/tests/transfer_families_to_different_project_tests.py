@@ -1,4 +1,5 @@
 from django.core.management import call_command
+import responses
 
 from seqr.models import Family, VariantTagType, VariantTag, Sample
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase
@@ -9,7 +10,10 @@ class TransferFamiliesTest(object):
     DEACTIVATE_SEARCH = True
     LOGS = []
 
+    @responses.activate
     def test_command(self):
+        responses.add(responses.POST, 'http://pipeline-runner:6000/delete_families_enqueue', status=200)
+
         call_command(
             'transfer_families_to_different_project', '--from-project=R0001_1kg', '--to-project=R0003_test', '2', '4', '5', '12',
         )
@@ -59,7 +63,5 @@ class TransferFamiliesClickhouseTest(TransferFamiliesTest, AnvilAuthenticationTe
     ES_HOSTNAME = ''
     LOGS = [
         ('Disabled search for 7 samples in the following 1 families: 2', None),
-        ('Clickhouse does not support deleting individual families from project. Manually delete MITO data for F000002_2 in project R0001_1kg', None),
-        ('Clickhouse does not support deleting individual families from project. Manually delete SNV_INDEL data for F000002_2 in project R0001_1kg', None),
-        ('Clickhouse does not support deleting individual families from project. Manually delete GCNV data for F000002_2 in project R0001_1kg', None),
+        ('Triggered Delete Families', {'detail':  {'project_guid': 'R0001_1kg', 'family_guids': ['F000002_2', 'F000004_4']}}),
     ]
