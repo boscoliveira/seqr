@@ -14,27 +14,12 @@ import {
   VEP_GROUP_NONSENSE,
   VEP_GROUP_ESSENTIAL_SPLICE_SITE,
   VEP_GROUP_FRAMESHIFT,
+  VEP_GROUP_MISSENSE,
+  VEP_GROUP_INFRAME,
   VEP_GROUP_SYNONYMOUS,
   VEP_GROUP_EXTENDED_SPLICE_SITE,
-  VEP_GROUP_OTHER,
 } from 'shared/utils/constants'
 import { snakecaseToTitlecase } from 'shared/utils/stringUtils'
-
-const OTHER_CONSEQUENCES = [
-  'transcript_ablation',
-  '5_prime_UTR_variant',
-  '3_prime_UTR_variant',
-  'non_coding_transcript_exon_variant__canonical',
-  'NMD_transcript_variant',
-]
-
-const groupOptions = (group) => {
-  const options = GROUPED_VEP_CONSEQUENCES[group]
-  if (group === VEP_GROUP_OTHER) {
-    return options.filter(({ value }) => OTHER_CONSEQUENCES.includes(value))
-  }
-  return options
-}
 
 const validateAnnotations = (value, { annotations }) => (
   value || Object.values(annotations || {}).some(val => val.length) ? undefined : 'At least one consequence filter is required'
@@ -44,14 +29,15 @@ const CONSEQUENCE_FILEDS = [
   VEP_GROUP_NONSENSE,
   VEP_GROUP_ESSENTIAL_SPLICE_SITE,
   VEP_GROUP_FRAMESHIFT,
+  VEP_GROUP_MISSENSE,
+  VEP_GROUP_INFRAME,
   VEP_GROUP_SYNONYMOUS,
   VEP_GROUP_EXTENDED_SPLICE_SITE,
-  VEP_GROUP_OTHER,
 ].map((group, i) => ({
   name: `annotations.${group}`,
   component: AlignedCheckboxGroup,
   groupLabel: snakecaseToTitlecase(group),
-  options: groupOptions(group),
+  options: GROUPED_VEP_CONSEQUENCES[group],
   format: value => value || [],
   inline: true,
   validate: i === 0 ? validateAnnotations : undefined,
