@@ -3,7 +3,6 @@ from django.contrib.auth.models import User
 from django.db.models import F
 import json
 import requests
-from typing import Callable
 
 from reference_data.models import GeneInfo, GENOME_VERSION_LOOKUP
 from seqr.models import Sample, Individual, Project
@@ -197,67 +196,20 @@ def _get_pedigree_path(genome_version: str, sample_type: str, dataset_type: str)
     return f'{LOADING_DATASETS_DIR}/{GENOME_VERSION_LOOKUP[genome_version]}/{loading_dataset_type}/pedigrees/{sample_type}'
 
 
-def get_loading_samples_validator(vcf_samples: list[str], loaded_individual_ids: list[int], sample_source: str,
-                                  missing_family_samples_error: str, loaded_sample_types: list[str] = None,
-                                  fetch_missing_loaded_samples: Callable = None, fetch_missing_vcf_samples: Callable = None) -> Callable:
+def get_missing_family_samples(expected_sample_set, record_family_ids, previous_loaded_individuals):
+    families = set(record_family_ids.values())
+    missing_samples_by_family = defaultdict(set)
+    for loaded_individual in previous_loaded_individuals:
+        individual_id = loaded_individual[JsonConstants.INDIVIDUAL_ID_COLUMN]
+        family_id = loaded_individual[JsonConstants.FAMILY_ID_COLUMN]
+        if family_id in families and individual_id not in expected_sample_set:
+            missing_samples_by_family[family_id].add(individual_id)
 
-    def validate_expected_samples(record_family_ids, previous_loaded_individuals, sample_type):
-        errors = []
+    return missing_samples_by_family
 
-        if loaded_sample_types is not None:
-            if sample_type:
-                loaded_sample_types.append(sample_type)
-            else:
-                errors.append('New data cannot be added to this project until the previously requested data is loaded')
 
-        families = set(record_family_ids.values())
-        missing_samples_by_family = defaultdict(set)
-        expected_sample_set = record_family_ids if fetch_missing_loaded_samples else vcf_samples
-        for loaded_individual in previous_loaded_individuals:
-            individual_id = loaded_individual[JsonConstants.INDIVIDUAL_ID_COLUMN]
-            family_id = loaded_individual[JsonConstants.FAMILY_ID_COLUMN]
-            if family_id in families and individual_id not in expected_sample_set:
-                missing_samples_by_family[family_id].add(individual_id)
-
-        loading_samples = set(record_family_ids.keys())
-        if missing_samples_by_family and fetch_missing_loaded_samples:
-            try:
-                additional_loaded_samples = fetch_missing_loaded_samples()
-                for missing_samples in missing_samples_by_family.values():
-                    loading_samples.update(missing_samples.intersection(additional_loaded_samples))
-                    missing_samples -= additional_loaded_samples
-                missing_samples_by_family = {
-                    family_id: samples for family_id, samples in missing_samples_by_family.items() if samples
-                }
-            except ValueError as e:
-                errors.append(str(e))
-
-        if missing_samples_by_family:
-            missing_family_sample_messages = [
-                f'Family {family_id}: {", ".join(sorted(individual_ids))}'
-                for family_id, individual_ids in missing_samples_by_family.items()
-            ]
-            errors.append(
-                missing_family_samples_error + '\n'.join(sorted(missing_family_sample_messages))
-            )
-
-        missing_vcf_samples = [] if vcf_samples is None else set(loading_samples - set(vcf_samples))
-        if missing_vcf_samples and fetch_missing_vcf_samples:
-            try:
-                additional_vcf_samples = fetch_missing_vcf_samples(missing_vcf_samples)
-                missing_vcf_samples -= set(additional_vcf_samples)
-            except ValueError as e:
-                errors.append(str(e))
-        if missing_vcf_samples:
-            errors.insert(
-                0, f'The following samples are included in {sample_source} but are missing from the VCF: {", ".join(sorted(missing_vcf_samples))}',
-            )
-
-        nonlocal loaded_individual_ids
-        loaded_individual_ids += [
-            i['individual_id'] for i in previous_loaded_individuals if i[JsonConstants.FAMILY_ID_COLUMN] in families
-        ]
-
-        return errors
-
-    return validate_expected_samples
+def get_loaded_individual_ids(record_family_ids, previous_loaded_individuals):
+    families = set(record_family_ids.values())
+    return [
+        i['individual_id'] for i in previous_loaded_individuals if i[JsonConstants.FAMILY_ID_COLUMN] in families
+    ]
