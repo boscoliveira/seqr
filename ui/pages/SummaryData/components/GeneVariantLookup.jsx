@@ -35,6 +35,10 @@ const groupOptions = (group) => {
   return options
 }
 
+const validateAnnotations = (value, { annotations }) => (
+  value || Object.values(annotations || {}).some(val => val.length) ? undefined : 'At least on consequence is required'
+)
+
 const CONSEQUENCE_FILEDS = [
   VEP_GROUP_NONSENSE,
   VEP_GROUP_ESSENTIAL_SPLICE_SITE,
@@ -42,13 +46,14 @@ const CONSEQUENCE_FILEDS = [
   VEP_GROUP_SYNONYMOUS,
   VEP_GROUP_EXTENDED_SPLICE_SITE,
   VEP_GROUP_OTHER,
-].map(group => ({
+].map((group, i) => ({
   name: `annotations.${group}`,
   component: AlignedCheckboxGroup,
   groupLabel: snakecaseToTitlecase(group),
   options: groupOptions(group),
   format: value => value || [],
   inline: true,
+  validate: i === 0 ? validateAnnotations : undefined,
 }))
 
 const FIELDS = [
