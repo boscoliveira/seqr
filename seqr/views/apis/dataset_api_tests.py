@@ -45,6 +45,7 @@ MOCK_FILE_ITER = MOCK_OPEN.return_value.__enter__.return_value.__iter__
 @mock.patch('seqr.utils.file_utils.open', MOCK_OPEN)
 class DatasetAPITest(object):
 
+    @mock.patch('seqr.utils.file_utils.os.path.isfile', lambda path: True)
     @mock.patch('seqr.models.random.randint')
     @mock.patch('seqr.utils.communication_utils.send_html_email')
     @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://seqr.broadinstitute.org/')
@@ -279,6 +280,7 @@ class DatasetAPITest(object):
             subject='New data available in seqr', to=[recipient], process_message=mock.ANY,
         )
 
+    @mock.patch('seqr.utils.file_utils.os.path.isfile', lambda path: True)
     @urllib3_responses.activate
     def test_add_variants_dataset_errors(self):
         url = reverse(add_variants_dataset_handler, args=[PROJECT_GUID])

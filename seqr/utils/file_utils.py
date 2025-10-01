@@ -43,7 +43,7 @@ def does_file_exist(file_path, user=None):
         success = process.wait() == 0
         if not success:
             errors = [line.decode('utf-8').strip() for line in process.stdout]
-            logger.info(' '.join(errors), user)
+            logger.warning(' '.join(errors), user)
         return success
     return os.path.isfile(file_path)
 
@@ -57,6 +57,8 @@ def list_files(wildcard_path, user, check_subfolders=False, allow_missing=True):
 
 
 def file_iter(file_path, byte_range=None, raw_content=False, user=None, **kwargs):
+    if not does_file_exist(file_path, user=user):
+        raise FileNotFoundError(f'Could not access file {file_path}')
     if is_google_bucket_file_path(file_path):
         for line in _google_bucket_file_iter(file_path, byte_range=byte_range, raw_content=raw_content, user=user, **kwargs):
             yield line
@@ -82,7 +84,7 @@ def file_iter(file_path, byte_range=None, raw_content=False, user=None, **kwargs
 def _google_bucket_file_iter(gs_path, byte_range=None, raw_content=False, user=None, **kwargs):
     """Iterate over lines in the given file"""
     range_arg = ' -r {}-{}'.format(byte_range[0], byte_range[1]) if byte_range else ''
-    process = run_gsutil_with_wait(
+    process = _run_gsutil_command(
         'cat{}'.format(range_arg), gs_path, gunzip=gs_path.endswith("gz") and not raw_content, user=user, **kwargs)
     for line in process.stdout:
         if not raw_content:

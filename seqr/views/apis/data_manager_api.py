@@ -18,7 +18,7 @@ from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.search.add_data_utils import trigger_data_loading, get_loading_samples_validator, trigger_delete_families_search
 from seqr.utils.search.elasticsearch.es_utils import get_elasticsearch_status, delete_es_index
 from seqr.utils.search.utils import clickhouse_only, es_only, InvalidSearchException
-from seqr.utils.file_utils import file_iter, does_file_exist
+from seqr.utils.file_utils import file_iter
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.vcf_utils import validate_vcf_and_get_samples, get_vcf_list
@@ -66,8 +66,6 @@ def update_rna_seq(request):
 
     data_type = request_json['dataType']
     file_path = request_json['file']
-    if not does_file_exist(file_path, user=request.user):
-        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
 
     mapping_file = None
     uploaded_mapping_file_id = request_json.get('mappingFile', {}).get('uploadedFileId')
@@ -90,6 +88,8 @@ def update_rna_seq(request):
         sample_guids_to_keys, info, warnings = load_rna_seq(
             data_type, file_path, _save_sample_data,
             user=request.user, mapping_file=mapping_file, ignore_extra_samples=request_json.get('ignoreExtraSamples'))
+    except FileNotFoundError:
+        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
     except ValueError as e:
         return create_json_response({'error': str(e)}, status=400)
 
@@ -126,10 +126,10 @@ def load_rna_seq_sample_data(request, sample_guid):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
 
     file_path = get_temp_file_path(f'{file_name}/{sample_guid}.json.gz')
-    if does_file_exist(file_path, user=request.user):
+    try:
         data_rows = [json.loads(line) for line in file_iter(file_path, user=request.user)]
         data_rows, error = post_process_rna_data(sample_guid, data_rows, **config.get('post_process_kwargs', {}))
-    else:
+    except FileNotFoundError:
         logger.error(f'No saved temp data found for {sample_guid} with file prefix {file_name}', request.user)
         error = 'Data for this sample was not properly parsed. Please re-upload the data'
     if error:
@@ -155,11 +155,10 @@ def load_phenotype_prioritization_data(request):
     request_json = json.loads(request.body)
 
     file_path = request_json['file']
-    if not does_file_exist(file_path, user=request.user):
-        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
-
     try:
         tool, data_by_project_indiv_id = load_phenotype_prioritization_data_file(file_path, request.user)
+    except FileNotFoundError:
+        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
     except ValueError as e:
         return create_json_response({'error': str(e)}, status=400)
 

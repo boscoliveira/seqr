@@ -20,6 +20,10 @@ class LoadRnaSeqTest(AuthenticationTestCase):
         mock_gzip_open = patcher.start()
         self.mock_gzip_file_iter = mock_gzip_open.return_value.__enter__.return_value.__iter__
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.file_utils.os')
+        mock_os = patcher.start()
+        mock_os.path.isfile.return_value = True
+        self.addCleanup(patcher.stop)
         patcher = mock.patch('seqr.management.commands.load_rna_seq.open')
         self.mock_open = patcher.start()
         self.addCleanup(patcher.stop)
