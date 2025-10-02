@@ -6,7 +6,9 @@ from django.db import migrations
 import os
 from string import Template
 
-SEQRDB_AFFECTED_STATUS_DICT = """
+from settings import DATABASES
+
+SEQRDB_AFFECTED_STATUS_DICT = Template("""
 CREATE DICTIONARY `seqrdb_affected_status_dict`
 (
     `family_guid` String,
@@ -16,12 +18,15 @@ CREATE DICTIONARY `seqrdb_affected_status_dict`
 PRIMARY KEY family_guid, sampleId
 SOURCE(POSTGRESQL(
     NAME 'seqr_postgres_named_collection' 
-    DATABASE 'seqrdb' 
+    DATABASE $database
     QUERY 'select f.guid as family_guid, i.individual_id as sample_id, i.affected FROM seqr_individual i INNER JOIN seqr_family f ON i.family_id = f.id'
 ))
 LIFETIME(MIN 0 MAX 0)
 LAYOUT(COMPLEX_KEY_HASHED());
-"""
+""").substitute(
+    database=DATABASES['default']['NAME'],
+)
+
 CLICKHOUSE_AC_EXCLUDED_PROJECT_GUIDS  = os.environ.get(
     'CLICKHOUSE_AC_EXCLUDED_PROJECT_GUIDS',
     ''
