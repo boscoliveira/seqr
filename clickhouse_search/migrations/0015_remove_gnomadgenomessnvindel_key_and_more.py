@@ -873,7 +873,7 @@ class Migration(migrations.Migration):
             hints={'clickhouse': True},
         ),
         migrations.RunSQL(
-            clickhouse_search.modelsGT_STATS_DICT.substitute(
+            clickhouse_search.models.GT_STATS_DICT.substitute(
                 reference_genome='GRCh38',
                 dataset_type='SNV_INDEL',
                 columns= ",\n    ".join([
