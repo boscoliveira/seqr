@@ -251,9 +251,9 @@ class Migration(migrations.Migration):
                 dataset_type='MITO',
                 columns=",\n    ".join([
                     'sample_type',
-                    "sumIf(sign, s.hl == '0') ref_samples",
-                    "sumIf(sign, s.hl > '0' AND s.hl < '0.95') het_samples",
-                    "sumIf(sign, s.hl >= '0.95') hom_samples",
+                    "sumIf(sign, calls.hl == '0') ref_samples",
+                    "sumIf(sign, calls.hl > '0' AND calls.hl < '0.95') het_samples",
+                    "sumIf(sign, calls.hl >= '0.95') hom_samples",
                 ]),
                 groupby_columns='project_guid, key, sample_type, affected',
             ),
