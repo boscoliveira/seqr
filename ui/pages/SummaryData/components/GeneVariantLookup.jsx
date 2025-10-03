@@ -7,6 +7,7 @@ import FormWrapper from 'shared/components/form/FormWrapper'
 import { AlignedCheckboxGroup } from 'shared/components/form/Inputs'
 import { AwesomeBarFormInput } from 'shared/components/page/AwesomeBar'
 import SubmitFormPage from 'shared/components/page/SubmitFormPage'
+import { Variant } from 'shared/components/panel/variants/Variants'
 import {
   GENE_SEARCH_FREQUENCIES,
   GENOME_VERSION_FIELD,
@@ -85,11 +86,9 @@ const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
       </Grid.Column>
       <Grid.Column width={1} />
     </Grid.Row>
-    <Grid.Row>
-      <Grid.Column width={16}>
-        {JSON.stringify(uploadStats)}
-      </Grid.Column>
-    </Grid.Row>
+    {uploadStats?.searchedVariants?.map(variant => (
+      <Variant key={variant.key} variant={variant} />
+    ))}
   </Grid>
 )
 
