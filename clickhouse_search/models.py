@@ -1,6 +1,3 @@
-import os
-from string import Template
-
 from clickhouse_backend import models
 from django.db.migrations import state
 from django.db.models import options, ForeignKey, OneToOneField, Func, CASCADE, PROTECT

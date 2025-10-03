@@ -2,7 +2,6 @@
 # Modified by the seqr team.
 
 import clickhouse_backend.models
-import clickhouse_search.models
 
 from django.db import migrations
 import os
