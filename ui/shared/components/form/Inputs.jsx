@@ -376,7 +376,8 @@ export const CheckboxGroup = React.memo((props) => {
     </List>
   )
   return (optionLists.length > 1 || inline) ?
-    [mainList, ...optionLists.slice(1)].map(c => <Form.Field inline>{c}</Form.Field>) : mainList
+    // eslint-disable-next-line react/no-array-index-key
+    [mainList, ...optionLists.slice(1)].map((c, i) => <Form.Field inline key={i}>{c}</Form.Field>) : mainList
 })
 
 CheckboxGroup.propTypes = {

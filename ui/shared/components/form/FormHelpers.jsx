@@ -5,7 +5,7 @@ import { Field } from 'react-final-form'
 import { FieldArray } from 'react-final-form-arrays'
 import { Form, Icon, Popup } from 'semantic-ui-react'
 
-export const StyledForm = styled(({ hasSubmitButton, inline, ...props }) => <Form {...props} />)`
+export const StyledForm = styled(({ hasSubmitButton, inline, verticalAlign, ...props }) => <Form {...props} />)`
   min-height: inherit;
   display: ${props => (props.inline ? 'inline-block' : 'block')};
   padding-bottom: ${props => props.hasSubmitButton && '50px'};

@@ -1,12 +1,12 @@
 import React from 'react'
+import { connect } from 'react-redux'
 import PropTypes from 'prop-types'
-import { Grid } from 'semantic-ui-react'
+import { Grid, Header } from 'semantic-ui-react'
 
 import { validators } from 'shared/components/form/FormHelpers'
 import FormWrapper from 'shared/components/form/FormWrapper'
 import { AlignedCheckboxGroup } from 'shared/components/form/Inputs'
 import { AwesomeBarFormInput } from 'shared/components/page/AwesomeBar'
-import SubmitFormPage from 'shared/components/page/SubmitFormPage'
 import { Variant } from 'shared/components/panel/variants/Variants'
 import {
   GENE_SEARCH_FREQUENCIES,
@@ -21,6 +21,8 @@ import {
   VEP_GROUP_EXTENDED_SPLICE_SITE,
 } from 'shared/utils/constants'
 import { snakecaseToTitlecase } from 'shared/utils/stringUtils'
+import { loadGeneVariantLookup } from '../reducers'
+import { getGeneVariantLookupLoading, getGeneVariantLookupResults } from '../selectors'
 
 const validateAnnotations = (value, { annotations }) => (
   value || Object.values(annotations || {}).some(val => val.length) ? undefined : 'At least one consequence filter is required'
@@ -60,25 +62,33 @@ const FIELDS = [
 
 const INITIAL_VALUES = { freqs: GENE_SEARCH_FREQUENCIES }
 
-const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
+const GeneVariantLookup = ({ loading, results, onSubmit }) => (
   <Grid divided="vertically">
     <Grid.Row>
-      <Grid.Column width={16} textAlign="center">
-        <i>
-          Lookup up all rare variants is seqr in a given gene, regardless of whether or not they are in your projects.
-          <br />
-          Variants are only returned if they have a gnomAD Allele Frequency &lt; 3%
-          and have a seqr global Allele Count &lt; 3000.
-        </i>
+      <Grid.Column width={16}>
+        <Header
+          textAlign="center"
+          content="Lookup Variants in Gene"
+          subheader={(
+            <Header.Subheader>
+              Lookup up all rare variants is seqr in a given gene, regardless of whether or not they are in your
+              projects.
+              <br />
+              Variants are only returned if they have a gnomAD Allele Frequency &lt; 3%
+              and have a seqr global Allele Count &lt; 3000.
+            </Header.Subheader>
+          )}
+        />
       </Grid.Column>
     </Grid.Row>
     <Grid.Row>
       <Grid.Column width={1} />
       <Grid.Column width={14}>
         <FormWrapper
-          initialValues={INITIAL_VALUES}
+          loading={loading}
           onSubmit={onSubmit}
-          fields={fields}
+          initialValues={INITIAL_VALUES}
+          fields={FIELDS}
           noModal
           showErrorPanel
           verticalAlign="top"
@@ -86,25 +96,25 @@ const GeneVariantLookupLayout = ({ fields, uploadStats, onSubmit }) => (
       </Grid.Column>
       <Grid.Column width={1} />
     </Grid.Row>
-    {uploadStats?.searchedVariants?.map(variant => (
+    {!loading && results?.map(variant => (
       <Variant key={variant.key} variant={variant} />
     ))}
   </Grid>
 )
 
-GeneVariantLookupLayout.propTypes = {
-  fields: PropTypes.arrayOf(PropTypes.object),
-  uploadStats: PropTypes.object,
+GeneVariantLookup.propTypes = {
+  loading: PropTypes.bool,
+  results: PropTypes.arrayOf(PropTypes.object),
   onSubmit: PropTypes.func,
 }
 
-const GeneVariantLookup = () => (
-  <SubmitFormPage
-    fields={FIELDS}
-    url="/api/gene_variant_lookup"
-    header="Lookup Variants in Gene"
-    formClass={GeneVariantLookupLayout}
-  />
-)
+const mapStateToProps = state => ({
+  loading: getGeneVariantLookupLoading(state),
+  results: getGeneVariantLookupResults(state),
+})
 
-export default GeneVariantLookup
+const mapDispatchToProps = {
+  onSubmit: loadGeneVariantLookup,
+}
+
+export default connect(mapStateToProps, mapDispatchToProps)(GeneVariantLookup)
