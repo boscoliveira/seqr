@@ -106,7 +106,7 @@ export const reducers = {
   savedVariantTags: createSingleObjectReducer(RECEIVE_SAVED_VARIANT_TAGS),
   externalAnalysisUploadStats: createSingleValueReducer(RECEIVE_EXTERNAL_ANALYSIS_UPLOAD_STATS, {}),
   geneVariantLookupLoading: loadingReducer(REQUEST_GENE_VARIANT_LOOKUP, RECEIVE_GENE_VARIANT_LOOKUP),
-  geneVariantLookupResults: createSingleValueReducer(RECEIVE_GENE_VARIANT_LOOKUP, []),
+  geneVariantLookupResults: createSingleValueReducer(RECEIVE_GENE_VARIANT_LOOKUP, null),
   allProjectSavedVariantTableState: createSingleObjectReducer(UPDATE_ALL_PROJECT_SAVED_VARIANT_TABLE_STATE, {
     sort: SORT_BY_XPOS,
     page: 1,

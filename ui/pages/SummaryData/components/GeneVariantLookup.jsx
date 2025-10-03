@@ -96,6 +96,15 @@ const GeneVariantLookup = ({ loading, results, onSubmit }) => (
       </Grid.Column>
       <Grid.Column width={1} />
     </Grid.Row>
+    {!loading && results && (
+      <Grid.Row>
+        <Grid.Column width={16}>
+          Found &nbsp;
+          <b>{results.length}</b>
+          &nbsp; variants
+        </Grid.Column>
+      </Grid.Row>
+    )}
     {!loading && results?.map(variant => (
       <Variant key={variant.key} variant={variant} />
     ))}
