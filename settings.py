@@ -258,15 +258,14 @@ if CLICKHOUSE_SERVICE_HOSTNAME:
                 'use_client_time_zone': False,
             }
         },
-        'TEST': {
-            'DEPENDENCIES': ['default'],
-        },
     }
     DATABASES['clickhouse'] = {
         **DATABASES['clickhouse_write'],
         'USER': os.environ.get('CLICKHOUSE_READER_USER', 'clickhouse'),
         'PASSWORD': os.environ.get('CLICKHOUSE_READER_PASSWORD', 'clickhouse_test'),
     }
+
+TEST_RUNNER = "seqr.testrunner.OrderedDatabaseDeletionRunner"
 
 WSGI_APPLICATION = 'wsgi.application'
 
