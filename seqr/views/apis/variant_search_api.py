@@ -31,7 +31,7 @@ from seqr.views.utils.orm_to_json_utils import get_json_for_saved_variants_with_
 from seqr.views.utils.permissions_utils import check_project_permissions, get_project_guids_user_can_view, \
     user_is_analyst, login_and_policies_required, check_user_created_object_permissions, check_projects_view_permission
 from seqr.views.utils.project_context_utils import get_projects_child_entities
-from seqr.views.utils.variant_utils import get_variant_key, get_variants_response
+from seqr.views.utils.variant_utils import get_variant_key, get_variants_response, get_variants_reference_data_response
 from seqr.views.utils.vlm_utils import vlm_lookup
 
 
@@ -562,9 +562,10 @@ def gene_variant_lookup(request):
     gene = get_gene(gene_id, request.user)
 
     results = clickhouse_variant_gene_lookup(request.user, gene, genome_version, search_json)
-    #  TODO variation of get_variants_response
+    response = get_variants_reference_data_response(results, [genome_version])
+    response['searchedVariants'] = results
 
-    return create_json_response({'searchedVariants': results})
+    return create_json_response(response)
 
 
 @login_and_policies_required

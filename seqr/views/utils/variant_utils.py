@@ -317,8 +317,10 @@ def _requires_transcript_metadata(variant):
     return variant.get('genomeVersion') != GENOME_VERSION_GRCh38 or variant.get('chrom', '').startswith('M')
 
 
-def _variants_reference_data_response(variants):
-    family_genes = defaultdict(set)
+def get_variants_reference_data_response(variants, genome_versions, get_family_genes=False):
+    response = {}
+    if get_family_genes:
+        response['family_genes'] = defaultdict(set)
     gene_ids = set()
     transcript_ids = set()
     for variant in variants:
@@ -329,17 +331,16 @@ def _variants_reference_data_response(variants):
                 gene_ids.add(gene_id)
                 if backend_specific_call(lambda v: True, _requires_transcript_metadata)(variant):
                     transcript_ids.update([t['transcriptId'] for t in transcripts if t.get('transcriptId')])
-            for family_guid in var['familyGuids']:
-                family_genes[family_guid].update(var.get('transcripts', {}).keys())
+            if get_family_genes:
+                for family_guid in var['familyGuids']:
+                    response['family_genes'][family_guid].update(var.get('transcripts', {}).keys())
 
-    projects = Project.objects.filter(family__guid__in=family_genes.keys()).distinct()
-    genome_versions = {p.genome_version for p in projects}
     genome_version = list(genome_versions)[0] if len(genome_versions) == 1 else None
-
     genes = get_genes_for_variants(gene_ids, genome_version=genome_version)
     for gene in genes.values():
         if gene:
             gene['locusListGuids'] = []
+    response['genesById'] = genes
 
     transcripts = {
         t['transcriptId']: t for t in get_json_for_queryset(
@@ -347,9 +348,6 @@ def _variants_reference_data_response(variants):
             nested_fields=[{'fields': ('refseqtranscript', 'refseq_id'), 'key': 'refseqId'}]
         )
     } if transcript_ids else None
-
-    response = {'genesById': genes}
-
     if transcripts:
         response['transcriptsById'] = transcripts
 
@@ -358,7 +356,7 @@ def _variants_reference_data_response(variants):
 
     backend_specific_call(lambda response: response, _add_sample_count_stats)(response)
 
-    return response, family_genes, projects
+    return response
 
 
 def get_omim_intervals_query(variants):
@@ -463,10 +461,13 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
     if not variants:
         return response
 
-    reference_response, family_genes, projects = _variants_reference_data_response(variants)
-    response.update(reference_response)
-
+    family_guids = {family_guid for variant in variants for family_guid in variant['familyGuids']}
+    projects = Project.objects.filter(family__guid__in=family_guids).distinct()
     project = list(projects)[0] if len(projects) == 1 else None
+
+    response.update(get_variants_reference_data_response(
+        variants, genome_versions={p.genome_version for p in projects}, get_family_genes=include_individual_gene_scores,
+    ))
 
     discovery_tags = None
     is_analyst = user_is_analyst(request.user)
@@ -482,7 +483,7 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
 
     response['mmeSubmissionsByGuid'] = _mme_response_context(response['savedVariantsByGuid'])
 
-    rna_tpm = _set_response_gene_scores(response, family_genes, response['genesById'].keys()) if include_individual_gene_scores else None
+    rna_tpm = _set_response_gene_scores(response, response.pop('family_genes'), response['genesById'].keys()) if include_individual_gene_scores else None
 
     if add_all_context or request.GET.get(LOAD_PROJECT_TAG_TYPES_CONTEXT_PARAM) == 'true':
         project_fields = {'projectGuid': 'guid'}
@@ -494,7 +495,7 @@ def get_variants_response(request, saved_variants, response_variants=None, add_a
         add_project_tag_types(response['projectsByGuid'])
 
     if add_all_context or request.GET.get(LOAD_FAMILY_CONTEXT_PARAM) == 'true':
-        families = Family.objects.filter(guid__in=family_genes.keys())
+        families = Family.objects.filter(guid__in=family_guids)
         add_families_context(
             response, families, project_guid=project.guid if project else None, user=request.user, is_analyst=is_analyst,
             has_case_review_perm=bool(project) and has_case_review_permissions(project, request.user), include_igv=include_igv,

@@ -71,10 +71,10 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     return format_clickhouse_results(cache_results['all_results'][(page-1)*num_results:page*num_results], genome_version)
 
 
-def _get_search_results(entry_cls, annotations_cls, sample_data, **search_kwargs):
-    entries = entry_cls.objects.search(sample_data, **search_kwargs)
+def _get_search_results(entry_cls, annotations_cls, sample_data, skip_entry_fields=False, **search_kwargs):
+    entries = entry_cls.objects.search(sample_data, skip_entry_fields=skip_entry_fields, **search_kwargs)
     results = annotations_cls.objects.subquery_join(entries).search(**search_kwargs)
-    return _evaluate_results(results.result_values())
+    return _evaluate_results(results.result_values(skip_entry_fields=skip_entry_fields))
 
 
 def _evaluate_results(result_q, is_comp_het=False):
