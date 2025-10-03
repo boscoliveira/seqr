@@ -224,6 +224,9 @@ class Migration(migrations.Migration):
             hints={'clickhouse': True},
         ),
         migrations.RunSQL(
+            'SYSTEM RELOAD DICTIONARY "seqrdb_affected_status_dict"',
+        ),
+        migrations.RunSQL(
             'DROP DICTIONARY `GRCh37/SNV_INDEL/gt_stats_dict`',
             hints={'clickhouse': True},
         ),

@@ -39,7 +39,6 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
                 cursor.execute(f'SYSTEM REFRESH VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM WAIT VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM RELOAD DICTIONARY "{table_base}/gt_stats_dict"')
-                cursor.execute(f'SYSTEM RELOAD DICTIONARY "seqrdb_affected_status_dict"')
         Project.objects.update(genome_version='38')
 
     def _assert_expected_search(self, expected_results, gene_counts=None, inheritance_mode=None, inheritance_filter=None, quality_filter=None, cached_variant_fields=None, sort='xpos', results_model=None, **search_kwargs):
