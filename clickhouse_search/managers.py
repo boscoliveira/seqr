@@ -1001,7 +1001,9 @@ class EntriesManager(SearchQuerySet):
              fields += ['clinvar', 'clinvar_key']
         if multi_sample_type_families or sample_data is None or len(set(sample_data['family_guids'])) > 1:
             entries = entries.values(*fields)
-            if not skip_entry_fields:
+            if skip_entry_fields:
+                entries = entries.distinct('key')
+            else:
                 genotype_sample_data = None if skip_individual_guid else sample_data
                 entries = entries.annotate(
                     familyGuids=ArraySort(ArrayDistinct(GroupArray('family_guid'))),
