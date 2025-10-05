@@ -30,7 +30,7 @@ from settings import DATABASES
 
 class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper, TestCase):
     databases = '__all__'
-    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data']
+    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
 
     def setUp(self):
         super().set_up()
@@ -38,11 +38,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
 
     @classmethod
     def setUpTestData(cls):
-        with connections['clickhouse_write'].cursor() as cursor:
-            create_mock_affected_status_dict(cursor)
-        for clickhouse_fixture in ['clickhouse_search', 'clickhouse_transcripts']:
-            for db in DATABASES.keys():
-                call_command("loaddata", clickhouse_fixture, database=db)
+        super().setUpClickhouseSearchFixture()
         with connections['clickhouse_write'].cursor() as cursor:
             for table_base in ['GRCh38/SNV_INDEL', 'GRCh38/MITO', 'GRCh38/SV', 'GRCh37/SNV_INDEL']:
                 cursor.execute(f'SYSTEM REFRESH VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
