@@ -1403,7 +1403,11 @@ def assert_workspace_calls(self, group_call_count, user=None):
 
 # Test for permissions from AnVIL only
 class AnvilVariantSearchAPITest(AnvilAuthenticationTestCase, VariantSearchAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'variant_searches', 'clickhouse_saved_variants']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'variant_searches']
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     EXPECTED_SEARCH_RESPONSE = {
         **EXPECTED_SEARCH_RESPONSE,

@@ -1065,7 +1065,11 @@ def assert_no_list_ws_has_al(self, acl_call_count):
 
 # Test for permissions from AnVIL only
 class AnvilSavedVariantAPITest(AnvilAuthenticationTestCase, SavedVariantAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'clickhouse_saved_variants']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     SAVED_VARIANT_RESPONSE_KEYS = {*SAVED_VARIANT_RESPONSE_KEYS, 'totalSampleCounts'}
     SAVED_VARIANT_DETAIL_FIELDS = {*SAVED_VARIANT_DETAIL_FIELDS, 'key', 'mainTranscriptId'}

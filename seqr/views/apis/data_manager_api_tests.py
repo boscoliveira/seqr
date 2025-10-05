@@ -1734,7 +1734,11 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
 
 @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
 class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'clickhouse_search']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpClickhouseEntriesFixtures(['clickhouse_search'])
 
     NUM_FIXTURE_GENES = 59
     LOADING_PROJECT_GUID = NON_ANALYST_PROJECT_GUID

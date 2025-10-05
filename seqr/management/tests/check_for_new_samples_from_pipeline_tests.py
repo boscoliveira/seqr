@@ -692,8 +692,12 @@ The following 1 families failed sex check:
 
 
 class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, AuthenticationTestCase, CheckNewSamplesTest):
-    fixtures = ['users', '1kg_project', 'clickhouse_saved_variants']
+    fixtures = ['users', '1kg_project']
     databases = '__all__'
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     ES_HOSTNAME = ''
 
@@ -766,7 +770,11 @@ class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, Authenticatio
 
 
 class AirtableCheckNewSamplesTest(AnvilAuthenticationTestCase, CheckNewSamplesTest):
-    fixtures = ['users', '1kg_project', 'clickhouse_saved_variants']
+    fixtures = ['users', '1kg_project']
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     airtable_samples_url = 'http://testairtable/app3Y97xtbbaOopVR/Samples'
     airtable_pdo_url = 'http://testairtable/app3Y97xtbbaOopVR/PDO'
