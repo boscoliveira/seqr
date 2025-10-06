@@ -576,17 +576,6 @@ class DifferentDbTransactionSupportMixin(object):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
-        with connections['clickhouse_write'].cursor() as cursor:
-            cursor.execute(
-                '''
-                DROP DICTIONARY seqrdb_affected_status_dict;
-                '''
-            )
-            cursor.execute(
-                '''
-                DROP TABLE mock_affected_status_source;
-                '''
-            )
         for db_name in cls._databases_names():
             if not connections[db_name].features.supports_transactions:
                 call_command(
@@ -598,6 +587,12 @@ class DifferentDbTransactionSupportMixin(object):
                     allow_cascade=False,
                     inhibit_post_migrate=False,
                 )
+        with connections['clickhouse_write'].cursor() as cursor:
+            cursor.execute(
+                '''
+                DROP TABLE mock_affected_status_source;
+                '''
+            )
 
 
 class AnvilAuthenticationTestCase(DifferentDbTransactionSupportMixin, AuthenticationTestCase):
