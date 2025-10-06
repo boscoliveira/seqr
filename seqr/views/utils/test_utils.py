@@ -515,53 +515,6 @@ def get_group_members_side_effect(user, group, use_sa_credentials=False):
 class DifferentDbTransactionSupportMixin(object):
 
     @classmethod
-    def setUpClickhouseEntriesFixtures(cls, fixtures: list[str]):
-        with connections['clickhouse_write'].cursor() as cursor:
-            cursor.execute(
-                '''
-                CREATE OR REPLACE TABLE mock_affected_status_source (
-                    `family_guid` String,
-                    `sampleId` String,
-                    `affected` String
-                ) ENGINE = Memory
-                '''
-            )
-            cursor.execute(
-                '''
-                INSERT INTO mock_affected_status_source (family_guid, sampleId, affected) 
-                VALUES
-                ('F000002_2', 'HG00731', 'A'),
-                ('F000002_2', 'HG00732', 'N'),
-                ('F000002_2', 'HG00733', 'N'),
-                ('F000002_2_x', 'HG00731', 'A'),
-                ('F000002_2_x', 'HG00732', 'N'),
-                ('F000002_2_x', 'HG00733', 'N'),
-                ('F000003_3', 'NA20870', 'A'),
-                ('F000011_11', 'NA20885', 'A'),
-                ('F000014_14', 'NA21234', 'A'),
-                ('F000014_14', 'NA21987', 'A'),
-                ('F000014_14', 'NA21654', 'N')
-                '''
-            )
-            cursor.execute(
-                f'''
-                REPLACE DICTIONARY `seqrdb_affected_status_dict`
-                (
-                    `family_guid` String,
-                    `sampleId` String,
-                    `affected` String
-                )
-                PRIMARY KEY family_guid, sampleId
-                SOURCE(CLICKHOUSE(USER {DATABASES['clickhouse_write']['USER']} PASSWORD {DATABASES['clickhouse_write']['PASSWORD']} TABLE "mock_affected_status_source"))
-                LIFETIME(MIN 0 MAX 0)
-                LAYOUT(COMPLEX_KEY_HASHED())
-                '''
-            )
-        for fixture in fixtures:
-            for db in DATABASES.keys():
-                call_command("loaddata", fixture, database=db)
-
-    @classmethod
     def _databases_support_transactions(cls):
         return True
 

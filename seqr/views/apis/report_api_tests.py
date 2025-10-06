@@ -1553,7 +1553,4 @@ class AnvilReportAPITest(AnvilAuthenticationTestCase, ReportAPITest):
         },
     }
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+    

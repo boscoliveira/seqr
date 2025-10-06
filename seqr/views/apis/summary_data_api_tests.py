@@ -860,17 +860,14 @@ def assert_has_expected_calls(self, users, skip_group_call_idxs=None):
 
 # Test for permissions from AnVIL only
 class AnvilSummaryDataAPITest(AnvilAuthenticationTestCase, SummaryDataAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'report_variants']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'report_variants', 'clickhouse_saved_variants']
 
     NUM_MANAGER_SUBMISSIONS = 4
     ADDITIONAL_SAMPLES = []
     HAS_AIRTABLE = True
     SAVED_VARIANT_RESPONSE_KEYS = {*SAVED_VARIANT_RESPONSE_KEYS, 'totalSampleCounts'}
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+    
 
     def test_mme_details(self, *args):
         super(AnvilSummaryDataAPITest, self).test_mme_details(*args)

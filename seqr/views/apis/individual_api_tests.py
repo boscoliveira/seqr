@@ -1368,13 +1368,10 @@ class LocalIndividualAPITest(AuthenticationTestCase, IndividualAPITest):
 
 
 class AnvilIndividualAPITest(AnvilAuthenticationTestCase, IndividualAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'clickhouse_saved_variants']
     HAS_EXTERNAL_PROJECT_ACCESS = True
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+    
 
     def setUp(self):
         patcher = mock.patch('seqr.utils.file_utils.subprocess.Popen')

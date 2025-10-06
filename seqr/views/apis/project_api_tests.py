@@ -709,10 +709,7 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
     PROJECT_COLLABORATOR_GROUPS = None
     HAS_EMPTY_PROJECT = False
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpTestData()
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+    
 
     def test_create_and_delete_project(self, *args, **kwargs):
         super(AnvilProjectAPITest, self).test_create_and_delete_project(*args, **kwargs)

@@ -26,7 +26,7 @@ from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
 
 class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper, TestCase):
     databases = '__all__'
-    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
+    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts', 'clickhouse_search']
 
     def setUp(self):
         super().set_up()
@@ -34,7 +34,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
 
     @classmethod
     def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_search'])
+        super().setUpTestData()
         with connections['clickhouse_write'].cursor() as cursor:
             for table_base in ['GRCh38/SNV_INDEL', 'GRCh38/MITO', 'GRCh38/SV', 'GRCh37/SNV_INDEL']:
                 cursor.execute(f'SYSTEM REFRESH VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
