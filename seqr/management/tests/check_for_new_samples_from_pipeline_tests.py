@@ -695,8 +695,6 @@ class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, Authenticatio
     fixtures = ['users', '1kg_project', 'clickhouse_saved_variants']
     databases = '__all__'
 
-    
-
     ES_HOSTNAME = ''
 
     MOCK_DATA_DIR = '/seqr/seqr-hail-search-data'
@@ -769,8 +767,6 @@ class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, Authenticatio
 
 class AirtableCheckNewSamplesTest(AnvilAuthenticationTestCase, CheckNewSamplesTest):
     fixtures = ['users', '1kg_project', 'clickhouse_saved_variants']
-
-    
 
     airtable_samples_url = 'http://testairtable/app3Y97xtbbaOopVR/Samples'
     airtable_pdo_url = 'http://testairtable/app3Y97xtbbaOopVR/PDO'

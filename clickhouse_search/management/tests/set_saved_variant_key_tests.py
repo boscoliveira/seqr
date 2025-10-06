@@ -19,9 +19,7 @@ class SetSavedVariantKeyTest(AnvilAuthenticationTestCase):
     @classmethod
     def setUpTestData(cls):
         Project.objects.filter(id=3).update(genome_version='38')
-        Sample.objects.filter(guid='S000154_na20889').update(
-            dataset_type='SV', is_active=True
-        )
+        Sample.objects.filter(guid='S000154_na20889').update(dataset_type='SV', is_active=True)
         SavedVariant.objects.update(key=None)
 
     @mock.patch('clickhouse_search.management.commands.set_saved_variant_key.BATCH_SIZE', 2)
