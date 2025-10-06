@@ -519,7 +519,7 @@ class DifferentDbTransactionSupportMixin(object):
         with connections['clickhouse_write'].cursor() as cursor:
             cursor.execute(
                 '''
-                CREATE TABLE mock_affected_status_source (
+                CREATE OR REPLACE TABLE mock_affected_status_source (
                     `family_guid` String,
                     `sampleId` String,
                     `affected` String
@@ -587,13 +587,6 @@ class DifferentDbTransactionSupportMixin(object):
                     allow_cascade=False,
                     inhibit_post_migrate=False,
                 )
-        with connections['clickhouse_write'].cursor() as cursor:
-            cursor.execute(
-                '''
-                DROP TABLE mock_affected_status_source;
-                '''
-            )
-
 
 class AnvilAuthenticationTestCase(DifferentDbTransactionSupportMixin, AuthenticationTestCase):
 
