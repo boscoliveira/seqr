@@ -1413,8 +1413,6 @@ class AnvilVariantSearchAPITest(AnvilAuthenticationTestCase, VariantSearchAPITes
         k: {**v, 'key': mock.ANY, 'mainTranscriptId': mock.ANY} for k, v in EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'].items()
     }
 
-    
-
     def test_query_variants(self, *args):
         super(AnvilVariantSearchAPITest, self).test_query_variants(*args)
         assert_ws_has_al(self, 1, 9, user=self.analyst_user)

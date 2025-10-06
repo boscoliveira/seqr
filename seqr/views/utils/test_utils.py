@@ -539,6 +539,7 @@ class DifferentDbTransactionSupportMixin(object):
                     inhibit_post_migrate=False,
                 )
 
+
 class AnvilAuthenticationTestCase(DifferentDbTransactionSupportMixin, AuthenticationTestCase):
 
     databases = '__all__'

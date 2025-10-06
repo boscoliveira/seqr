@@ -704,12 +704,9 @@ class LocalProjectAPITest(AuthenticationTestCase, ProjectAPITest):
 # Test for permissions from AnVIL only
 class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'clickhouse_saved_variants']
-
     PROJECT_COLLABORATORS = ANVIL_COLLABORATORS
     PROJECT_COLLABORATOR_GROUPS = None
     HAS_EMPTY_PROJECT = False
-
-    
 
     def test_create_and_delete_project(self, *args, **kwargs):
         super(AnvilProjectAPITest, self).test_create_and_delete_project(*args, **kwargs)
