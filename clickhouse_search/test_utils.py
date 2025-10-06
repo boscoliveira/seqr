@@ -1,5 +1,4 @@
 from copy import deepcopy
-import os
 
 VARIANT1 = {
     'key': 1,
