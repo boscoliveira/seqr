@@ -94,7 +94,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatsgrch37snvindel',
                     name='ac_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -105,7 +105,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatsgrch37snvindel',
                     name='hom_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -116,7 +116,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatssnvindel',
                     name='ac_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -127,7 +127,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatssnvindel',
                     name='hom_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -138,7 +138,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatsmito',
                     name='ac_het_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -149,7 +149,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatsmito',
                     name='ac_hom_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -160,7 +160,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatssv',
                     name='ac_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -171,7 +171,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='gtstatssv',
                     name='hom_affected',
-                    field=clickhouse_backend.models.UInt32Field(default=0),
+                    field=clickhouse_backend.models.UInt32Field(),
                 ),
             ],
         ),
@@ -182,7 +182,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='projectgtstatsgrch37snvindel',
                     name='affected',
-                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')], default='U'),
+                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')]),
                 ),
             ]
         ),
@@ -193,7 +193,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='projectgtstatssnvindel',
                     name='affected',
-                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')], default='U'),
+                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')]),
                 ),
             ]
         ),
@@ -204,7 +204,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='projectgtstatsmito',
                     name='affected',
-                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')], default='U'),
+                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')]),
                 ),
             ]
         ),
@@ -215,7 +215,7 @@ class Migration(migrations.Migration):
                 migrations.AddField(
                     model_name='projectgtstatssv',
                     name='affected',
-                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')], default='U'),
+                    field=clickhouse_backend.models.Enum8Field(choices=[(1, 'A'), (2, 'N'), (3, 'U')]),
                 ),
             ]
         ),
