@@ -579,6 +579,11 @@ class DifferentDbTransactionSupportMixin(object):
         with connections['clickhouse_write'].cursor() as cursor:
             cursor.execute(
                 '''
+                DROP TABLE seqrdb_affected_status_dict;
+                '''
+            )
+            cursor.execute(
+                '''
                 DROP TABLE mock_affected_status_source;
                 '''
             )
