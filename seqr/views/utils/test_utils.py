@@ -16,8 +16,6 @@ from urllib.parse import quote_plus, urlparse
 
 from seqr.models import Project, SavedVariant, CAN_VIEW, CAN_EDIT
 
-from settings import DATABASES
-
 WINDOW_REGEX_TEMPLATE = 'window\.{key}=(?P<value>[^)<]+)'
 
 

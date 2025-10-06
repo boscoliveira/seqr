@@ -26,7 +26,7 @@ from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
 
 class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper, TestCase):
     databases = '__all__'
-    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts', 'clickhouse_search']
+    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_search', 'clickhouse_transcripts']
 
     def setUp(self):
         super().set_up()

@@ -1534,7 +1534,7 @@ class LocalReportAPITest(AuthenticationTestCase, ReportAPITest):
 
 
 class AnvilReportAPITest(AnvilAuthenticationTestCase, ReportAPITest):
-    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'report_variants']
+    fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'report_variants', 'clickhouse_saved_variants']
 
     HAS_PM_OVERRIDE = False
     STATS_DATA = {
