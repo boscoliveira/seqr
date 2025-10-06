@@ -58,7 +58,7 @@ TO `$reference_genome/$dataset_type/project_gt_stats`
 AS SELECT
     project_guid,
     key,
-    dictGet('seqrdb_affected_status_dict', 'affected', (family_guid, calls.sampleId)) affected,
+    dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, calls.sampleId), 'U') affected,
     $columns
 FROM `$reference_genome/$dataset_type/entries`
 ARRAY JOIN calls
