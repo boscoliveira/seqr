@@ -60,8 +60,6 @@ class ElasticsearchDeactivateProjectSearchTest(AuthenticationTestCase):
 class ClickhouseDeactivateProjectSearchTest(AnvilAuthenticationTestCase):
     fixtures = ['users', '1kg_project', 'reference_data', 'clickhouse_search']
 
-    
-
     def test_command(self):
         with self.assertRaises(ValueError) as e:
             call_command('deactivate_project_search', 'foo')
