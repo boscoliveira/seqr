@@ -1,11 +1,8 @@
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.management import call_command
 from django.db import connections
 from django.test import TestCase
 import json
 import mock
-import os
-from string import Template
 
 from clickhouse_search.test_utils import VARIANT1, VARIANT2, VARIANT3, VARIANT4, CACHED_CONSEQUENCES_BY_KEY, \
     VARIANT_ID_SEARCH, VARIANT_IDS, LOCATION_SEARCH, GENE_IDS, SELECTED_TRANSCRIPT_MULTI_FAMILY_VARIANT, \

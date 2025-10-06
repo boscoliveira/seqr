@@ -503,7 +503,7 @@ def get_workspaces_side_effect(user):
 
 def get_groups_side_effect(user):
     return [group for group, users in ANVIL_GROUPS.items() if user.email in users]
-3
+
 
 def get_group_members_side_effect(user, group, use_sa_credentials=False):
     members = ANVIL_GROUPS[str(group)]
