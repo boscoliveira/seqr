@@ -517,13 +517,15 @@ class DifferentDbTransactionSupportMixin(object):
     @classmethod
     def setUpClickhouseEntriesFixtures(cls, fixtures: list[str]):
         with connections['clickhouse_write'].cursor() as cursor:
-            cursor.execute('''
+            cursor.execute(
+                '''
                 CREATE TABLE mock_affected_status_source (
                     `family_guid` String,
                     `sampleId` String,
                     `affected` String
                 ) ENGINE = Memory
-            ''')
+                '''
+            )
             cursor.execute(
                 '''
                 INSERT INTO mock_affected_status_source (family_guid, sampleId, affected) 
@@ -574,6 +576,12 @@ class DifferentDbTransactionSupportMixin(object):
     @classmethod
     def tearDownClass(cls):
         super().tearDownClass()
+        with connections['clickhouse_write'].cursor() as cursor:
+            cursor.execute(
+                '''
+                DROP TABLE mock_affected_status_source;
+                '''
+            )
         for db_name in cls._databases_names():
             if not connections[db_name].features.supports_transactions:
                 call_command(
