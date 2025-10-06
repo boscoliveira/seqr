@@ -18,6 +18,7 @@ class SetSavedVariantKeyTest(AnvilAuthenticationTestCase):
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
         Project.objects.filter(id=3).update(genome_version='38')
         Sample.objects.filter(guid='S000154_na20889').update(dataset_type='SV', is_active=True)

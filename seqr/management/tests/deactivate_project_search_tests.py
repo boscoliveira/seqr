@@ -62,6 +62,7 @@ class ClickhouseDeactivateProjectSearchTest(AnvilAuthenticationTestCase):
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_search'])
 
     def test_command(self):

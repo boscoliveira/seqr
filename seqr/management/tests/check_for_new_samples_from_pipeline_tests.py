@@ -697,6 +697,7 @@ class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, Authenticatio
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     ES_HOSTNAME = ''
@@ -774,6 +775,7 @@ class AirtableCheckNewSamplesTest(AnvilAuthenticationTestCase, CheckNewSamplesTe
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     airtable_samples_url = 'http://testairtable/app3Y97xtbbaOopVR/Samples'

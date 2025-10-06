@@ -702,6 +702,7 @@ class AnvilFamilyAPITest(AnvilAuthenticationTestCase, FamilyAPITest):
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     EXTERNAL_ANVIL_CAN_DELETE = True
