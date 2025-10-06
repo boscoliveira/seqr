@@ -19,9 +19,19 @@ class SetSavedVariantKeyTest(AnvilAuthenticationTestCase):
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
+        cls.setUpClickhouseData()
+        cls.setUpProjectAndSampleData()
+
+    @classmethod
+    def setUpClickhouseData(cls):
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+
+    @classmethod
+    def setUpProjectAndSampleData(cls):
         Project.objects.filter(id=3).update(genome_version='38')
-        Sample.objects.filter(guid='S000154_na20889').update(dataset_type='SV', is_active=True)
+        Sample.objects.filter(guid='S000154_na20889').update(
+            dataset_type='SV', is_active=True
+        )
         SavedVariant.objects.update(key=None)
 
     @mock.patch('clickhouse_search.management.commands.set_saved_variant_key.BATCH_SIZE', 2)
@@ -98,6 +108,10 @@ class SetSavedVariantKeyFailedMappingTest(SetSavedVariantKeyTest):
     fixtures = ['users', '1kg_project', 'report_variants']
 
     MOCK_GCNV_DATA = MOCK_GCNV_DATA[:1]
+
+    @classmethod
+    def setUpClickhouseData(cls):
+        pass
 
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
     def test_command(self, mock_subprocess):
