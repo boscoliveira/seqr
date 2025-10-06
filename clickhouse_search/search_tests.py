@@ -1511,3 +1511,12 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestCase):
         expected_response['searchedVariants'].append(variant3)
         expected_response['genesById']['ENSG00000177000'] = mock.ANY
         self.assertDictEqual(response.json(), expected_response)
+
+        body['geneId'] = 'ENSG00000229905'
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(response.json(), {
+            **expected_response,
+            'searchedVariants': [],
+            'genesById': {},
+        })
