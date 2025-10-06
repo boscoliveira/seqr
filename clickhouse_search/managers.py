@@ -811,6 +811,9 @@ class EntriesManager(SearchQuerySet):
 
        entries = entries.filter(family_q)
 
+       if inheritance_mode == X_LINKED_RECESSIVE:
+           entries = entries.filter(self._interval_query('X', start=MIN_POS, end=MAX_POS))
+
        inheritance_q = None
        quality_q = None
        gt_filter = None
