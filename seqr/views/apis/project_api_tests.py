@@ -705,12 +705,14 @@ class LocalProjectAPITest(AuthenticationTestCase, ProjectAPITest):
 class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
     PROJECT_COLLABORATORS = ANVIL_COLLABORATORS
     PROJECT_COLLABORATOR_GROUPS = None
     HAS_EMPTY_PROJECT = False
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     def test_create_and_delete_project(self, *args, **kwargs):
         super(AnvilProjectAPITest, self).test_create_and_delete_project(*args, **kwargs)

@@ -1,9 +1,6 @@
 from copy import deepcopy
 import os
 
-CLICKHOUSE_WRITER_PASSWORD = os.environ.get('CLICKHOUSE_WRITER_PASSWORD', 'clickhouse_test')
-CLICKHOUSE_WRITER_USER = os.environ.get('CLICKHOUSE_WRITER_USER', 'clickhouse')
-
 VARIANT1 = {
     'key': 1,
     'variantId': '1-10439-AC-A',
@@ -1344,43 +1341,3 @@ GCNV_GENE_COUNTS = {
     'ENSG00000277258': {'total': 1, 'families': {'F000002_2': 1}},
     'ENSG00000277972': {'total': 1, 'families': {'F000002_2': 1}},
 }
-
-def create_mock_affected_status_dict(cursor):
-    cursor.execute('''
-        CREATE TABLE mock_affected_status_source (
-            `family_guid` String,
-            `sampleId` String,
-            `affected` String
-        ) ENGINE = Memory
-    ''')
-    cursor.execute(
-        '''
-        INSERT INTO mock_affected_status_source (family_guid, sampleId, affected) 
-        VALUES
-        ('F000002_2', 'HG00731', 'A'),
-        ('F000002_2', 'HG00732', 'N'),
-        ('F000002_2', 'HG00733', 'N'),
-        ('F000002_2_x', 'HG00731', 'A'),
-        ('F000002_2_x', 'HG00732', 'N'),
-        ('F000002_2_x', 'HG00733', 'N'),
-        ('F000003_3', 'NA20870', 'A'),
-        ('F000011_11', 'NA20885', 'A'),
-        ('F000014_14', 'NA21234', 'A'),
-        ('F000014_14', 'NA21987', 'A'),
-        ('F000014_14', 'NA21654', 'N')
-        '''
-    )
-    cursor.execute(
-        f'''
-        REPLACE DICTIONARY `seqrdb_affected_status_dict`
-        (
-            `family_guid` String,
-            `sampleId` String,
-            `affected` String
-        )
-        PRIMARY KEY family_guid, sampleId
-        SOURCE(CLICKHOUSE(USER {CLICKHOUSE_WRITER_USER} PASSWORD {CLICKHOUSE_WRITER_PASSWORD} TABLE "mock_affected_status_source"))
-        LIFETIME(MIN 0 MAX 0)
-        LAYOUT(COMPLEX_KEY_HASHED())
-        '''
-    )

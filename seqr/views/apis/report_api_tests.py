@@ -1536,9 +1536,6 @@ class LocalReportAPITest(AuthenticationTestCase, ReportAPITest):
 class AnvilReportAPITest(AnvilAuthenticationTestCase, ReportAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'report_variants']
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
     HAS_PM_OVERRIDE = False
     STATS_DATA = {
         'projectsCount': {'internal': 1, 'external': 1, 'no_anvil': 1, 'demo': 1},
@@ -1555,3 +1552,8 @@ class AnvilReportAPITest(AnvilAuthenticationTestCase, ReportAPITest):
             'RNA__E': {'internal': 1},
         },
     }
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])

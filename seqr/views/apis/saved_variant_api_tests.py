@@ -1067,12 +1067,13 @@ def assert_no_list_ws_has_al(self, acl_call_count):
 class AnvilSavedVariantAPITest(AnvilAuthenticationTestCase, SavedVariantAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
-
     SAVED_VARIANT_RESPONSE_KEYS = {*SAVED_VARIANT_RESPONSE_KEYS, 'totalSampleCounts'}
     SAVED_VARIANT_DETAIL_FIELDS = {*SAVED_VARIANT_DETAIL_FIELDS, 'key', 'mainTranscriptId'}
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     def test_saved_variant_data(self, *args):
         super(AnvilSavedVariantAPITest, self).test_saved_variant_data(*args)

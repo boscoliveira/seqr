@@ -1405,10 +1405,6 @@ def assert_workspace_calls(self, group_call_count, user=None):
 class AnvilVariantSearchAPITest(AnvilAuthenticationTestCase, VariantSearchAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data', 'variant_searches']
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
-
     EXPECTED_SEARCH_RESPONSE = {
         **EXPECTED_SEARCH_RESPONSE,
         'totalSampleCounts': {'MITO': {'WES': 1}, 'SNV_INDEL': {'WES': 7}, 'SV': {'WES': 3, 'WGS': 3}},
@@ -1416,6 +1412,12 @@ class AnvilVariantSearchAPITest(AnvilAuthenticationTestCase, VariantSearchAPITes
     EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'] = {
         k: {**v, 'key': mock.ANY, 'mainTranscriptId': mock.ANY} for k, v in EXPECTED_SEARCH_RESPONSE['savedVariantsByGuid'].items()
     }
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
+
 
     def test_query_variants(self, *args):
         super(AnvilVariantSearchAPITest, self).test_query_variants(*args)

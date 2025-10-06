@@ -1736,10 +1736,6 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
 class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
     fixtures = ['users', 'social_auth', '1kg_project', 'reference_data']
 
-    @classmethod
-    def setUpTestData(cls):
-        super().setUpClickhouseEntriesFixtures(['clickhouse_search'])
-
     NUM_FIXTURE_GENES = 59
     LOADING_PROJECT_GUID = NON_ANALYST_PROJECT_GUID
     CALLSET_DIR = 'gs://test_bucket'
@@ -1758,6 +1754,11 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         'datasetType': 'SNV_INDEL',
     }
     VCF_SAMPLES = [s for s in VCF_SAMPLES if s != 'NA21234']
+
+    @classmethod
+    def setUpTestData(cls):
+        super().setUpTestData()
+        super().setUpClickhouseEntriesFixtures(['clickhouse_search'])
 
     def setUp(self):
         patcher = mock.patch('seqr.utils.file_utils.subprocess.Popen')

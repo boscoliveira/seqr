@@ -1373,6 +1373,7 @@ class AnvilIndividualAPITest(AnvilAuthenticationTestCase, IndividualAPITest):
 
     @classmethod
     def setUpTestData(cls):
+        super().setUpTestData()
         super().setUpClickhouseEntriesFixtures(['clickhouse_saved_variants'])
 
     def setUp(self):
