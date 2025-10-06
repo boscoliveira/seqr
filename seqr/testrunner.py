@@ -4,7 +4,7 @@ from django.test.runner import DiscoverRunner
 
 class OrderedDatabaseDeletionRunner(DiscoverRunner):
 
-    # This class is necessary to resolve an issue with 
+    # This class is necessary to resolve an issue with
     # clickhouse maintaining an open connection to the postgres
     # test database.  The "default" database is both created
     # and deleted first, but postgres (very reasonably) prevents a database
