@@ -1,7 +1,7 @@
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.management import call_command
 from django.db import connections
-from django.test import TestCase, TransactionTestCase
+from django.test import TransactionTestCase
 import json
 import mock
 
