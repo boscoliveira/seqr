@@ -34,7 +34,7 @@ class ClickhouseSearchTests(SearchTestHelper, TransactionTestCase):
         super().set_up()
         self.mock_redis.get.return_value = None
 
-    def _fixture_setup(self): # noqa: W0221
+    def _fixture_setup(self): # pylint: disable=arguments-differ
         # TransactionTestCase does not call setupTestData in the same way as TestCase
         # https://github.com/django/django/blob/stable/4.2.x/django/test/testcases.py#L1466
         # As a warning to a future reader, this method changes from an instance to a class method
