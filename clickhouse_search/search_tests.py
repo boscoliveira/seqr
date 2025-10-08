@@ -22,7 +22,6 @@ from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchRes
 from seqr.utils.search.search_utils_tests import SearchTestHelper
 from seqr.utils.search.utils import query_variants, variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
-from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
 
 from settings import DATABASES
 
