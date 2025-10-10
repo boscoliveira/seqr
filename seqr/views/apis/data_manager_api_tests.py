@@ -1225,7 +1225,7 @@ class DataManagerAPITest(AirtableTest):
                 'entityIds': ['PP177442291_na19678ensg0000010', 'PP215071655_na19678ensg0000010'],
             }}),
         ])
-        saved_data = _get_json_for_models(PhenotypePrioritization.objects.filter(tool='lirical'),
+        saved_data = _get_json_for_models(PhenotypePrioritization.objects.filter(tool='lirical').order_by('id'),
                                           nested_fields=[{'fields': ('individual', 'guid'), 'key': 'individualGuid'}])
         self.assertListEqual(saved_data, EXPECTED_UPDATED_LIRICAL_DATA)
         self._assert_expected_notifications(mock_send_email, [
