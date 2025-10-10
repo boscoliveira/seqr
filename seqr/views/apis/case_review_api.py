@@ -33,7 +33,7 @@ def _update_case_review(model, project, request, field):
         raise PermissionDenied('User cannot edit case review for this project')
 
     update_json = {field: json.loads(request.body).get(field)}
-    update_model_from_json(model, update_json, user=request.user)
+    update_model_from_json(model, update_json, user=request.user)  # TODO update_individual_from_json?
 
     return create_json_response({
         model.guid: _get_json_for_model(model, user=request.user, additional_model_fields=[_to_snake_case(field)])

@@ -44,7 +44,7 @@ def update_individual_parents(individual, json, user):
     _parse_parent_field(update_json, json, individual, 'mother', parent_id_key=None if has_update_model else 'maternalId')
     _parse_parent_field(update_json, json, individual, 'father', parent_id_key=None if has_update_model else 'paternalId')
 
-    return update_model_from_json(individual, update_json, user)
+    return update_model_from_json(individual, update_json, user) # TODO update_individual_from_json?
 
 
 def _parse_parent_field(update_json, all_json, individual, parent_key, parent_id_key):
@@ -98,6 +98,7 @@ def create_model_from_json(model_class, json, user):
     return model
 
 
+#  TODO check usages
 def get_or_create_model_from_json(model_class, create_json, update_json, user, update_on_create_only=False):
     model, created = model_class.objects.get_or_create(**create_json)
     updated_fields = set()
