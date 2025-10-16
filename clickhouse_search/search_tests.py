@@ -23,18 +23,19 @@ from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchRes
 from seqr.utils.search.search_utils_tests import SearchTestHelper
 from seqr.utils.search.utils import query_variants, variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
-from seqr.views.utils.test_utils import AnvilAuthenticationTestCase
+from seqr.views.utils.test_utils import AnvilAuthenticationTestMixin
 from seqr.views.apis.variant_search_api import gene_variant_lookup
 
 from settings import DATABASES
 
-class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestCase, TransactionTestCase):
+class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, TransactionTestCase):
     databases = '__all__'
     fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
 
     def setUp(self):
         super().set_up()
         super().setUp()
+        super().test_set_up()
         self.mock_redis.get.return_value = None
 
     def _fixture_setup(self): # pylint: disable=arguments-differ
@@ -54,6 +55,7 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestCase, Trans
                 cursor.execute(f'SYSTEM WAIT VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM RELOAD DICTIONARY "{table_base}/gt_stats_dict"')
         Project.objects.update(genome_version='38')
+        AnvilAuthenticationTestMixin.user_set_up()
 
     def _assert_expected_search(self, expected_results, gene_counts=None, inheritance_mode=None, inheritance_filter=None, quality_filter=None, cached_variant_fields=None, sort='xpos', results_model=None, **search_kwargs):
         results_model = results_model or self.results_model
