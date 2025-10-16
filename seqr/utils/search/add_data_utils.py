@@ -132,7 +132,7 @@ def _enqueue_pipeline_request(name: str, variables: dict, user: User, raise_erro
         logger.info(f'Triggered {_to_title_case(name)}', user, detail=variables)
     except requests.RequestException as e:
         error = str(e)
-        if response and response.status_code == 409:
+        if response is not None and response.status_code == 409:
             error = 'Loading pipeline is already running. Wait for it to complete and resubmit'
             e = ErrorsWarningsException([error])
         if raise_error:
