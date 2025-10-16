@@ -38,6 +38,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
     """
     updated_family_ids = set()
     updated_individuals = set()
+    updated_affected = set()
     updated_note_ids = []
     parent_updates = []
     num_created_families = 0
@@ -69,7 +70,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
 
     for record in individual_records:
         created_individual = _update_from_record(
-            record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update)
+            record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, updated_affected, parent_updates, updated_note_ids, allow_features_update)
         if created_individual:
             num_created_individuals += 1
 
@@ -83,6 +84,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
 
     updated_family_models = Family.objects.filter(id__in=updated_family_ids)
     _remove_pedigree_images(updated_family_models, user)
+    backend_specific_call(lambda *args: True, _trigger_update_affected)(project, updated_affected)
 
     pedigree_json = None
     if get_update_json:
@@ -97,7 +99,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
     return pedigree_json
 
 
-def _update_from_record(record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update):
+def _update_from_record(record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, updated_affected, parent_updates, updated_note_ids, allow_features_update):
     family_id = _get_record_family_id(record)
     family = families_by_id.get(family_id)
     created_individual = False
@@ -159,9 +161,11 @@ def _update_from_record(record, user, families_by_id, individual_lookup, updated
         if is_updated:
             updated_family_ids.add(family.id)
 
-    is_updated = update_individual_from_json(individual, record, user=user, allow_unknown_keys=True, allow_features_update=allow_features_update, allow_search_field_update=True)
-    if is_updated:
+    updated_fields = update_individual_from_json(individual, record, user=user, allow_unknown_keys=True, allow_features_update=allow_features_update, allow_search_field_update=True)
+    if updated_fields:
         updated_individuals.add(individual)
+        if 'affected' in updated_fields:
+            updated_affected.add(individual)
         if family.pedigree_image:
             updated_family_ids.add(family.id)
 
@@ -255,3 +259,8 @@ def _get_updated_pedigree_json(updated_individuals, updated_families, updated_no
         response['familyNotesByGuid'] = family_notes_by_guid
 
     return response
+
+
+def _trigger_update_affected(project, updated_affected):
+    # TODO
+    pass

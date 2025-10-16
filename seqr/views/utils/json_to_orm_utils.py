@@ -37,9 +37,11 @@ def update_individual_from_json(individual, json, user, allow_unknown_keys=False
         immutable_keys += ['case_review_status', 'case_review_discussion']
     if not allow_features_update:
         immutable_keys += ['population', 'features', 'absent_features', 'nonstandard_features', 'absent_nonstandard_features']
-    return update_model_from_json(
-        individual, json, user=user, allow_unknown_keys=allow_unknown_keys, immutable_keys=immutable_keys,
+    updated_fields = set()
+    is_updated = update_model_from_json(
+        individual, json, user=user, allow_unknown_keys=allow_unknown_keys, immutable_keys=immutable_keys, updated_fields=updated_fields,
     )
+    return updated_fields if allow_search_field_update else is_updated
 
 
 def update_individual_parents(individual, json, user):
@@ -69,7 +71,7 @@ def update_model_from_json(model_obj, json, user, allow_unknown_keys=False, immu
     for audit_field in audit_fields:
         immutable_keys += get_audit_field_names(audit_field)
 
-    if not updated_fields:
+    if updated_fields is None:
         updated_fields = set()
     for json_key, value in json.items():
         orm_key = _to_snake_case(json_key)
