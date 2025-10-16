@@ -6,6 +6,7 @@ from collections import defaultdict
 from matchmaker.models import MatchmakerSubmission, MatchmakerResult
 from seqr.models import Sample, IgvSample, RnaSample, Individual, Family, FamilyNote
 from seqr.utils.middleware import ErrorsWarningsException
+from seqr.utils.search.add_data_utils import trigger_rebuild_gt_stats
 from seqr.utils.search.utils import backend_specific_call
 from seqr.views.utils.json_to_orm_utils import update_individual_from_json, update_individual_parents, create_model_from_json, \
     update_family_from_json
@@ -84,7 +85,8 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
 
     updated_family_models = Family.objects.filter(id__in=updated_family_ids)
     _remove_pedigree_images(updated_family_models, user)
-    backend_specific_call(lambda *args: True, _trigger_update_affected)(project, updated_affected)
+    if updated_affected:
+        backend_specific_call(lambda *args: True, trigger_rebuild_gt_stats)(project, user)
 
     pedigree_json = None
     if get_update_json:
@@ -259,8 +261,3 @@ def _get_updated_pedigree_json(updated_individuals, updated_families, updated_no
         response['familyNotesByGuid'] = family_notes_by_guid
 
     return response
-
-
-def _trigger_update_affected(project, updated_affected):
-    # TODO
-    pass
