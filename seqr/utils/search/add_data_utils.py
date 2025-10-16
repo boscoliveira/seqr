@@ -83,7 +83,7 @@ def trigger_delete_families_search(project, family_guids, user=None):
 
 def trigger_rebuild_gt_stats(project, user):
     logger.info(f'Triggering rebuild_gt_stats for {project.guid}', user)
-    _enqueue_pipeline_request('rebuild_gt_stats', {'project_guids': project.guid}, user, raise_error=False)
+    _enqueue_pipeline_request('rebuild_gt_stats', {'project_guids': [project.guid]}, user, raise_error=False)
 
 def trigger_data_loading(projects: list[Project], individual_ids: list[int], sample_type: str, dataset_type: str,
                          genome_version: str, data_path: str, user: User, raise_error: bool = False, skip_expect_tdr_metrics: bool = True,

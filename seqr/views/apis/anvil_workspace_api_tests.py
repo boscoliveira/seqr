@@ -873,7 +873,7 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
         self.assertEqual(len(responses.calls), 3)
 
         self.assertEqual(responses.calls[0].request.url, f'{PIPELINE_RUNNER_HOST}/rebuild_gt_stats_enqueue')
-        self.assertDictEqual(json.loads(responses.calls[0].request.body), {'project_guids': project.guid})
+        self.assertDictEqual(json.loads(responses.calls[0].request.body), {'project_guids': [project.guid]})
 
         self.assertEqual(responses.calls[1].request.url, PIPELINE_RUNNER_URL)
         self.assertDictEqual(json.loads(responses.calls[1].request.body), variables)
