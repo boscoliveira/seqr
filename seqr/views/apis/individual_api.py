@@ -324,7 +324,7 @@ def save_individuals_table_handler(request, project_guid, upload_file_id):
 
 
 def _update_and_parse_individuals_and_families(project, individual_records, user):
-    pedigree_json = add_or_update_individuals_and_families(project, individual_records, user)
+    pedigree_json = add_or_update_individuals_and_families(project, individual_records, user, allow_id_update=True)
     return create_json_response(pedigree_json)
 
 

@@ -22,7 +22,7 @@ def _get_record_individual_id(record):
     return record.get(JsonConstants.PREVIOUS_INDIVIDUAL_ID_COLUMN) or record[JsonConstants.INDIVIDUAL_ID_COLUMN]
 
 
-def add_or_update_individuals_and_families(project, individual_records, user, get_update_json=True, get_updated_individual_db_ids=False, get_created_counts=False, allow_features_update=False):
+def add_or_update_individuals_and_families(project, individual_records, user, get_update_json=True, get_updated_individual_db_ids=False, get_created_counts=False, allow_features_update=False, allow_id_update=False):
     """
     Add or update individual and family records in the given project.
 
@@ -69,7 +69,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
 
     for record in individual_records:
         created_individual = _update_from_record(
-            record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update)
+            record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update, allow_id_update)
         if created_individual:
             num_created_individuals += 1
 
@@ -97,7 +97,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
     return pedigree_json
 
 
-def _update_from_record(record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update):
+def _update_from_record(record, user, families_by_id, individual_lookup, updated_family_ids, updated_individuals, parent_updates, updated_note_ids, allow_features_update, allow_id_update):
     family_id = _get_record_family_id(record)
     family = families_by_id.get(family_id)
     created_individual = False
@@ -127,7 +127,7 @@ def _update_from_record(record, user, families_by_id, individual_lookup, updated
         family = individual.family
 
     previous_id = record.pop(JsonConstants.PREVIOUS_INDIVIDUAL_ID_COLUMN, None)
-    if previous_id:
+    if allow_id_update and previous_id:
         updated_individuals.update(individual.maternal_children.all())
         updated_individuals.update(individual.paternal_children.all())
         record['displayName'] = ''
@@ -159,7 +159,7 @@ def _update_from_record(record, user, families_by_id, individual_lookup, updated
         if is_updated:
             updated_family_ids.add(family.id)
 
-    is_updated = update_individual_from_json(individual, record, user=user, allow_unknown_keys=True, allow_features_update=allow_features_update)
+    is_updated = update_individual_from_json(individual, record, user=user, allow_unknown_keys=True, allow_features_update=allow_features_update, allow_id_update=allow_id_update)
     if is_updated:
         updated_individuals.add(individual)
         if family.pedigree_image:
