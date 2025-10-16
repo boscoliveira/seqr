@@ -26,15 +26,18 @@ def update_family_from_json(family, json, user, allow_unknown_keys=False, immuta
     )
 
 
-def update_individual_from_json(individual, json, user, allow_unknown_keys=False, allow_features_update=False):
+def update_individual_from_json(individual, json, user, allow_unknown_keys=False, allow_features_update=False, allow_case_review_update=False):
     if json.get('displayName') and json['displayName'] == individual.individual_id:
         json['displayName'] = ''
 
+    immutable_keys = ['filter_flags', 'pop_platform_filters', 'sv_flags']
+    if not allow_case_review_update:
+        immutable_keys += ['case_review_status', 'case_review_discussion']
+    if not allow_features_update:
+        immutable_keys += ['population', 'features', 'absent_features', 'nonstandard_features', 'absent_nonstandard_features']
     return update_model_from_json(
         individual, json, user=user, allow_unknown_keys=allow_unknown_keys,
-        immutable_keys=[
-            'filter_flags', 'pop_platform_filters', 'sv_flags', 'case_review_status', 'case_review_discussion'
-        ] + [] if allow_features_update else ['population', 'features', 'absent_features', 'nonstandard_features', 'absent_nonstandard_features'],
+        immutable_keys=immutable_keys,
     )
 
 
@@ -44,7 +47,7 @@ def update_individual_parents(individual, json, user):
     _parse_parent_field(update_json, json, individual, 'mother', parent_id_key=None if has_update_model else 'maternalId')
     _parse_parent_field(update_json, json, individual, 'father', parent_id_key=None if has_update_model else 'paternalId')
 
-    return update_individual_from_json(individual, update_json, user) # TODO update_individual_from_json?
+    return update_individual_from_json(individual, update_json, user)
 
 
 def _parse_parent_field(update_json, all_json, individual, parent_key, parent_id_key):
