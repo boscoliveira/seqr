@@ -43,7 +43,7 @@ class AuthenticationTestMixin(object):
     inactive_user = None
     no_policy_user = None
 
-    def test_set_up(self):
+    def set_up_test(self):
         patcher = mock.patch('seqr.utils.search.elasticsearch.es_utils.ELASTICSEARCH_SERVICE_HOSTNAME', self.ES_HOSTNAME)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -68,9 +68,7 @@ class AuthenticationTestMixin(object):
         logging.getLogger().handlers[0].stream = self._log_stream
 
     @classmethod
-    def user_set_up(cls):
-        if User.objects.count() < 2:
-            return
+    def set_up_users(cls):
         cls.super_user = User.objects.get(username='test_superuser')
         cls.analyst_user = User.objects.get(username='test_user')
         cls.pm_user = User.objects.get(username='test_pm_user')
@@ -277,12 +275,12 @@ class AuthenticationTestCase(AuthenticationTestMixin, TestCase):
     databases = ['default', 'reference_data']
 
     def setUp(self):
-        self.test_set_up()
+        self.set_up_test()
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.user_set_up()
+        cls.set_up_users()
 
 TEST_WORKSPACE_NAMESPACE = 'my-seqr-billing'
 TEST_WORKSPACE_NAME = 'anvil-1kg project n\u00e5me with uni\u00e7\u00f8de'
@@ -560,7 +558,7 @@ class AnvilAuthenticationTestMixin(AuthenticationTestMixin):
     SKIP_RESET_VARIANT_JSON = False
 
     # mock the terra apis
-    def test_set_up(self):
+    def set_up_test(self):
         patcher = mock.patch('seqr.views.utils.terra_api_utils.TERRA_API_ROOT_URL', TEST_TERRA_API_ROOT_URL)
         patcher.start()
         self.addCleanup(patcher.stop)
@@ -599,7 +597,7 @@ class AnvilAuthenticationTestMixin(AuthenticationTestMixin):
         self.mock_get_group_members = patcher.start()
         self.mock_get_group_members.side_effect = get_group_members_side_effect
         self.addCleanup(patcher.stop)
-        super().test_set_up()
+        super().set_up_test()
         if self.CLICKHOUSE_HOSTNAME and not self.SKIP_RESET_VARIANT_JSON:
             SavedVariant.objects.filter(key__isnull=False).update(saved_variant_json={})
 
@@ -619,12 +617,12 @@ class AnvilAuthenticationTestCase(DifferentDbTransactionSupportMixin, AnvilAuthe
     databases = '__all__'
 
     def setUp(self):
-        self.test_set_up()
+        self.set_up_test()
 
     @classmethod
     def setUpTestData(cls):
         super().setUpTestData()
-        cls.user_set_up()
+        cls.set_up_users()
 
 
 @mock.patch('seqr.views.utils.terra_api_utils.SOCIAL_AUTH_PROVIDER', TEST_OAUTH2_PROVIDER)

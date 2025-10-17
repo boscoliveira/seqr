@@ -34,8 +34,7 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
 
     def setUp(self):
         super().set_up()
-        super().setUp()
-        super().test_set_up()
+        super().set_up_test()
         self.mock_redis.get.return_value = None
 
     def _fixture_setup(self): # pylint: disable=arguments-differ
@@ -55,7 +54,7 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
                 cursor.execute(f'SYSTEM WAIT VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM RELOAD DICTIONARY "{table_base}/gt_stats_dict"')
         Project.objects.update(genome_version='38')
-        AnvilAuthenticationTestMixin.user_set_up()
+        AnvilAuthenticationTestMixin.set_up_users()
 
     def _assert_expected_search(self, expected_results, gene_counts=None, inheritance_mode=None, inheritance_filter=None, quality_filter=None, cached_variant_fields=None, sort='xpos', results_model=None, **search_kwargs):
         results_model = results_model or self.results_model
