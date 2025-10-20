@@ -973,6 +973,21 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             ],
         )
 
+        annotations = {'extended_splice_site': ['5_prime_UTR_variant']}
+        self._assert_expected_search(
+            [selected_transcript_variant_2], pathogenicity=None, annotations=annotations, cached_variant_fields=[
+                {'selectedTranscript': CACHED_CONSEQUENCES_BY_KEY[2][1]},
+            ],
+        )
+
+        annotations['extended_splice_site'].append('extended_intronic_splice_region_variant')
+        self._assert_expected_search(
+            [selected_transcript_variant_2, VARIANT4], annotations=annotations, cached_variant_fields=[
+                {'selectedTranscript': CACHED_CONSEQUENCES_BY_KEY[2][1]},
+                {'selectedTranscript': CACHED_CONSEQUENCES_BY_KEY[4][0]},
+            ],
+        )
+
         annotations = {'motif_feature': ['TF_binding_site_variant'], 'regulatory_feature': ['regulatory_region_variant']}
         self._assert_expected_search(
             [VARIANT3, VARIANT4], annotations=annotations, pathogenicity=None,

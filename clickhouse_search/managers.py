@@ -547,7 +547,6 @@ class AnnotationsQuerySet(SearchQuerySet):
 
     TRANSCRIPT_FIELD_FILTERS = {
         UTR_ANNOTATOR_KEY: ('fiveutrConsequence', 'hasAny({value}, [{field}])'),
-        EXTENDED_SPLICE_KEY: ('extendedIntronicSpliceRegionVariant', '{field} = {value}', lambda value: 1 if EXTENDED_SPLICE_REGION_CONSEQUENCE in value else 0),
         SV_CONSEQUENCES_FIELD: ('majorConsequence', 'hasAny({value}, [{field}])'),
     }
     ANNOTATION_FIELD_FILTERS = {
@@ -568,11 +567,15 @@ class AnnotationsQuerySet(SearchQuerySet):
         transcript_field_filters = {}
         for field, value in (annotations or {}).items():
             if field in self.TRANSCRIPT_FIELD_FILTERS:
-                filter_field, template, *format_value = self.TRANSCRIPT_FIELD_FILTERS[field]
-                if format_value:
-                    value = format_value[0](value)
+                filter_field, template = self.TRANSCRIPT_FIELD_FILTERS[field]
                 if value:
                     transcript_field_filters[filter_field] = (value, template)
+            elif field == EXTENDED_SPLICE_KEY:
+                if EXTENDED_SPLICE_REGION_CONSEQUENCE in value:
+                    transcript_field_filters['extendedIntronicSpliceRegionVariant'] = (1, '{field} = {value}')
+                value = [c for c in value if c != EXTENDED_SPLICE_REGION_CONSEQUENCE]
+                if value:
+                    allowed_consequences += value
             elif field in self.ANNOTATION_FIELD_FILTERS:
                 filter_field, *format_filter = self.ANNOTATION_FIELD_FILTERS[field]
                 filters_by_field[filter_field] = format_filter[0](value, self.model) if format_filter else ('{field}__in', value)
