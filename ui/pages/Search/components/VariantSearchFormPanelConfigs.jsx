@@ -40,7 +40,7 @@ import {
   NUM_ALT_OPTIONS,
   PANEL_APP_FIELD_NAME,
   CLINVAR_FIELD,
-  PATHOGENICITY_FIELDS,
+  ES_CLINVAR_FIELD,
   PATHOGENICITY_FILTER_OPTIONS, QUALITY_FILTER_OPTIONS, SV_GROUPS, SV_GROUPS_NO_NEW, VARIANT_ANNOTATION_LAYOUT_GROUPS,
 } from '../constants'
 import LocusListItemsFilter from './filters/LocusListItemsFilter'
@@ -325,7 +325,8 @@ export const PATHOGENICITY_PANEL = {
     title: 'Pathogenicity',
     inputProps: JsonSelectPropsWithAll(PATHOGENICITY_FILTER_OPTIONS, ANY_PATHOGENICITY_FILTER),
   },
-  fields: PATHOGENICITY_FIELDS,
+  fields: [CLINVAR_FIELD],
+  esEnabledFields: [ES_CLINVAR_FIELD],
   fieldProps: PATHOGENICITY_FIELD_PROPS,
   helpText: 'Filter by reported pathogenicity.  This overrides the annotation filter, the frequency filter, and the call quality filter.  Variants will be returned if they have the specified transcript consequence AND the specified frequencies AND all individuals pass all specified quality filters OR if the variant has the specified pathogenicity and a frequency up to 0.05.',
 }
