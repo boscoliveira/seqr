@@ -147,12 +147,12 @@ const CLINVAR_OPTIONS = [
     value: CLINVAR_LIKELY_PATH,
   },
   {
-    description: 'Clinvar variant of with conflicting interpretations, at least one of which is Pathogenic (P) or Likely Pathogenic (LP)',
+    description: 'ClinVar variant with conflicting interpretations, at least one of which is Pathogenic (P) or Likely Pathogenic (LP)',
     text: 'Conflicting with P/LP',
     value: CLINVAR_CONFLICTING_P_LP,
   },
   {
-    description: 'Clinvar variant of uncertain significance or variant with conflicting interpretations',
+    description: 'ClinVar variant of uncertain significance or variant with conflicting interpretations',
     text: 'VUS or Conflicting',
     value: CLINVAR_UNCERTAIN,
   },
@@ -189,7 +189,7 @@ const HGMD_OPTIONS = [ // see https://portal.biobase-international.com/hgmd/pro/
 export const CLINVAR_FIELD = {
   name: CLINVAR_NAME,
   options: CLINVAR_OPTIONS,
-  groupLabel: 'Clinvar',
+  groupLabel: 'ClinVar',
   width: 1,
 }
 
