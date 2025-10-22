@@ -83,6 +83,10 @@ class SearchQuerySet(QuerySet):
         clinvar_q = clinvar_qs[0]
         for q in clinvar_qs[1:]:
             clinvar_q |= q
+
+        if pathogenicity.get('clinvarMinStars'):
+            clinvar_q &= cls._clinvar_star_q(pathogenicity['clinvarMinStars'])
+
         return clinvar_q
 
     def _seqr_pop_fields(self, seqr_populations):
@@ -655,6 +659,10 @@ class AnnotationsQuerySet(SearchQuerySet):
         return Q(clinvar__0__range=path_range, clinvar_key__isnull=False)
 
     @staticmethod
+    def _clinvar_star_q(min_stars):
+        return Q(clinvar__4__gte=min_stars, clinvar_key__isnull=False)
+
+    @staticmethod
     def _clinvar_conflicting_path_filter(array_func, conflicting_filter):
         return {f'clinvar__5__{array_func}': conflicting_filter, 'clinvar__5__not_empty': True, 'clinvar_key__isnull': False}
 
@@ -796,6 +804,10 @@ class EntriesManager(SearchQuerySet):
     @staticmethod
     def _clinvar_range_q(path_range):
         return Q(clinvar_join__pathogenicity__range=path_range)
+
+    @staticmethod
+    def _clinvar_star_q(min_stars):
+        return Q(clinvar_join__gold_stars__gte=min_stars)
 
     @staticmethod
     def _clinvar_conflicting_path_filter(array_func, conflicting_filter):

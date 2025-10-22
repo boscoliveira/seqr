@@ -623,10 +623,17 @@ class ClickhouseSearchTests(SearchTestHelper, TransactionTestCase):
             cached_variant_fields=cached_variant_fields[:1] + cached_variant_fields[2:],
         )
 
+        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, selected_family_3_variant, MITO_VARIANT1, MITO_VARIANT3], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity=pathogenicity,
             cached_variant_fields=cached_variant_fields,
+        )
+
+        self._assert_expected_search(
+            [VARIANT2, selected_family_3_variant, MITO_VARIANT1],  quality_filter=quality_filter,
+            annotations=annotations, pathogenicity={**pathogenicity, 'clinvarMinStars': 1},
+            cached_variant_fields=cached_variant_fields[1:],
         )
 
         self._assert_expected_search(
@@ -868,6 +875,10 @@ class ClickhouseSearchTests(SearchTestHelper, TransactionTestCase):
         pathogenicity = {'clinvar': clinvar_paths, 'hgmd': []}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
+        )
+
+        self._assert_expected_search(
+            [VARIANT2, MITO_VARIANT1], pathogenicity={**pathogenicity, 'clinvarMinStars': 1},
         )
 
         self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
