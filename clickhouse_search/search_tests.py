@@ -840,24 +840,25 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         self._assert_expected_search(
             [VARIANT1, VARIANT4, MITO_VARIANT1],
             freqs={'gnomad_genomes': {'af': 0.01, 'hh': 10}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'likely_pathogenic', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'likely_pathogenic', 'vus']},
         )
 
         self._assert_expected_search(
             [VARIANT2, VARIANT4, MITO_VARIANT1], freqs={'gnomad_genomes': {'af': 0.01}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus']},
         )
 
     def test_annotations_filter(self):
         self._assert_expected_search([VARIANT2], pathogenicity={'hgmd': ['hgmd_other']})
         self._assert_expected_search([], pathogenicity={'hgmd': ['disease_causing', 'likely_disease_causing']})
 
-        pathogenicity = {'clinvar': ['likely_pathogenic', 'vus_or_conflicting', 'benign'], 'hgmd': []}
+        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus', 'benign'], 'hgmd': []}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
         )
 
         self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
+        # self._assert_expected_search([], pathogenicity={'clinvar': ['conflicting_no_p']}) TODO
 
         exclude = {'clinvar': pathogenicity['clinvar'][1:]}
         pathogenicity['clinvar'] = pathogenicity['clinvar'][:1]
@@ -1106,7 +1107,7 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             ],
         )
 
-        pathogenicity = {'clinvar': ['likely_pathogenic', 'vus_or_conflicting']}
+        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus']}
         self._reset_search_families()
         self._assert_expected_search(
             [VARIANT2, [VARIANT3, SELECTED_ANNOTATION_TRANSCRIPT_VARIANT_4], MITO_VARIANT3], inheritance_mode='recessive',
