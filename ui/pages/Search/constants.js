@@ -212,6 +212,10 @@ export const ES_CLINVAR_FIELD = {
   options: ES_CLINVAR_OPTIONS,
 }
 
+export const PATHOGENICITY_FIELDS = [
+  CLINVAR_FIELD,
+]
+
 export const HGMD_PATHOGENICITY_FIELDS = [
   CLINVAR_FIELD,
   {
