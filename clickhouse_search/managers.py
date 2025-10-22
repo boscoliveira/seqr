@@ -45,13 +45,16 @@ class SearchQuerySet(QuerySet):
 
     @classmethod
     def _clinvar_path_q(cls, pathogenicity):
-        clinvar_path_filters = [
-            f for f in (pathogenicity or {}).get(CLINVAR_KEY) or [] if f in CLINVAR_PATH_SIGNIFICANCES
-        ]
-        return cls._clinvar_filter_q(clinvar_path_filters) if clinvar_path_filters else None
+        return cls._clinvar_filter_q(pathogenicity, allowed_filters=CLINVAR_PATH_SIGNIFICANCES)
 
     @classmethod
-    def _clinvar_filter_q(cls, clinvar_filters):
+    def _clinvar_filter_q(cls, pathogenicity, allowed_filters=None):
+        clinvar_filters = (pathogenicity or {}).get(CLINVAR_KEY)
+        if allowed_filters:
+            clinvar_filters = [f for f in (clinvar_filters or []) if f in allowed_filters]
+        if not clinvar_filters:
+            return None
+
         ranges = [[None, None]]
         include_conflicting_p = CLINVAR_CONFLICTING_P_LP in clinvar_filters
         include_conflicting_no_p = CLINVAR_CONFLICTING_NO_P in clinvar_filters
@@ -510,9 +513,10 @@ class AnnotationsQuerySet(SearchQuerySet):
 
         filter_qs, transcript_filters = self._parse_annotation_filters(annotations, pathogenicity) if (annotations or pathogenicity) else ([], [])
 
-        exclude_clinvar = (exclude or {}).get(CLINVAR_KEY)
-        if exclude_clinvar and self.has_annotation(CLINVAR_KEY):
-            results = results.exclude(self._clinvar_filter_q(exclude_clinvar))
+        if self.has_annotation(CLINVAR_KEY):
+            exclude_clinvar_q = self._clinvar_filter_q(exclude)
+            if exclude_clinvar_q is not None:
+                results = results.exclude(exclude_clinvar_q)
 
         if not (filter_qs or transcript_filters):
             if any(val for key, val in (annotations or {}).items() if key != NEW_SV_FIELD) or any(val for val in (pathogenicity or {}).values()):
@@ -592,13 +596,14 @@ class AnnotationsQuerySet(SearchQuerySet):
             elif field != NEW_SV_FIELD:
                 allowed_consequences += value
 
-        for field, value in (pathogenicity or {}).items():
-            if not value:
-                continue
-            elif field == HGMD_KEY:
-                filters_by_field[HGMD_KEY] = self._hgmd_filter(value)
-            elif field == CLINVAR_KEY and self.has_annotation(CLINVAR_KEY):
-                filter_qs.append(self._clinvar_filter_q(value))
+        hgmd_filter = (pathogenicity or {}).get(HGMD_KEY)
+        if hgmd_filter:
+            filters_by_field[HGMD_KEY] = self._hgmd_filter(hgmd_filter)
+
+        if self.has_annotation(CLINVAR_KEY):
+            clinvar_q = self._clinvar_filter_q(pathogenicity)
+            if clinvar_q is not None:
+                filter_qs.append(clinvar_q)
 
         filter_qs += [
             Q(**{lookup_template.format(field=field): value})
