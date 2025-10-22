@@ -1,6 +1,7 @@
 from django.core.exceptions import ObjectDoesNotExist
+from django.core.management import call_command
 from django.db import connections
-from django.test import TestCase
+from django.test import TransactionTestCase
 import json
 import mock
 
@@ -21,25 +22,36 @@ from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchRes
 from seqr.utils.search.search_utils_tests import SearchTestHelper
 from seqr.utils.search.utils import query_variants, variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
-from seqr.views.utils.test_utils import DifferentDbTransactionSupportMixin
+
+from settings import DATABASES
 
 
-class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper, TestCase):
+class ClickhouseSearchTests(SearchTestHelper, TransactionTestCase):
     databases = '__all__'
-    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_search', 'clickhouse_transcripts']
+    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
 
     def setUp(self):
         super().set_up()
         self.mock_redis.get.return_value = None
 
-    @classmethod
-    def setUpTestData(cls):
+    def _fixture_setup(self): # pylint: disable=arguments-differ
+        # TransactionTestCase does not call setupTestData in the same way as TestCase
+        # https://github.com/django/django/blob/stable/4.2.x/django/test/testcases.py#L1466
+        # As a warning to a future reader, this method changes from an instance to a class method
+        # between versions 4.x and 6.x (alongside several other impactful method changes).  When
+        # Django is updated, our pattern here must be re-visited.
+        super()._fixture_setup()
+        with connections['clickhouse_write'].cursor() as cursor:
+            cursor.execute('SYSTEM RELOAD DICTIONARY "seqrdb_affected_status_dict"')
+        for db in DATABASES.keys():
+            call_command("loaddata", 'clickhouse_search', database=db)
         with connections['clickhouse_write'].cursor() as cursor:
             for table_base in ['GRCh38/SNV_INDEL', 'GRCh38/MITO', 'GRCh38/SV', 'GRCh37/SNV_INDEL']:
                 cursor.execute(f'SYSTEM REFRESH VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM WAIT VIEW "{table_base}/project_gt_stats_to_gt_stats_mv"')
                 cursor.execute(f'SYSTEM RELOAD DICTIONARY "{table_base}/gt_stats_dict"')
         Project.objects.update(genome_version='38')
+
 
     def _assert_expected_search(self, expected_results, gene_counts=None, inheritance_mode=None, inheritance_filter=None, quality_filter=None, cached_variant_fields=None, sort='xpos', results_model=None, **search_kwargs):
         results_model = results_model or self.results_model
