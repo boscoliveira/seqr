@@ -15,7 +15,7 @@ from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFEC
     X_LINKED_RECESSIVE, REF_REF, REF_ALT, ALT_ALT, HAS_ALT, HAS_REF, SPLICE_AI_FIELD, SCREEN_KEY, UTR_ANNOTATOR_KEY, \
     EXTENDED_SPLICE_KEY, MOTIF_FEATURES_KEY, REGULATORY_FEATURES_KEY, CLINVAR_KEY, HGMD_KEY, NEW_SV_FIELD, \
     EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_LIKELY_PATH_FILTER, \
-    CLINVAR_CONFLICTING_P_LP, PATH_FREQ_OVERRIDE_CUTOFF, \
+    CLINVAR_CONFLICTING_P_LP, CLINVAR_CONFLICTING_NO_P, CLINVAR_CONFLICTING, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
@@ -53,8 +53,10 @@ class SearchQuerySet(QuerySet):
     @classmethod
     def _clinvar_filter_q(cls, clinvar_filters):
         ranges = [[None, None]]
+        include_conflicting_p = CLINVAR_CONFLICTING_P_LP in clinvar_filters
+        include_conflicting_no_p = CLINVAR_CONFLICTING_NO_P in clinvar_filters
         for path_filter, start, end in CLINVAR_PATH_RANGES:
-            if path_filter in clinvar_filters:
+            if path_filter in clinvar_filters or (path_filter == CLINVAR_CONFLICTING and include_conflicting_p and include_conflicting_no_p):
                 ranges[-1][1] = end
                 if ranges[-1][0] is None:
                     ranges[-1][0] = start
@@ -64,9 +66,15 @@ class SearchQuerySet(QuerySet):
 
         clinvar_qs = [cls._clinvar_range_q(path_range) for path_range in ranges]
 
-        if CLINVAR_CONFLICTING_P_LP in clinvar_filters:
+        conflicting_filter = None
+        if include_conflicting_p and not include_conflicting_no_p:
             max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
-            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: (max_path, "{field} <= '{value}'")}))
+            conflicting_filter = (max_path, "{field} <= '{value}'")
+        elif include_conflicting_no_p and not include_conflicting_p:
+            min_path = next(start for path_filter, start, _ in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
+            conflicting_filter = (min_path, "{field} > '{value}'")
+        if conflicting_filter is not  None:
+            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: conflicting_filter}))
 
         clinvar_q = clinvar_qs[0]
         for q in clinvar_qs[1:]:
