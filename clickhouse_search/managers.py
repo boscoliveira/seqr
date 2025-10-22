@@ -68,13 +68,14 @@ class SearchQuerySet(QuerySet):
 
         conflicting_filter = None
         if include_conflicting_p and not include_conflicting_no_p:
-            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
-            conflicting_filter = (max_path, "{field} <= '{value}'")
+            conflicting_filter = ('array_exists', "{field} <= '{value}'")
         elif include_conflicting_no_p and not include_conflicting_p:
-            min_path = next(start for path_filter, start, _ in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
-            conflicting_filter = (min_path, "{field} > '{value}'")
+            conflicting_filter = ('array_all', "{field} > '{value}'")
         if conflicting_filter is not  None:
-            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: conflicting_filter}))
+            path_cutoff = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
+            clinvar_qs.append(Q(**cls._clinvar_conflicting_path_filter(
+                conflicting_filter[0], {1: (path_cutoff, conflicting_filter[1])},
+            )))
 
         clinvar_q = clinvar_qs[0]
         for q in clinvar_qs[1:]:
@@ -649,8 +650,8 @@ class AnnotationsQuerySet(SearchQuerySet):
         return Q(clinvar__0__range=path_range, clinvar_key__isnull=False)
 
     @staticmethod
-    def _clinvar_conflicting_path_filter(conflicting_filter):
-        return Q(clinvar__5__array_exists=conflicting_filter, clinvar_key__isnull=False)
+    def _clinvar_conflicting_path_filter(array_func, conflicting_filter):
+        return {f'clinvar__5__{array_func}': conflicting_filter, 'clinvar__5__not_empty': True, 'clinvar_key__isnull': False}
 
     def explode_gene_id(self, gene_id_key):
         consequence_field = self.GENE_CONSEQUENCE_FIELD if self.has_annotation(self.GENE_CONSEQUENCE_FIELD) else self.transcript_field
@@ -792,8 +793,11 @@ class EntriesManager(SearchQuerySet):
         return Q(clinvar_join__pathogenicity__range=path_range)
 
     @staticmethod
-    def _clinvar_conflicting_path_filter(conflicting_filter):
-        return Q(clinvar_join__conflicting_pathogenicities__array_exists=conflicting_filter)
+    def _clinvar_conflicting_path_filter(array_func, conflicting_filter):
+        return {
+            f'clinvar_join__conflicting_pathogenicities__{array_func}': conflicting_filter,
+            'clinvar_join__conflicting_pathogenicities__not_empty': True,
+        }
 
     def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, skip_individual_guid=False, **kwargs):
        project_guids = sample_data['project_guids']

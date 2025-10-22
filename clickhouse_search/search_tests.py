@@ -852,20 +852,21 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
         self._assert_expected_search([VARIANT2], pathogenicity={'hgmd': ['hgmd_other']})
         self._assert_expected_search([], pathogenicity={'hgmd': ['disease_causing', 'likely_disease_causing']})
 
-        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus', 'benign'], 'hgmd': []}
+        clinvar_paths = ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus', 'benign']
+        pathogenicity = {'clinvar': clinvar_paths, 'hgmd': []}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
         )
 
         self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
-        # self._assert_expected_search([], pathogenicity={'clinvar': ['conflicting_no_p']}) TODO
+        self._assert_expected_search([], pathogenicity={'clinvar': ['conflicting_no_p']})
 
-        exclude = {'clinvar': pathogenicity['clinvar'][1:]}
-        pathogenicity['clinvar'] = pathogenicity['clinvar'][:1]
+        exclude = {'clinvar': clinvar_paths[2:]}
+        pathogenicity['clinvar'] = clinvar_paths[:2]
         snv_38_only_annotations = {'SCREEN': ['CTCF-only', 'DNase-only'], 'UTRAnnotator': ['5_prime_UTR_stop_codon_loss_variant']}
         selected_transcript_variant_2 = {**VARIANT2, 'selectedMainTranscriptId': 'ENST00000408919'}
         self._assert_expected_search(
-            [VARIANT1, selected_transcript_variant_2, VARIANT4, MITO_VARIANT3], pathogenicity=pathogenicity, annotations=snv_38_only_annotations,
+            [VARIANT1, selected_transcript_variant_2, VARIANT4, MITO_VARIANT3], exclude=exclude, pathogenicity=pathogenicity, annotations=snv_38_only_annotations,
             cached_variant_fields=[
                 {'selectedTranscript': None},
                 {'selectedTranscript': CACHED_CONSEQUENCES_BY_KEY[2][1]},
@@ -874,6 +875,8 @@ class ClickhouseSearchTests(DifferentDbTransactionSupportMixin, SearchTestHelper
             ]
         )
 
+        exclude['clinvar'] = clinvar_paths[1:]
+        pathogenicity['clinvar'] = clinvar_paths[:1]
         self._assert_expected_search(
             [VARIANT1, VARIANT4, MITO_VARIANT3], exclude=exclude, pathogenicity=pathogenicity,
             annotations=snv_38_only_annotations, cached_variant_fields=[
