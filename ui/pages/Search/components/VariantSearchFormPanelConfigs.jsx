@@ -41,7 +41,6 @@ import {
   PANEL_APP_FIELD_NAME,
   CLINVAR_FIELD,
   ES_CLINVAR_FIELD,
-  PATHOGENICITY_FIELDS,
   PATHOGENICITY_FILTER_OPTIONS, QUALITY_FILTER_OPTIONS, SV_GROUPS, SV_GROUPS_NO_NEW, VARIANT_ANNOTATION_LAYOUT_GROUPS,
 } from '../constants'
 import LocusListItemsFilter from './filters/LocusListItemsFilter'
@@ -319,6 +318,19 @@ const JsonSelectPropsWithAll = (options, all) => ({
 })
 
 export const PATHOGENICITY_PANEL_NAME = 'pathogenicity'
+export const PATHOGENICITY_FIELDS = [
+  CLINVAR_FIELD,
+  {
+    name: 'clinvarMinStars',
+    label: 'ClinVar Gold Stars',
+    labelHelp: 'ClinVar must have at least the specified number of gold stars to be included',
+    control: LazyLabeledSlider,
+    min: 0,
+    max: 4,
+    format: val => val || null,
+    width: 1,
+  },
+]
 const PATHOGENICITY_FIELD_PROPS = { control: AlignedCheckboxGroup, format: val => val || [] }
 export const PATHOGENICITY_PANEL = {
   name: PATHOGENICITY_PANEL_NAME,

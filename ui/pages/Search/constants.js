@@ -212,19 +212,12 @@ export const ES_CLINVAR_FIELD = {
   options: ES_CLINVAR_OPTIONS,
 }
 
-export const PATHOGENICITY_FIELDS = [
-  CLINVAR_FIELD,
-]
-
-export const HGMD_PATHOGENICITY_FIELDS = [
-  CLINVAR_FIELD,
-  {
-    name: HGMD_NAME,
-    options: HGMD_OPTIONS,
-    groupLabel: 'HGMD',
-    width: 1,
-  },
-]
+export const HGMD_FIELD = {
+  name: HGMD_NAME,
+  options: HGMD_OPTIONS,
+  groupLabel: 'HGMD',
+  width: 1,
+}
 
 export const ANY_PATHOGENICITY_FILTER = {
   text: 'Any',
