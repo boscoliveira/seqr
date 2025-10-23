@@ -464,7 +464,7 @@ def _search_dataset_type(search, genome_version):
     chroms = [gene[f'chromGrch{genome_version}'] for gene in (search.get('genes') or {}).values()] + [
         interval['chrom'] for interval in (search.get('intervals') or [])
     ] if not search.get('exclude_locations') else None
-    dataset_type = _annotation_dataset_type(search.get('annotations'), chroms, pathogenicity=search.get('pathogenicity'), exclude_svs=search.get('exclude_svs'))
+    dataset_type = _annotation_dataset_type(search.get('annotations'), chroms, pathogenicity=search.get('pathogenicity'), exclude_svs=search.pop('exclude_svs', False))
     secondary_dataset_type = _annotation_dataset_type(search['annotations_secondary'], chroms) if search.get('annotations_secondary') else None
 
     return dataset_type, secondary_dataset_type, None
