@@ -15,7 +15,6 @@ from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.xpos_utils import format_chrom
 from seqr.views.utils.file_utils import parse_file, get_temp_file_path, persist_temp_file
-from seqr.views.utils.permissions_utils import get_internal_projects
 from seqr.views.utils.json_utils import _to_snake_case, _to_camel_case
 from reference_data.models import GeneInfo
 from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL
@@ -69,7 +68,7 @@ def _find_or_create_samples(
     samples_guids = [sample['guid'] for sample in existing_samples.values()]
     individual_ids = {sample['individual_id'] for sample in existing_samples.values()}
     if len(remaining_sample_keys) > 0:
-        remaining_individuals_dict = _get_individuals_by_key(projects, matched_individual_ids)
+        remaining_individuals_dict = _get_individuals_by_key(projects, matched_individual_ids=matched_individual_ids)
 
         # find Individual records with exactly-matching individual_ids
         sample_id_to_individual_record = {}
@@ -128,6 +127,7 @@ def _create_rna_samples(sample_data, sample_guid_keys_to_load, user, **kwargs):
 
 
 def _get_rna_sample_data_by_key(values=None, **kwargs):
+    #  TODO use project_id
     key_fields = ['individual__individual_id', 'individual__family__project__name', 'tissue_type']
     return {
         tuple(s.pop(k) for k in key_fields): s
@@ -135,10 +135,12 @@ def _get_rna_sample_data_by_key(values=None, **kwargs):
     }
 
 
-def _get_individuals_by_key(projects, matched_individual_ids=None):
+def _get_individuals_by_key(projects, matched_individual_ids=None, allowed_individual_ids=None):
     individuals = Individual.objects.filter(family__project__in=projects)
     if matched_individual_ids:
         individuals = individuals.exclude(id__in=matched_individual_ids)
+    if allowed_individual_ids:
+        individuals = individuals.filter(id__in=allowed_individual_ids)
     return {
         (i['individual_id'], i.pop('family__project__name')): i
         for i in individuals.values('id', 'individual_id', 'family__project__name')
@@ -240,7 +242,6 @@ PROJECT_COL = 'project'
 TISSUE_COL = 'tissue'
 SAMPLE_ID_COL = 'sample_id'
 SAMPLE_ID_HEADER_COL = 'sampleID'
-INDIV_ID_COL = 'individual_id'
 GENE_ID_COL = 'gene_id'
 GENE_ID_HEADER_COL = 'geneID'
 RNA_OUTLIER_COLUMNS = {GENE_ID_COL: GENE_ID_HEADER_COL, 'p_value': 'pValue', 'p_adjust': 'padjust', 'z_score': 'zScore',
@@ -339,12 +340,8 @@ def _validate_rna_header(header, column_map):
 
 def _load_rna_seq_file(
         file_path, data_source, user, data_type, model_cls, potential_samples, sample_files, file_dir, individual_data_by_key,
-        column_map, mapping_file=None, allow_missing_gene=False, ignore_extra_samples=False,
+        column_map, allow_missing_gene=False, ignore_extra_samples=False,
 ):
-    sample_id_to_individual_id_mapping = {}
-    if mapping_file:
-        sample_id_to_individual_id_mapping = load_mapping_file_content(mapping_file)
-
     f = file_iter(file_path, user=user)
     parsed_f = parse_file(file_path.replace('.gz', ''), f, iter_file=True)
     header = next(parsed_f)
@@ -361,7 +358,7 @@ def _load_rna_seq_file(
     for line in tqdm(parsed_f, unit=' rows'):
         _parse_rna_row(
             dict(zip(header, line)), column_map, required_column_map, missing_required_fields,
-            sample_id_to_individual_id_mapping, potential_samples, loaded_samples, gene_ids, sample_guid_keys_to_load,
+            potential_samples, loaded_samples, gene_ids, sample_guid_keys_to_load,
             samples_to_create, unmatched_samples, individual_data_by_key, sample_files, file_dir, ignore_extra_samples,
         )
 
@@ -380,7 +377,7 @@ def _load_rna_seq_file(
     return warnings, len(loaded_samples) + len(unmatched_samples), sample_guid_keys_to_load, prev_loaded_individual_ids
 
 
-def _parse_rna_row(row, column_map, required_column_map, missing_required_fields, sample_id_to_individual_id_mapping,
+def _parse_rna_row(row, column_map, required_column_map, missing_required_fields,
                    potential_samples, loaded_samples, gene_ids, sample_guid_keys_to_load, samples_to_create,
                    unmatched_samples, individual_data_by_key, sample_files, file_dir, ignore_extra_samples):
     row_dict = {mapped_key: row[col] for mapped_key, col in column_map.items()}
@@ -393,12 +390,9 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
     if missing_cols:
         return
 
-    if row.get(INDIV_ID_COL) and sample_id not in sample_id_to_individual_id_mapping:
-        sample_id_to_individual_id_mapping[sample_id] = row[INDIV_ID_COL]
-
     tissue_type = TISSUE_TYPE_MAP[row[TISSUE_COL]]
     project = row_dict.pop(PROJECT_COL, None) or row[PROJECT_COL]
-    sample_key = ((sample_id_to_individual_id_mapping or {}).get(sample_id, sample_id), project, tissue_type)
+    sample_key = (sample_id, project, tissue_type)
 
     potential_sample = potential_samples.get(sample_key)
     if (potential_sample or {}).get('active'):
@@ -497,19 +491,25 @@ def _match_new_sample(sample_key, samples_to_create, unmatched_samples, individu
         unmatched_samples.add(sample_key)
 
 
-def load_rna_seq(data_type, file_path, user, **kwargs):
+def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
     data_type = config['data_type']
     model_cls = config['model_class']
-    projects = get_internal_projects()
     data_source = file_path.split('/')[-1].split('_-_')[-1]
 
+    projects = set()
+    for sample_id, (project, _) in sample_metadata_mapping.items():
+        projects.add(project)
+    
+    individual_ids = list(sample_metadata_mapping.keys())
     potential_samples = _get_rna_sample_data_by_key(
-        individual__family__project__in=projects, data_type=data_type, data_source=data_source, values={
+        individual__family__project__in=projects, individual__individual_id__in=individual_ids,
+        data_type=data_type, data_source=data_source, values={
             'active': F('is_active'),
         },
     )
-    individual_data_by_key = _get_individuals_by_key(projects)
+    individual_data_by_key = _get_individuals_by_key(projects, allowed_individual_ids=individual_ids)
+    #  TODO use sample_metadata_mapping for tissue
 
     sample_files = {}
     file_name_prefix = f'rna_sample_data__{data_type}__{datetime.now().isoformat()}'

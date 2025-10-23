@@ -66,15 +66,13 @@ def update_rna_seq(request):
     data_type = request_json['dataType']
     file_path = request_json['file']
 
-    mapping_file = None
-    uploaded_mapping_file_id = request_json.get('mappingFile', {}).get('uploadedFileId')
-    if uploaded_mapping_file_id:
-        mapping_file = load_uploaded_file(uploaded_mapping_file_id)
+    sample_metadata_mapping = {}  # TODO from airtable, confirm no dupilicate sample projects or tissue types
 
     try:
         sample_guids_to_keys, file_name_prefix, info, warnings = load_rna_seq(
-            data_type, file_path,
-            user=request.user, mapping_file=mapping_file, ignore_extra_samples=request_json.get('ignoreExtraSamples'))
+            data_type, file_path, request.user, sample_metadata_mapping=sample_metadata_mapping,
+            ignore_extra_samples=request_json.get('ignoreExtraSamples'),
+        )
     except FileNotFoundError:
         return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
     except ValueError as e:
