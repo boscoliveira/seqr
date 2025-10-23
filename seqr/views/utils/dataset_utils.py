@@ -321,6 +321,7 @@ RNA_DATA_TYPE_CONFIGS = {
 }
 
 
+#  TODO
 def load_rna_seq(data_type, *args, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
     return _load_rna_seq(config['model_class'], config['data_type'], *args, config['columns'], **config['additional_kwargs'], **kwargs)
@@ -526,6 +527,7 @@ def _load_rna_seq(model_cls, data_type, file_path, save_data, *args, user=None, 
     return sample_guid_keys_to_load, info, warnings
 
 
+#  TODO
 def post_process_rna_data(sample_guid, data, get_unique_key=None, format_fields=None):
     mismatches = set()
     invalid_format_fields = defaultdict(set)
