@@ -39,6 +39,7 @@ from seqr.views.apis.individual_api import \
     edit_individuals_handler, \
     delete_individuals_handler, \
     import_gregor_metadata, \
+    load_rna_seq_sample_data, \
     receive_individuals_table_handler, \
     save_individuals_table_handler, \
     receive_individuals_metadata_handler, \
@@ -124,7 +125,7 @@ from seqr.views.apis.users_api import \
     forgot_password
 
 from seqr.views.apis.data_manager_api import elasticsearch_status, delete_index, \
-    update_rna_seq, load_rna_seq_sample_data, proxy_to_kibana, load_phenotype_prioritization_data, \
+    update_rna_seq, proxy_to_kibana, load_phenotype_prioritization_data, \
     validate_callset, get_loaded_projects, load_data, loading_vcfs, proxy_to_luigi, \
     trigger_delete_project, trigger_delete_family
 from seqr.views.apis.report_api import \
