@@ -190,6 +190,8 @@ api_endpoints = {
     'individual/(?P<individual_guid>[\w.|-]+)/update_case_review_status': update_case_review_status,
     'individual/(?P<individual_guid>[\w.|-]+)/rna_seq_data': get_individual_rna_seq_data,
 
+    'load_rna_seq_sample/(?P<sample_guid>[^/]+)': load_rna_seq_sample_data,
+
     'family/(?P<family_guid>[\w.|-]+)/details': family_page_data,
     'family/(?P<family_guid>[\w.|-]+)/variant_tag_summary': family_variant_tag_summary,
     'family/(?P<family_guid>[\w.|-]+)/update_case_review_notes': save_internal_case_review_notes,
@@ -335,7 +337,6 @@ api_endpoints = {
     'data_management/delete_index': delete_index,
     'data_management/get_all_users': get_all_users,
     'data_management/update_rna_seq': update_rna_seq,
-    'data_management/load_rna_seq_sample/(?P<sample_guid>[^/]+)': load_rna_seq_sample_data,
     'data_management/load_phenotype_prioritization_data': load_phenotype_prioritization_data,
     'data_management/loading_vcfs': loading_vcfs,
     'data_management/validate_callset': validate_callset,
