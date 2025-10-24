@@ -466,10 +466,10 @@ RNA_DATA_TYPE_PARAMS = {
         'model_cls': RnaSeqOutlier,
         'data_type': 'E',
         'message_data_type': 'Expression Outlier',
-        'header': ['sampleID', 'project', 'geneID', 'tissue', 'detail', 'pValue', 'padjust', 'zScore'],
+        'header': ['sampleID', 'geneID', 'detail', 'pValue', 'padjust', 'zScore'],
         'optional_headers': ['detail'],
-        'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.001, -3.1],
-        'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
+        'loaded_data_row': ['NA19675_D2', 'ENSG00000240361', 'detail1', 0.01, 0.001, -3.1],
+        'no_existing_data': ['NA19678', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
         'duplicated_indiv_id_data': [
             ['NA20870', 'Test Reprocessed Project', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
             ['NA20870', '1kg project nåme with uniçøde', 'ENSG00000240361', 'fibroblasts', 'detail2', 0.01, 0.13, -3.1],
@@ -500,26 +500,22 @@ RNA_DATA_TYPE_PARAMS = {
         'model_cls': RnaSeqTpm,
         'data_type': 'T',
         'message_data_type': 'Expression',
-        'header': ['sample_id', 'project', 'gene_id', 'individual_id', 'tissue', 'TPM'],
+        'header': ['sample_id', 'gene_id', 'individual_id', 'TPM'],
         'optional_headers': ['individual_id'],
-        'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000135953', 'NA19675_D3', 'muscle', 1.34],
-        'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19678', 'muscle', 0.064],
-        'duplicated_indiv_id_data': [
-            ['NA20870', 'Test Reprocessed Project', 'ENSG00000240361', 'NA20870', 'muscle', 7.8],
-            ['NA20870', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA20870', 'fibroblasts', 0.0],
-        ],
+        'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 'NA19675_D3', 1.34],
+        'no_existing_data': ['NA19678', 'ENSG00000233750', 'NA19678', 0.064],
         'write_data': {'{"gene_id": "ENSG00000240361", "tpm": "7.8"}\n',
                        '{"gene_id": "ENSG00000233750", "tpm": "0.0"}\n'},
         'new_data': [
             # existing sample NA19675_D2
-            ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'NA19675_D2', 'muscle', 7.8],
-            ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19675_D2', 'muscle', 0.0],
+            ['NA19675_D2', 'ENSG00000240361', 'NA19675_D2', 7.8],
+            ['NA19675_D2', 'ENSG00000233750', 'NA19675_D2', 0.0],
             # no matched individual NA19675_D3
-            ['NA19675_D3', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19675_D3', 'fibroblasts', 0.064],
+            ['NA19675_D3', 'ENSG00000233750', 'NA19675_D3',  0.064],
             # a different project sample NA20888
-            ['NA20888', 'Test Reprocessed Project', 'ENSG00000240361', 'NA20888', 'muscle', 0.112],
+            ['NA20888', 'ENSG00000240361', 'NA20888', 0.112],
             # a project mismatched sample NA20878
-            ['NA20878', 'Test Reprocessed Project', 'ENSG00000233750', 'NA20878', 'fibroblasts', 0.064],
+            ['NA20878', 'ENSG00000233750', 'NA20878', 0.064],
         ],
         'skipped_samples': 'NA19675_D3 (1kg project nåme with uniçøde), NA20878 (Test Reprocessed Project)',
         'sample_tissue_type': 'M',
@@ -796,11 +792,10 @@ class DataManagerAPITest(AirtableTest):
     @mock.patch('seqr.views.utils.dataset_utils.datetime')
     @mock.patch('seqr.views.utils.dataset_utils.os.mkdir')
     @mock.patch('seqr.views.utils.dataset_utils.os.rename')
-    @mock.patch('seqr.views.apis.data_manager_api.load_uploaded_file')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
     @mock.patch('seqr.views.utils.dataset_utils.gzip.open')
     @responses.activate
-    def _test_update_rna_seq(self, data_type, mock_open, mock_subprocess, mock_load_uploaded_file,
+    def _test_update_rna_seq(self, data_type, mock_open, mock_subprocess,
                             mock_rename, mock_mkdir, mock_datetime, mock_send_slack, mock_send_email):
         url = reverse(update_rna_seq)
         self.check_pm_login(url)
@@ -816,8 +811,6 @@ class DataManagerAPITest(AirtableTest):
         # Test errors
         body = {'dataType': data_type, 'file': 'gs://rna_data/muscle_samples.tsv'}
         mock_datetime.now.return_value = datetime(2020, 4, 15)
-        mock_load_uploaded_file.return_value = [['a']]
-        mock_load_uploaded_file.return_value = [['a']]
         mock_does_file_exist = mock.MagicMock()
         mock_does_file_exist.wait.return_value = 1
         mock_subprocess.side_effect = [mock_does_file_exist]
@@ -849,14 +842,6 @@ class DataManagerAPITest(AirtableTest):
                      f'{", ".join(sorted([col for col in header if col not in params["optional_headers"]]))}',
         })
 
-        mapping_body = {'mappingFile': {'uploadedFileId': 'map.tsv'}}
-        body.update(mapping_body)
-        mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter]
-        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-        self.assertEqual(response.status_code, 400)
-        self.assertDictEqual(response.json(), {'error': 'Must contain 2 columns: a'})
-
-        mock_load_uploaded_file.return_value = [['NA19675_D2', 'NA19675_1']]
         missing_sample_row = ['NA19675_D3'] + loaded_data_row[1:]
         _set_file_iter_stdout([header, loaded_data_row, missing_sample_row])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))

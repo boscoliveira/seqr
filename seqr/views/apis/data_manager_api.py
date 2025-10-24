@@ -22,7 +22,6 @@ from seqr.utils.vcf_utils import validate_vcf_and_get_samples, get_vcf_list
 
 from seqr.views.utils.airtable_utils import AirtableSession, LOADABLE_PDO_STATUSES, AVAILABLE_PDO_STATUS
 from seqr.views.utils.dataset_utils import load_rna_seq, load_phenotype_prioritization_data_file, convert_django_meta_to_http_headers
-from seqr.views.utils.file_utils import load_uploaded_file
 from seqr.views.utils.json_utils import create_json_response
 from seqr.views.utils.pedigree_info_utils import get_validated_related_individuals, JsonConstants
 from seqr.views.utils.permissions_utils import data_manager_required, pm_or_data_manager_required, get_internal_projects
