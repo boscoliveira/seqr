@@ -72,19 +72,10 @@ def update_rna_seq(request):
     airtable_samples = _get_dataset_type_samples_for_matched_pdos(
         ['RNA ready to load'], request.user, RNA, None, sample_fields=[TISSUE_FIELD], skip_invalid_pdos=True,
     )
-    multi_tissue_samples = set()
-    multi_project_samples = set()
-    sample_metadata_mapping = {}
-    for sample in airtable_samples:
-        sample_id = sample['sample_id']
-        if len(sample[TISSUE_FIELD]) > 1:
-            multi_tissue_samples.add(sample_id)
-        if len(sample['pdos']) > 1:
-            multi_project_samples.add(sample_id)
-        elif len(sample[TISSUE_FIELD]) == 1:
-            sample_metadata_mapping[sample_id] = {
-                'tissue': sample[TISSUE_FIELD][0], 'project_guid': sample['pdos'][0]['project_guid'],
-            }
+    sample_metadata_mapping = {
+        sample['sample_id']: {'tissue': sample[TISSUE_FIELD][0], 'project_guid': sample['pdos'][0]['project_guid']}
+        for sample in airtable_samples if len(sample[TISSUE_FIELD]) == 1 and len(sample['pdos']) == 1
+    }
 
     try:
         sample_guids_to_keys, file_name_prefix, info, warnings = load_rna_seq(
