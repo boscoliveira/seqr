@@ -799,6 +799,7 @@ class DataManagerAPITest(AirtableTest):
     @mock.patch('seqr.views.apis.data_manager_api.load_uploaded_file')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
     @mock.patch('seqr.views.utils.dataset_utils.gzip.open')
+    @responses.activate
     def _test_update_rna_seq(self, data_type, mock_open, mock_subprocess, mock_load_uploaded_file,
                             mock_rename, mock_mkdir, mock_datetime, mock_send_slack, mock_send_email):
         url = reverse(update_rna_seq)
@@ -808,6 +809,9 @@ class DataManagerAPITest(AirtableTest):
         model_cls = params['model_cls']
         header = params['header']
         loaded_data_row = params['loaded_data_row']
+        responses.add(
+            responses.GET, 'https://api.airtable.com/v0/app3Y97xtbbaOopVR/Samples', json={'records': []},
+        )
 
         # Test errors
         body = {'dataType': data_type, 'file': 'gs://rna_data/muscle_samples.tsv'}
@@ -817,8 +821,10 @@ class DataManagerAPITest(AirtableTest):
         mock_does_file_exist = mock.MagicMock()
         mock_does_file_exist.wait.return_value = 1
         mock_subprocess.side_effect = [mock_does_file_exist]
-        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-        self.assertEqual(response.status_code, 400)
+        self.reset_logs()
+        response = self._assert_expected_pm_access(
+            lambda: self.client.post(url, content_type='application/json', data=json.dumps(body)), status_code=400,
+        )
         self.assertDictEqual(response.json(), {'error': 'File not found: gs://rna_data/muscle_samples.tsv'})
 
         mock_does_file_exist.wait.return_value = 0
@@ -1311,9 +1317,9 @@ class DataManagerAPITest(AirtableTest):
 
         self._assert_expected_airtable_errors(url)
 
-    def _assert_expected_pm_access(self, get_response):
+    def _assert_expected_pm_access(self, get_response, status_code=200):
         response = get_response()
-        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.status_code, status_code)
         self.login_data_manager_user()
         return response
 
@@ -1788,14 +1794,14 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
                 fields=['CollaboratorSampleID', 'SeqrCollaboratorSampleID', 'PDOStatus', 'SeqrProject'],
             )
 
-    def _assert_expected_pm_access(self, get_response):
+    def _assert_expected_pm_access(self, get_response, **kwargs):
         response = get_response()
         self.assertEqual(response.status_code, 403)
         self.assert_json_logs(self.pm_user, [
             ('PermissionDenied: Error: To access RDG airtable user must login with Broad email.', {'severity': 'WARNING'})
         ])
         self.login_data_manager_user()
-        return super()._assert_expected_pm_access(get_response)
+        return super()._assert_expected_pm_access(get_response, **kwargs)
 
     def _assert_expected_load_data_requests(self, *args, dataset_type='SNV_INDEL', skip_project=False, **kwargs):
         num_calls = 1
