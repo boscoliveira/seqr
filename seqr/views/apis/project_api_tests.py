@@ -769,7 +769,7 @@ class LocalProjectAPITest(AuthenticationTestCase, ProjectAPITest):
     PROJECT_COLLABORATOR_GROUPS = [{'name': 'analysts', 'hasViewPermissions': True, 'hasEditPermissions': True}]
     REQUIRED_FIELDS = ['name', 'genomeVersion']
     HAS_EMPTY_PROJECT = True
-    TEMP_DIR = '/tmp/rna_loading'
+    TEMP_DIR = '/test/rna_loading'
 
     def _check_created_project_groups(self, project):
         super()._check_created_project_groups(project)
