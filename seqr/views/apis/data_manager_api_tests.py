@@ -978,7 +978,8 @@ class DataManagerAPITest(AirtableTest):
         expected_subprocess_calls = [
             f'gsutil ls {RNA_FILE_ID}',
             f'gsutil cat {RNA_FILE_ID} | gunzip -c -q - ',
-        ] + self._additional_expected_loading_subprocess_calls(file_path)
+            f'gsutil mv tmp/temp_uploads/{file_path} gs://seqr-scratch-temp/{file_path}',
+        ]
         self.assertEqual(mock_subprocess.call_count, len(expected_subprocess_calls))
         mock_subprocess.assert_has_calls([
             mock.call(command, stdout=-1, stderr=-2, shell=True) for command in expected_subprocess_calls  # nosec
@@ -1034,10 +1035,6 @@ class DataManagerAPITest(AirtableTest):
             {''.join([call.args[0] for call in mock_file.write.call_args_list]) for mock_file in mock_files.values()},
             params['write_data'],
         )
-
-    @staticmethod
-    def _additional_expected_loading_subprocess_calls(file_path):
-        return []
 
     def _get_expected_read_file_subprocess_calls(self, file_name, sample_guid):
         return []
@@ -1731,6 +1728,14 @@ class LocalDataManagerAPITest(AuthenticationTestCase, DataManagerAPITest):
     def _test_validate_dataset_type(self, url):
         pass
 
+    def _test_update_rna_seq(self, data_type, *args, **kwargs):
+        url = reverse(update_rna_seq)
+        self.check_pm_login(url)
+        body = {'dataType': data_type, 'file': 'gs://rna_data/muscle_samples.tsv'}
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 500)
+        self.assertDictEqual(response.json(), {'error': 'Airtable is not configured'})
+
 
 @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
 class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
@@ -1822,10 +1827,6 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
             (f'==> gsutil ls gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz', None),
             (f'==> {gsutil_cat}', None),
         ]
-
-    @staticmethod
-    def _additional_expected_loading_subprocess_calls(file_path):
-        return [f'gsutil mv tmp/temp_uploads/{file_path} gs://seqr-scratch-temp/{file_path}']
 
     def _assert_expected_es_status(self, response):
         self.assertEqual(response.status_code, 500)
