@@ -9,13 +9,16 @@ from django.contrib.auth.models import User
 from django.db.models import prefetch_related_objects
 
 from reference_data.models import HumanPhenotypeOntology
-from seqr.models import Individual, Family, CAN_VIEW
+from seqr.models import Individual, Family, RnaSample, CAN_VIEW
 from seqr.utils.file_utils import file_iter
 from seqr.utils.gene_utils import get_genes, get_gene_ids_for_gene_symbols
+from seqr.utils.logging_utils import SeqrLogger
+
 from seqr.views.utils.anvil_metadata_utils import PARTICIPANT_TABLE, PHENOTYPE_TABLE, EXPERIMENT_TABLE, \
     EXPERIMENT_LOOKUP_TABLE, FINDINGS_TABLE, FINDING_METADATA_COLUMNS, TRANSCRIPT_FIELDS, GENE_COLUMN, parse_population
-from seqr.views.utils.file_utils import save_uploaded_file, load_uploaded_file, parse_file
-from seqr.views.utils.json_to_orm_utils import update_individual_from_json
+from seqr.views.utils.dataset_utils import post_process_rna_data, RNA_DATA_TYPE_CONFIGS
+from seqr.views.utils.file_utils import save_uploaded_file, load_uploaded_file, parse_file, get_temp_file_path
+from seqr.views.utils.json_to_orm_utils import update_individual_from_json, update_model_from_json
 from seqr.views.utils.json_utils import create_json_response, _to_snake_case, _to_camel_case
 from seqr.views.utils.orm_to_json_utils import _get_json_for_model, _get_json_for_individuals, add_individual_hpo_details, \
     _get_json_for_families, get_json_for_rna_seq_outliers, get_project_collaborators_by_username, INDIVIDUAL_DISPLAY_NAME_EXPR, \
@@ -29,6 +32,7 @@ from seqr.views.utils.project_context_utils import add_project_tag_type_counts
 from seqr.views.utils.individual_utils import delete_individuals, add_or_update_individuals_and_families
 from seqr.views.utils.variant_utils import bulk_create_tagged_variants
 
+logger = SeqrLogger(__name__)
 
 @login_and_policies_required
 def update_individual_handler(request, individual_guid):
@@ -944,3 +948,30 @@ def get_hpo_terms(request, hpo_parent_id):
             for hpo in HumanPhenotypeOntology.objects.filter(parent_id=hpo_parent_id)
         }
     })
+
+
+@pm_or_data_manager_required
+def load_rna_seq_sample_data(request, sample_guid):
+    sample = RnaSample.objects.get(guid=sample_guid)
+    logger.info(f'Loading outlier data for {sample.individual.individual_id}', request.user)
+
+    request_json = json.loads(request.body)
+    file_name = request_json['fileName']
+    data_type = request_json['dataType']
+    config = RNA_DATA_TYPE_CONFIGS[data_type]
+
+    file_path = get_temp_file_path(f'{file_name}/{sample_guid}.json.gz')
+    try:
+        data_rows = [json.loads(line) for line in file_iter(file_path, user=request.user)]
+        data_rows, error = post_process_rna_data(sample_guid, data_rows, **config.get('post_process_kwargs', {}))
+    except FileNotFoundError:
+        logger.error(f'No saved temp data found for {sample_guid} with file prefix {file_name}', request.user)
+        error = 'Data for this sample was not properly parsed. Please re-upload the data'
+    if error:
+        return create_json_response({'error': error}, status=400)
+
+    model_cls = config['model_class']
+    model_cls.bulk_create(request.user, [model_cls(sample=sample, **data) for data in data_rows], batch_size=1000)
+    update_model_from_json(sample, {'is_active': True}, user=request.user)
+
+    return create_json_response({'success': True})
