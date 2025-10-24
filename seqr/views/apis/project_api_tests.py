@@ -7,12 +7,13 @@ from django.db import connections
 from django.urls.base import reverse
 import responses
 
-from seqr.models import Project
+from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier
 from seqr.views.apis.project_api import create_project_handler, delete_project_handler, update_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
     project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, load_rna_seq_sample_data
-from seqr.views.apis.data_manager_api_tests import RNA_DATA_TYPE_PARAMS
+from seqr.views.apis.data_manager_api_tests import RNA_OUTLIER_SAMPLE_DATA, RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, \
+    RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RNA_SPLICE_SAMPLE_GUID
 from seqr.views.utils.terra_api_utils import TerraAPIException, TerraRefreshTokenFailedException
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, \
     PROJECT_FIELDS, LOCUS_LIST_FIELDS, PA_LOCUS_LIST_FIELDS, NO_INTERNAL_CASE_REVIEW_INDIVIDUAL_FIELDS, \
@@ -660,74 +661,104 @@ class ProjectAPITest(object):
         self.assertDictEqual(response.json(), {'isSubscriber': True})
         self.assertTrue(self.collaborator_user.groups.filter(name='subscribers').exists())
 
+    def test_load_rna_outlier_sample_data(self, *args, **kwargs):
+        models = self._test_load_rna_seq_sample_data(
+            'outlier', RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_OUTLIER_SAMPLE_DATA, RnaSeqOutlier, *args, **kwargs,
+        )
+
+        expected_models = [
+            ('ENSG00000240361', 0.13, 0.01, -3.1), ('ENSG00000233750', 0.0000057, 0.064, 7.8),
+        ]
+        self.assertEqual(models.count(), len(expected_models))
+        self.assertListEqual(list(models.values_list('gene_id', 'p_adjust', 'p_value', 'z_score')), expected_models)
+
+    def test_load_rna_tpm_sample_data(self, *args, **kwargs):
+        models = self._test_load_rna_seq_sample_data(
+            'tpm', RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, RnaSeqTpm, *args, **kwargs, mismatch_field='tpm',
+        )
+
+        expected_models = [('ENSG00000240361', 7.8), ('ENSG00000233750', 0.0)]
+        self.assertEqual(models.count(), len(expected_models))
+        self.assertListEqual(list(models.values_list('gene_id', 'tpm')), expected_models)
+
+    def test_load_rna_splice_outlier_sample_data(self, *args, **kwargs):
+        models = self._test_load_rna_seq_sample_data(
+            'splice_outlier', RNA_SPLICE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RnaSeqSpliceOutlier, *args, **kwargs,
+            row_id='ENSG00000233750-2-167254166-167258349-*-psi3',
+        )
+
+        expected_models = [
+            ('ENSG00000233750', '2', 167254166, 167258349, '*', 'psi3', 1.56e-25, -4.9, -0.46, 166, 1, 20),
+            ('ENSG00000240361', '2', 167254166, 167258349, '*', 'psi3', 1.56e-25, -4.9, -0.46, 166, 1, 20),
+            ('ENSG00000240361', '7', 132885746, 132975168, '*', 'psi5', 1.08e-56, -6.53, -0.85, 231, 1, 20)
+        ]
+        self.assertEqual(models.count(), len(expected_models))
+        self.assertListEqual(expected_models, list(models.values_list(
+            'gene_id', 'chrom', 'start', 'end', 'strand', 'type', 'p_value', 'p_adjust', 'delta_intron_jaccard_index',
+            'counts', 'rare_disease_samples_with_this_junction', 'rare_disease_samples_total',
+        )))
+
     @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
     @mock.patch('seqr.utils.file_utils.gzip.open')
     @mock.patch('seqr.utils.file_utils.os.path.isfile')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
-    def test_load_rna_seq_sample_data(self, mock_subprocess, mock_does_file_exist, mock_open):
-        url = reverse(load_rna_seq_sample_data, args=['RS000162_T_na19675_d2'])
+    def _test_load_rna_seq_sample_data(self, data_type, sample_guid, parsed_file_data, model_cls, mock_subprocess, mock_does_file_exist, mock_open, mismatch_field='p_value', row_id=None):
+        url = reverse(load_rna_seq_sample_data, args=[sample_guid])
         self.check_pm_login(url)
 
-        for data_type, params in RNA_DATA_TYPE_PARAMS.items():
-            with self.subTest(data_type):
-                sample_guid = params['sample_guid']
-                url = reverse(load_rna_seq_sample_data, args=[sample_guid])
-                model_cls = params['model_cls']
-                model_cls.objects.all().delete()
-                self.reset_logs()
-                parsed_file_lines = params['parsed_file_data'][sample_guid].strip().split('\n')
+        model_cls.objects.all().delete()
+        self.reset_logs()
+        parsed_file_lines = parsed_file_data[sample_guid].strip().split('\n')
 
-                file_name = f'{self.TEMP_DIR}/rna_sample_data__{data_type}__2020-04-15T00:00:00'
-                not_found_logs = self._set_file_not_found(
-                    f'{file_name}/{sample_guid}.json.gz', mock_subprocess, mock_does_file_exist, mock_open,
-                )
+        file_name = f'{self.TEMP_DIR}/rna_sample_data__{data_type}__2020-04-15T00:00:00'
+        not_found_logs = self._set_file_not_found(
+            f'{file_name}/{sample_guid}.json.gz', mock_subprocess, mock_does_file_exist, mock_open,
+        )
 
-                body = {'fileName': file_name, 'dataType': data_type}
-                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-                self.assertEqual(response.status_code, 400)
-                self.assertDictEqual(response.json(), {'error': 'Data for this sample was not properly parsed. Please re-upload the data'})
-                self.assert_json_logs(self.pm_user, [
-                    ('Loading outlier data for NA19675_1', None),
-                    *not_found_logs,
-                    (f'No saved temp data found for {sample_guid} with file prefix {file_name}', {
-                        'severity': 'ERROR', '@type': 'type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent',
-                    }),
-                ])
+        body = {'fileName': file_name, 'dataType': data_type}
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 400)
+        self.assertDictEqual(response.json(), {'error': 'Data for this sample was not properly parsed. Please re-upload the data'})
+        self.assert_json_logs(self.pm_user, [
+            ('Loading outlier data for NA19675_1', None),
+            *not_found_logs,
+            (f'No saved temp data found for {sample_guid} with file prefix {file_name}', {
+                'severity': 'ERROR', '@type': 'type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent',
+            }),
+        ])
 
-                file_lines = [row.encode('utf-8') for row in parsed_file_lines]
-                self._set_file_iter(file_lines, mock_subprocess, mock_does_file_exist, mock_open)
+        file_lines = [row.encode('utf-8') for row in parsed_file_lines]
+        self._set_file_iter(file_lines, mock_subprocess, mock_does_file_exist, mock_open)
 
-                self.reset_logs()
-                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-                self.assertEqual(response.status_code, 200)
-                self.assertDictEqual(response.json(), {'success': True})
+        self.reset_logs()
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(response.json(), {'success': True})
 
-                models = model_cls.objects.all()
-                num_models = len(params['expected_models_json'])
-                self.assertEqual(models.count(), num_models)
-                self.assertSetEqual({model.sample.guid for model in models}, {sample_guid})
-                self.assertTrue(all(model.sample.is_active for model in models))
+        models = model_cls.objects.all()
+        self.assertSetEqual({model.sample.guid for model in models}, {sample_guid})
+        self.assertTrue(all(model.sample.is_active for model in models))
 
-                subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid)
+        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid)
 
-                self.assert_json_logs(self.pm_user, [
-                    ('Loading outlier data for NA19675_1', None),
-                    *subprocess_logs,
-                    (f'create {model_cls.__name__}s', {'dbUpdate': {
-                        'dbEntity': model_cls.__name__, 'numEntities': num_models, 'parentEntityIds': [sample_guid],
-                        'updateType': 'bulk_create',
-                    }}),
-                ])
+        self.assert_json_logs(self.pm_user, [
+            ('Loading outlier data for NA19675_1', None),
+            *subprocess_logs,
+            (f'create {model_cls.__name__}s', {'dbUpdate': {
+                'dbEntity': model_cls.__name__, 'numEntities': models.count(), 'parentEntityIds': [sample_guid],
+                'updateType': 'bulk_create',
+            }}),
+        ])
 
-                self.assertListEqual(list(params['get_models_json'](models)), params['expected_models_json'])
+        mismatch_row = {**json.loads(parsed_file_lines[0]), mismatch_field: '0.05'}
+        self._set_file_iter(file_lines + [json.dumps(mismatch_row).encode('utf-8')], mock_subprocess, mock_does_file_exist, mock_open)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 400)
+        self.assertDictEqual(response.json(), {
+            'error': f'Error in {sample_guid.split("_", 1)[-1].upper()}: mismatched entries for {row_id or mismatch_row["gene_id"]}'
+        })
 
-                mismatch_row = {**json.loads(parsed_file_lines[0]), params.get('mismatch_field', 'p_value'): '0.05'}
-                self._set_file_iter(file_lines + [json.dumps(mismatch_row).encode('utf-8')], mock_subprocess, mock_does_file_exist, mock_open)
-                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-                self.assertEqual(response.status_code, 400)
-                self.assertDictEqual(response.json(), {
-                    'error': f'Error in {sample_guid.split("_", 1)[-1].upper()}: mismatched entries for {params.get("row_id", mismatch_row["gene_id"])}'
-                })
+        return models
 
     @staticmethod
     def _set_file_not_found(file_name, mock_subprocess, mock_does_file_exist, mock_open):
