@@ -7,12 +7,13 @@ from django.db import connections
 from django.urls.base import reverse
 import responses
 
-from seqr.models import Project
+from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier
 from seqr.views.apis.project_api import create_project_handler, delete_project_handler, update_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
     project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, load_rna_seq_sample_data
-from seqr.views.apis.data_manager_api_tests import RNA_DATA_TYPE_PARAMS
+from seqr.views.apis.data_manager_api_tests import RNA_OUTLIER_SAMPLE_DATA, RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, \
+    RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RNA_SPLICE_SAMPLE_GUID
 from seqr.views.utils.terra_api_utils import TerraAPIException, TerraRefreshTokenFailedException
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, \
     PROJECT_FIELDS, LOCUS_LIST_FIELDS, PA_LOCUS_LIST_FIELDS, NO_INTERNAL_CASE_REVIEW_INDIVIDUAL_FIELDS, \
@@ -41,6 +42,41 @@ MOCK_RECORDS = {'records': [
     {'id': 'recH4SEO1CeoIlOiE', 'fields': {'Status': 'Loading'}},
     {'id': 'recSgwrXNkmlIB5eM', 'fields': {'Status': 'Available in Seqr'}},
 ]}
+
+RNA_DATA_TYPE_PARAMS = {
+    'outlier': {
+        'model_cls': RnaSeqOutlier,
+        'parsed_file_data': RNA_OUTLIER_SAMPLE_DATA,
+        'get_models_json': lambda models: list(models.values_list('gene_id', 'p_adjust', 'p_value', 'z_score')),
+        'expected_models_json': [
+            ('ENSG00000240361', 0.13, 0.01, -3.1), ('ENSG00000233750', 0.0000057, 0.064, 7.8),
+        ],
+        'sample_guid': RNA_OUTLIER_MUSCLE_SAMPLE_GUID,
+    },
+    'tpm': {
+        'model_cls': RnaSeqTpm,
+        'parsed_file_data': RNA_TPM_SAMPLE_DATA,
+        'get_models_json': lambda models: list(models.values_list('gene_id', 'tpm')),
+        'expected_models_json': [('ENSG00000240361', 7.8), ('ENSG00000233750', 0.0)],
+        'sample_guid': RNA_TPM_MUSCLE_SAMPLE_GUID,
+        'mismatch_field': 'tpm',
+    },
+    'splice_outlier': {
+        'model_cls': RnaSeqSpliceOutlier,
+        'parsed_file_data': RNA_SPLICE_SAMPLE_DATA,
+        'get_models_json': lambda models: list(
+            models.values_list('gene_id', 'chrom', 'start', 'end', 'strand', 'type', 'p_value', 'p_adjust',
+                               'delta_intron_jaccard_index',
+                               'counts', 'rare_disease_samples_with_this_junction', 'rare_disease_samples_total')),
+        'expected_models_json': [
+            ('ENSG00000233750', '2', 167254166, 167258349, '*', 'psi3', 1.56e-25, -4.9, -0.46, 166, 1, 20),
+            ('ENSG00000240361', '2', 167254166, 167258349, '*', 'psi3', 1.56e-25, -4.9, -0.46, 166, 1, 20),
+            ('ENSG00000240361', '7', 132885746, 132975168, '*', 'psi5', 1.08e-56, -6.53, -0.85, 231, 1, 20)
+        ],
+        'sample_guid': RNA_SPLICE_SAMPLE_GUID,
+        'row_id': 'ENSG00000233750-2-167254166-167258349-*-psi3',
+    },
+}
 
 
 class ProjectAPITest(object):
