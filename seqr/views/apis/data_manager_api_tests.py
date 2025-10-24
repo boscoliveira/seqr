@@ -1039,9 +1039,6 @@ class DataManagerAPITest(AirtableTest):
     def _additional_expected_loading_subprocess_calls(file_path):
         return []
 
-    def _get_expected_read_file_subprocess_calls(self, file_name, sample_guid):
-        return []
-
     def _assert_expected_file_open(self, mock_rename, mock_open, expected_file_names):
         file_rename = {call.args[1]: call.args[0] for call in mock_rename.call_args_list}
         self.assertSetEqual(set(expected_file_names), set(file_rename.keys()))
@@ -1750,14 +1747,6 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
         self.mock_file_iter.stdout += [row.encode('utf-8') for row in stdout]
         self.mock_subprocess.side_effect = [
             self.mock_does_file_exist, self.mock_does_file_exist,  self.mock_file_iter, self.mock_does_file_exist, self.mock_does_file_exist, self.mock_file_iter,
-        ]
-
-    def _get_expected_read_file_subprocess_calls(self, file_name, sample_guid):
-        gsutil_cat = f'gsutil cat gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz | gunzip -c -q - '
-        self.mock_subprocess.assert_called_with(gsutil_cat, stdout=-1, stderr=-2, shell=True)  # nosec
-        return [
-            (f'==> gsutil ls gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz', None),
-            (f'==> {gsutil_cat}', None),
         ]
 
     @staticmethod
