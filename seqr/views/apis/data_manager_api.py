@@ -59,6 +59,9 @@ def delete_index(request):
 
     return create_json_response({'indices': updated_indices})
 
+RNA = 'RNA'
+TISSUE_FIELD = 'TissueOfOrigin'
+
 @pm_or_data_manager_required
 def update_rna_seq(request):
     request_json = json.loads(request.body)
@@ -66,7 +69,22 @@ def update_rna_seq(request):
     data_type = request_json['dataType']
     file_path = request_json['file']
 
-    sample_metadata_mapping = {}  # TODO from airtable, confirm no dupilicate sample projects or tissue types
+    airtable_samples = _get_dataset_type_samples_for_matched_pdos(
+        ['RNA ready to load'], request.user, RNA, None, sample_fields=[TISSUE_FIELD], skip_invalid_pdos=True,
+    )
+    multi_tissue_samples = set()
+    multi_project_samples = set()
+    sample_metadata_mapping = {}
+    for sample in airtable_samples:
+        sample_id = sample['sample_id']
+        if len(sample[TISSUE_FIELD]) > 1:
+            multi_tissue_samples.add(sample_id)
+        if len(sample['pdos']) > 1:
+            multi_project_samples.add(sample_id)
+        elif len(sample[TISSUE_FIELD]) == 1:
+            sample_metadata_mapping[sample_id] = {
+                'tissue': sample[TISSUE_FIELD][0], 'project_guid': sample['pdos'][0]['project_guid'],
+            }
 
     try:
         sample_guids_to_keys, file_name_prefix, info, warnings = load_rna_seq(
@@ -266,10 +284,11 @@ AIRTABLE_CALLSET_FIELDS = {
     (Sample.DATASET_TYPE_MITO_CALLS, Sample.SAMPLE_TYPE_WGS): 'MITO_WGS_CallsetPath',
     (Sample.DATASET_TYPE_SV_CALLS, Sample.SAMPLE_TYPE_WES): 'gCNV_CallsetPath',
     (Sample.DATASET_TYPE_SV_CALLS, Sample.SAMPLE_TYPE_WGS): 'SV_CallsetPath',
+    (RNA, None): TISSUE_FIELD,
 }
 
 
-def _get_dataset_type_samples_for_matched_pdos(pdo_statuses, user, dataset_type, sample_type, **kwargs):
+def _get_dataset_type_samples_for_matched_pdos(pdo_statuses, user, dataset_type, sample_type=None, **kwargs):
     required_sample_fields = ['PassingCollaboratorSampleIDs']
     required_data_type_field = AIRTABLE_CALLSET_FIELDS.get((dataset_type, sample_type))
     if required_data_type_field:
