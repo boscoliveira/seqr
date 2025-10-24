@@ -39,7 +39,6 @@ from seqr.views.apis.individual_api import \
     edit_individuals_handler, \
     delete_individuals_handler, \
     import_gregor_metadata, \
-    load_rna_seq_sample_data, \
     receive_individuals_table_handler, \
     save_individuals_table_handler, \
     receive_individuals_metadata_handler, \
@@ -147,7 +146,7 @@ from seqr.views.apis.analysis_group_api import update_analysis_group_handler, de
 from seqr.views.apis.project_api import create_project_handler, update_project_handler, delete_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
-    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications
+    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, load_rna_seq_sample_data
 from seqr.views.apis.project_categories_api import update_project_categories_handler
 from seqr.views.apis.anvil_workspace_api import anvil_workspace_page, create_project_from_workspace, \
     grant_workspace_access, validate_anvil_vcf, add_workspace_data, get_anvil_vcf_list, get_anvil_igv_options

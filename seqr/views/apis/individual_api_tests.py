@@ -16,7 +16,7 @@ from seqr.models import Individual, Sample, SavedVariant, VariantTag
 from seqr.views.apis.individual_api import edit_individuals_handler, update_individual_handler, \
     delete_individuals_handler, receive_individuals_table_handler, save_individuals_table_handler, \
     receive_individuals_metadata_handler, save_individuals_metadata_table_handler, update_individual_hpo_terms, \
-    get_hpo_terms, get_individual_rna_seq_data, import_gregor_metadata, load_rna_seq_sample_data
+    get_hpo_terms, get_individual_rna_seq_data, import_gregor_metadata
 from seqr.views.apis.data_manager_api_tests import RNA_DATA_TYPE_PARAMS
 from seqr.views.apis.report_api_tests import PARTICIPANT_TABLE, PHENOTYPE_TABLE, EXPERIMENT_TABLE, EXPERIMENT_LOOKUP_TABLE, GENETIC_FINDINGS_TABLE
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, INDIVIDUAL_FIELDS, \
