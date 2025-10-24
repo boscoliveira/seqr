@@ -11,7 +11,8 @@ from seqr.models import Project
 from seqr.views.apis.project_api import create_project_handler, delete_project_handler, update_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
-    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications
+    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, load_rna_seq_sample_data
+from seqr.views.apis.data_manager_api_tests import RNA_DATA_TYPE_PARAMS
 from seqr.views.utils.terra_api_utils import TerraAPIException, TerraRefreshTokenFailedException
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, \
     PROJECT_FIELDS, LOCUS_LIST_FIELDS, PA_LOCUS_LIST_FIELDS, NO_INTERNAL_CASE_REVIEW_INDIVIDUAL_FIELDS, \
@@ -658,6 +659,68 @@ class ProjectAPITest(object):
         self.assertEqual(response.status_code, 200)
         self.assertDictEqual(response.json(), {'isSubscriber': True})
         self.assertTrue(self.collaborator_user.groups.filter(name='subscribers').exists())
+
+    def test_load_rna_seq_sample_data(self):
+        url = reverse(load_rna_seq_sample_data, args=['RS000162_T_na19675_d2'])
+        self.check_pm_login(url)
+
+        for data_type, params in RNA_DATA_TYPE_PARAMS.items():
+            with self.subTest(data_type):
+                sample_guid = params['sample_guid']
+                url = reverse(load_rna_seq_sample_data, args=[sample_guid])
+                model_cls = params['model_cls']
+                model_cls.objects.all().delete()
+                self.reset_logs()
+                parsed_file_lines = params['parsed_file_data'][sample_guid].strip().split('\n')
+
+                file_name = f'rna_sample_data__{data_type}__2020-04-15T00:00:00'
+                not_found_logs = self._set_file_not_found(file_name, sample_guid)
+
+                body = {'fileName': file_name, 'dataType': data_type}
+                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+                self.assertEqual(response.status_code, 400)
+                self.assertDictEqual(response.json(), {'error': 'Data for this sample was not properly parsed. Please re-upload the data'})
+                self.assert_json_logs(self.pm_user, [
+                    ('Loading outlier data for NA19675_1', None),
+                    *not_found_logs,
+                    (f'No saved temp data found for {sample_guid} with file prefix {file_name}', {
+                        'severity': 'ERROR', '@type': 'type.googleapis.com/google.devtools.clouderrorreporting.v1beta1.ReportedErrorEvent',
+                    }),
+                ])
+
+                self._add_file_iter([row.encode('utf-8') for row in parsed_file_lines])
+
+                self.reset_logs()
+                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+                self.assertEqual(response.status_code, 200)
+                self.assertDictEqual(response.json(), {'success': True})
+
+                models = model_cls.objects.all()
+                num_models = len(params['expected_models_json'])
+                self.assertEqual(models.count(), num_models)
+                self.assertSetEqual({model.sample.guid for model in models}, {sample_guid})
+                self.assertTrue(all(model.sample.is_active for model in models))
+
+                subprocess_logs = self._get_expected_read_file_subprocess_calls(file_name, sample_guid)
+
+                self.assert_json_logs(self.pm_user, [
+                    ('Loading outlier data for NA19675_1', None),
+                    *subprocess_logs,
+                    (f'create {model_cls.__name__}s', {'dbUpdate': {
+                        'dbEntity': model_cls.__name__, 'numEntities': num_models, 'parentEntityIds': [sample_guid],
+                        'updateType': 'bulk_create',
+                    }}),
+                ])
+
+                self.assertListEqual(list(params['get_models_json'](models)), params['expected_models_json'])
+
+                mismatch_row = {**json.loads(parsed_file_lines[0]), params.get('mismatch_field', 'p_value'): '0.05'}
+                self._add_file_iter([json.dumps(mismatch_row).encode('utf-8')])
+                response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+                self.assertEqual(response.status_code, 400)
+                self.assertDictEqual(response.json(), {
+                    'error': f'Error in {sample_guid.split("_", 1)[-1].upper()}: mismatched entries for {params.get("row_id", mismatch_row["gene_id"])}'
+                })
 
 
 BASE_COLLABORATORS = [
