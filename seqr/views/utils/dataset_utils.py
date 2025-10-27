@@ -118,12 +118,12 @@ def _create_samples(sample_data, user, loaded_date=timezone.now(), **kwargs):
     return Sample.bulk_create(user, new_samples)
 
 
-def _create_rna_samples(sample_data, sample_guid_keys_to_load, user, **kwargs):
+def _create_rna_samples(sample_data, sample_guid_ids_to_load, user, **kwargs):
     new_samples = [RnaSample(**sample, **kwargs) for sample in sample_data]
     new_sample_models = RnaSample.bulk_create(user, new_samples)
     new_sample_ids = [s.id for s in new_sample_models]
     sample_key_map = _get_rna_sample_data_by_key(id__in=new_sample_ids)
-    sample_guid_keys_to_load.update({s['guid']: sample_key for sample_key, s in sample_key_map.items()})
+    sample_guid_ids_to_load.update({s['guid']: sample_key[0] for sample_key, s in sample_key_map.items()})
 
 
 def _get_rna_sample_data_by_key(values=None, **kwargs):
@@ -356,13 +356,13 @@ def _load_rna_seq_file(
     loaded_samples = set()
     unmatched_samples = set()
     samples_to_create = {}
-    sample_guid_keys_to_load = {}
+    sample_guid_ids_to_load = {}
     missing_required_fields = defaultdict(set)
     gene_ids = set()
     for line in tqdm(parsed_f, unit=' rows'):
         _parse_rna_row(
             dict(zip(header, line)), column_map, required_column_map, missing_required_fields,
-            potential_samples, loaded_samples, gene_ids, sample_guid_keys_to_load,
+            potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load,
             samples_to_create, unmatched_samples, individual_data_by_id, sample_files, file_dir, ignore_extra_samples,
         )
 
@@ -374,15 +374,15 @@ def _load_rna_seq_file(
         raise ErrorsWarningsException(errors)
 
     if samples_to_create:
-        _create_rna_samples(samples_to_create.values(), sample_guid_keys_to_load, user, data_source=data_source, data_type=data_type)
+        _create_rna_samples(samples_to_create.values(), sample_guid_ids_to_load, user, data_source=data_source, data_type=data_type)
 
     prev_loaded_individual_ids = _update_existing_sample_models(model_cls, user, data_type, samples_to_create, loaded_samples)
 
-    return warnings, len(loaded_samples) + len(unmatched_samples), sample_guid_keys_to_load, prev_loaded_individual_ids
+    return warnings, len(loaded_samples) + len(unmatched_samples), sample_guid_ids_to_load, prev_loaded_individual_ids
 
 
 def _parse_rna_row(row, column_map, required_column_map, missing_required_fields,
-                   potential_samples, loaded_samples, gene_ids, sample_guid_keys_to_load, samples_to_create,
+                   potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load, samples_to_create,
                    unmatched_samples, individual_data_by_id, sample_files, file_dir, ignore_extra_samples):
     row_dict = {mapped_key: row[col] for mapped_key, col in column_map.items()}
 
@@ -408,11 +408,11 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
         return
 
     if potential_sample:
-        sample_guid_keys_to_load[potential_sample['guid']] = sample_key
+        sample_guid_ids_to_load[potential_sample['guid']] = sample_id
     elif sample_key not in samples_to_create:
         samples_to_create[sample_key] = {'individual_id': individual['id'], 'tissue_type': tissue_type}
 
-    if missing_required_fields or (unmatched_samples and not ignore_extra_samples) or (sample_key in unmatched_samples):
+    if missing_required_fields or (unmatched_samples and not ignore_extra_samples):
         # If there are definite errors, do not process/save data, just continue to check for additional errors
         return
 
@@ -422,10 +422,10 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
 
     for gene_id in row_gene_ids:
         row_dict = {**row_dict, GENE_ID_COL: gene_id}
-        if sample_key not in sample_files:
-            file_name = _get_sample_file_path(file_dir, '_'.join(sample_key))
-            sample_files[sample_key] = gzip.open(file_name, 'at')
-        sample_files[sample_key].write(f'{json.dumps(row_dict)}\n')
+        if sample_id not in sample_files:
+            file_name = _get_sample_file_path(file_dir, sample_id)
+            sample_files[sample_id] = gzip.open(file_name, 'at')
+        sample_files[sample_id].write(f'{json.dumps(row_dict)}\n')
 
 
 def _get_sample_file_path(file_dir, sample_guid):
@@ -511,20 +511,20 @@ def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
     file_dir = get_temp_file_path(file_name_prefix, is_local=True)
     os.mkdir(file_dir)
 
-    warnings, not_loaded_count, sample_guid_keys_to_load, prev_loaded_individual_ids = _load_rna_seq_file(
+    warnings, not_loaded_count, sample_guid_ids_to_load, prev_loaded_individual_ids = _load_rna_seq_file(
         file_path, data_source, user, data_type, model_cls, potential_samples, sample_files, file_dir, individual_data_by_id,
         config['columns'], **config['additional_kwargs'], **kwargs)
-    message = f'Parsed {len(sample_guid_keys_to_load) + not_loaded_count} RNA-seq samples'
+    message = f'Parsed {len(sample_guid_ids_to_load) + not_loaded_count} RNA-seq samples'
     info = [message]
     logger.info(message, user)
 
-    sample_projects = Project.objects.filter(family__individual__rnasample__guid__in=sample_guid_keys_to_load).values(
+    sample_projects = Project.objects.filter(family__individual__rnasample__guid__in=sample_guid_ids_to_load).values(
         'guid', 'name', new_sample_ids=ArrayAgg(
             'family__individual__individual_id', distinct=True, ordering='family__individual__individual_id',
             filter=~Q(family__individual__id__in=prev_loaded_individual_ids) if prev_loaded_individual_ids else None
         ))
     project_names = ', '.join(sorted([project['name'] for project in sample_projects]))
-    message = f'Attempted data loading for {len(sample_guid_keys_to_load)} RNA-seq samples in the following {len(sample_projects)} projects: {project_names}'
+    message = f'Attempted data loading for {len(sample_guid_ids_to_load)} RNA-seq samples in the following {len(sample_projects)} projects: {project_names}'
     info.append(message)
     logger.info(message, user)
 
@@ -533,17 +533,17 @@ def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
     for warning in warnings:
         logger.warning(warning, user)
 
-    for sample_guid, sample_key in sample_guid_keys_to_load.items():
-        sample_files[sample_key].close()  # Required to ensure gzipped files are properly terminated
+    for sample_guid, sample_id in sample_guid_ids_to_load.items():
+        sample_files[sample_id].close()  # Required to ensure gzipped files are properly terminated
         os.rename(
-            _get_sample_file_path(file_dir, '_'.join(sample_key)),
+            _get_sample_file_path(file_dir, sample_id),
             _get_sample_file_path(file_dir, sample_guid),
         )
 
-    if sample_guid_keys_to_load:
+    if sample_guid_ids_to_load:
         persist_temp_file(file_name_prefix, user)
 
-    return sample_guid_keys_to_load, file_name_prefix, info, warnings
+    return sorted(sample_guid_ids_to_load.keys()), file_name_prefix, info, warnings
 
 
 def post_process_rna_data(sample_guid, data, get_unique_key=None, format_fields=None):

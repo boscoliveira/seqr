@@ -77,7 +77,7 @@ def update_rna_seq(request):
     }
 
     try:
-        sample_guids_to_keys, file_name_prefix, info, warnings = load_rna_seq(
+        sample_guids, file_name_prefix, info, warnings = load_rna_seq(
             data_type, file_path, request.user, sample_metadata_mapping=sample_metadata_mapping,
             ignore_extra_samples=request_json.get('ignoreExtraSamples'),
         )
@@ -90,7 +90,7 @@ def update_rna_seq(request):
         'info': info,
         'warnings': warnings,
         'fileName': file_name_prefix,
-        'sampleGuids': sorted(sample_guids_to_keys.keys()),
+        'sampleGuids': sample_guids,
     })
 
 
