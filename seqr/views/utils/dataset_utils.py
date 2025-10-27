@@ -492,13 +492,13 @@ def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
     projects = Project.objects.filter(guid__in={metadata['project_guid'] for metadata in sample_metadata_mapping.values()})
 
     individuals = Individual.objects.filter(
-        family__project__in=projects, id__in=list(sample_metadata_mapping.keys()),
+        family__project__in=projects, individual_id__in=list(sample_metadata_mapping.keys()),
     ).values('id', 'individual_id', 'family__project__guid')
     individual_data_by_id = {}
     for indiv in individuals:
         sample_metadata = sample_metadata_mapping[indiv['individual_id']]
-        if i.pop('family__project__guid') == sample_metadata['project_guid']:
-            individual_data_by_id[indiv.pop('sample_id')] = {**indiv, 'tissue': sample_metadata['tissue']}
+        if indiv.pop('family__project__guid') == sample_metadata['project_guid']:
+            individual_data_by_id[sample_metadata['sample_id']] = {**indiv, 'tissue': sample_metadata['tissue']}
     potential_samples = _get_rna_sample_data_by_key(
         individual_id__in={i['id'] for i in individual_data_by_id.values()},
         data_type=data_type, data_source=data_source, values={

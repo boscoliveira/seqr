@@ -454,6 +454,22 @@ INVALID_AIRTABLE_SAMPLE_RECORDS = {
     ],
 }
 
+AIRTABLE_RNA_SAMPLE_RECORDS = {
+    'records': [
+        {
+            'id': 'recW24C2CJW5lT75K',
+            'fields': {
+                'SeqrCollaboratorSampleID': 'NA19675_1',
+                'CollaboratorSampleID': 'NA19675_D2',
+                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
+                'PDOStatus': ['RNA ready to load'],
+                'TissueOfOrigin': ['Muscle'],
+            }
+        },
+        *INVALID_AIRTABLE_SAMPLE_RECORDS['records'],
+    ],
+}
+
 VCF_SAMPLES = [
     'ABC123', 'NA19675_1', 'NA19678', 'NA19679', 'HG00731', 'HG00732', 'HG00733', 'NA20874', 'NA21234', 'NA21987',
 ]
@@ -768,6 +784,7 @@ class DataManagerAPITest(AirtableTest):
     def test_update_rna_splice_outlier(self, *args, **kwargs):
         self._test_update_rna_seq('splice_outlier', *args, **kwargs)
 
+    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://seqr.broadinstitute.org/')
     @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
     @mock.patch('seqr.views.utils.dataset_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
     @mock.patch('seqr.views.utils.file_utils.tempfile.gettempdir', lambda: 'tmp/')
@@ -788,9 +805,8 @@ class DataManagerAPITest(AirtableTest):
         model_cls = params['model_cls']
         header = params['header']
         loaded_data_row = params['loaded_data_row']
-        responses.add(
-            responses.GET, 'https://api.airtable.com/v0/app3Y97xtbbaOopVR/Samples', json={'records': []},
-        )
+        samples_url = 'https://api.airtable.com/v0/app3Y97xtbbaOopVR/Samples'
+        responses.add(responses.GET, samples_url, json={'records': []})
 
         # Test errors
         body = {'dataType': data_type, 'file': 'gs://rna_data/muscle_samples.tsv'}
@@ -831,6 +847,7 @@ class DataManagerAPITest(AirtableTest):
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'errors': ['Unable to find matches for the following samples: NA19675_D2'], 'warnings': None})
 
+        responses.replace(responses.GET, samples_url, json=AIRTABLE_RNA_SAMPLE_RECORDS)
         unknown_gene_id_row1 = loaded_data_row[:2] + ['NOT_A_GENE_ID1'] + loaded_data_row[3:]
         unknown_gene_id_row2 = loaded_data_row[:2] + ['NOT_A_GENE_ID2'] + loaded_data_row[3:]
         _set_file_iter_stdout([header, unknown_gene_id_row1, unknown_gene_id_row2])
