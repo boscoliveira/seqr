@@ -68,7 +68,11 @@ def update_rna_seq(request):
         ['RNA ready to load'], request.user, RNA, None, sample_fields=[TISSUE_FIELD], skip_invalid_pdos=True,
     )
     sample_metadata_mapping = {
-        sample['sample_id']: {'tissue': sample[TISSUE_FIELD][0], 'project_guid': sample['pdos'][0]['project_guid']}
+        sample['sample_id']: {
+            'tissue': sample[TISSUE_FIELD][0],
+            'project_guid': sample['pdos'][0]['project_guid'],
+            'sample_id': sample.get('CollaboratorSampleID') or sample['sample_id'],
+        }
         for sample in airtable_samples if len(sample[TISSUE_FIELD]) == 1 and len(sample['pdos']) == 1
     }
 
