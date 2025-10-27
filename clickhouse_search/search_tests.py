@@ -626,10 +626,17 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
             cached_variant_fields=cached_variant_fields[:1] + cached_variant_fields[2:],
         )
 
+        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, selected_family_3_variant, MITO_VARIANT1, MITO_VARIANT3], quality_filter=quality_filter,
-            annotations=annotations, pathogenicity={'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity=pathogenicity,
             cached_variant_fields=cached_variant_fields,
+        )
+
+        self._assert_expected_search(
+            [VARIANT2, selected_family_3_variant, MITO_VARIANT1],  quality_filter=quality_filter,
+            annotations=annotations, pathogenicity={**pathogenicity, 'clinvarMinStars': 1},
+            cached_variant_fields=cached_variant_fields[1:],
         )
 
         self._assert_expected_search(
@@ -855,31 +862,37 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
         self._assert_expected_search(
             [VARIANT1, VARIANT4, MITO_VARIANT1],
             freqs={'gnomad_genomes': {'af': 0.01, 'hh': 10}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'likely_pathogenic', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'likely_pathogenic', 'vus']},
         )
 
         self._assert_expected_search(
             [VARIANT2, VARIANT4, MITO_VARIANT1], freqs={'gnomad_genomes': {'af': 0.01}, 'gnomad_mito': {'af': 0.01}},
-            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus_or_conflicting']},
+            annotations=annotations, pathogenicity={'clinvar': ['pathogenic', 'conflicting_p_lp', 'vus']},
         )
 
     def test_annotations_filter(self):
         self._assert_expected_search([VARIANT2], pathogenicity={'hgmd': ['hgmd_other']})
         self._assert_expected_search([], pathogenicity={'hgmd': ['disease_causing', 'likely_disease_causing']})
 
-        pathogenicity = {'clinvar': ['likely_pathogenic', 'vus_or_conflicting', 'benign'], 'hgmd': []}
+        clinvar_paths = ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus', 'benign']
+        pathogenicity = {'clinvar': clinvar_paths, 'hgmd': []}
         self._assert_expected_search(
             [VARIANT1, VARIANT2, MITO_VARIANT1, MITO_VARIANT3], pathogenicity=pathogenicity,
         )
 
-        self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
+        self._assert_expected_search(
+            [VARIANT2, MITO_VARIANT1], pathogenicity={**pathogenicity, 'clinvarMinStars': 1},
+        )
 
-        exclude = {'clinvar': pathogenicity['clinvar'][1:]}
-        pathogenicity['clinvar'] = pathogenicity['clinvar'][:1]
+        self._assert_expected_search([VARIANT2], pathogenicity={'clinvar': ['conflicting_p_lp']})
+        self._assert_expected_search([], pathogenicity={'clinvar': ['conflicting_no_p']})
+
+        exclude = {'clinvar': clinvar_paths[2:]}
+        pathogenicity['clinvar'] = clinvar_paths[:2]
         snv_38_only_annotations = {'SCREEN': ['CTCF-only', 'DNase-only'], 'UTRAnnotator': ['5_prime_UTR_stop_codon_loss_variant']}
         selected_transcript_variant_2 = {**VARIANT2, 'selectedMainTranscriptId': 'ENST00000408919'}
         self._assert_expected_search(
-            [VARIANT1, selected_transcript_variant_2, VARIANT4, MITO_VARIANT3], pathogenicity=pathogenicity, annotations=snv_38_only_annotations,
+            [VARIANT1, selected_transcript_variant_2, VARIANT4, MITO_VARIANT3], exclude=exclude, pathogenicity=pathogenicity, annotations=snv_38_only_annotations,
             cached_variant_fields=[
                 {'selectedTranscript': None},
                 {'selectedTranscript': CACHED_CONSEQUENCES_BY_KEY[2][1]},
@@ -888,6 +901,8 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
             ]
         )
 
+        exclude['clinvar'] = clinvar_paths[1:]
+        pathogenicity['clinvar'] = clinvar_paths[:1]
         self._assert_expected_search(
             [VARIANT1, VARIANT4, MITO_VARIANT3], exclude=exclude, pathogenicity=pathogenicity,
             annotations=snv_38_only_annotations, cached_variant_fields=[
@@ -1136,7 +1151,7 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
             ],
         )
 
-        pathogenicity = {'clinvar': ['likely_pathogenic', 'vus_or_conflicting']}
+        pathogenicity = {'clinvar': ['likely_pathogenic', 'conflicting_p_lp', 'conflicting_no_p', 'vus']}
         self._reset_search_families()
         self._assert_expected_search(
             [VARIANT2, [VARIANT3, SELECTED_ANNOTATION_TRANSCRIPT_VARIANT_4], MITO_VARIANT3], inheritance_mode='recessive',

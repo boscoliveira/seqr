@@ -15,7 +15,7 @@ from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFEC
     X_LINKED_RECESSIVE, REF_REF, REF_ALT, ALT_ALT, HAS_ALT, HAS_REF, SPLICE_AI_FIELD, SCREEN_KEY, UTR_ANNOTATOR_KEY, \
     EXTENDED_SPLICE_KEY, MOTIF_FEATURES_KEY, REGULATORY_FEATURES_KEY, CLINVAR_KEY, HGMD_KEY, NEW_SV_FIELD, \
     EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_LIKELY_PATH_FILTER, \
-    CLINVAR_CONFLICTING_P_LP, PATH_FREQ_OVERRIDE_CUTOFF, \
+    CLINVAR_CONFLICTING_P_LP, CLINVAR_CONFLICTING_NO_P, CLINVAR_CONFLICTING, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
@@ -45,16 +45,21 @@ class SearchQuerySet(QuerySet):
 
     @classmethod
     def _clinvar_path_q(cls, pathogenicity):
-        clinvar_path_filters = [
-            f for f in (pathogenicity or {}).get(CLINVAR_KEY) or [] if f in CLINVAR_PATH_SIGNIFICANCES
-        ]
-        return cls._clinvar_filter_q(clinvar_path_filters) if clinvar_path_filters else None
+        return cls._clinvar_filter_q(pathogenicity, allowed_filters=CLINVAR_PATH_SIGNIFICANCES)
 
     @classmethod
-    def _clinvar_filter_q(cls, clinvar_filters):
+    def _clinvar_filter_q(cls, pathogenicity, allowed_filters=None):
+        clinvar_filters = (pathogenicity or {}).get(CLINVAR_KEY)
+        if allowed_filters:
+            clinvar_filters = [f for f in (clinvar_filters or []) if f in allowed_filters]
+        if not clinvar_filters:
+            return None
+
         ranges = [[None, None]]
+        include_conflicting_p = CLINVAR_CONFLICTING_P_LP in clinvar_filters
+        include_conflicting_no_p = CLINVAR_CONFLICTING_NO_P in clinvar_filters
         for path_filter, start, end in CLINVAR_PATH_RANGES:
-            if path_filter in clinvar_filters:
+            if path_filter in clinvar_filters or (path_filter == CLINVAR_CONFLICTING and include_conflicting_p and include_conflicting_no_p):
                 ranges[-1][1] = end
                 if ranges[-1][0] is None:
                     ranges[-1][0] = start
@@ -64,13 +69,24 @@ class SearchQuerySet(QuerySet):
 
         clinvar_qs = [cls._clinvar_range_q(path_range) for path_range in ranges]
 
-        if CLINVAR_CONFLICTING_P_LP in clinvar_filters:
-            max_path = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
-            clinvar_qs.append(cls._clinvar_conflicting_path_filter({1: (max_path, "{field} <= '{value}'")}))
+        conflicting_filter = None
+        if include_conflicting_p and not include_conflicting_no_p:
+            conflicting_filter = ('array_exists', "{field} <= '{value}'")
+        elif include_conflicting_no_p and not include_conflicting_p:
+            conflicting_filter = ('array_all', "{field} > '{value}'")
+        if conflicting_filter is not  None:
+            path_cutoff = next(end for path_filter, _, end in CLINVAR_PATH_RANGES if path_filter == CLINVAR_LIKELY_PATH_FILTER)
+            clinvar_qs.append(Q(**cls._clinvar_conflicting_path_filter(
+                conflicting_filter[0], {1: (path_cutoff, conflicting_filter[1])},
+            )))
 
         clinvar_q = clinvar_qs[0]
         for q in clinvar_qs[1:]:
             clinvar_q |= q
+
+        if pathogenicity.get('clinvarMinStars'):
+            clinvar_q &= cls._clinvar_star_q(pathogenicity['clinvarMinStars'])
+
         return clinvar_q
 
     def _seqr_pop_fields(self, seqr_populations):
@@ -501,9 +517,10 @@ class AnnotationsQuerySet(SearchQuerySet):
 
         filter_qs, transcript_filters = self._parse_annotation_filters(annotations, pathogenicity) if (annotations or pathogenicity) else ([], [])
 
-        exclude_clinvar = (exclude or {}).get(CLINVAR_KEY)
-        if exclude_clinvar and self.has_annotation(CLINVAR_KEY):
-            results = results.exclude(self._clinvar_filter_q(exclude_clinvar))
+        if self.has_annotation(CLINVAR_KEY):
+            exclude_clinvar_q = self._clinvar_filter_q(exclude)
+            if exclude_clinvar_q is not None:
+                results = results.exclude(exclude_clinvar_q)
 
         if not (filter_qs or transcript_filters):
             if any(val for key, val in (annotations or {}).items() if key != NEW_SV_FIELD) or any(val for val in (pathogenicity or {}).values()):
@@ -586,13 +603,14 @@ class AnnotationsQuerySet(SearchQuerySet):
             elif field != NEW_SV_FIELD:
                 allowed_consequences += value
 
-        for field, value in (pathogenicity or {}).items():
-            if not value:
-                continue
-            elif field == HGMD_KEY:
-                filters_by_field[HGMD_KEY] = self._hgmd_filter(value)
-            elif field == CLINVAR_KEY and self.has_annotation(CLINVAR_KEY):
-                filter_qs.append(self._clinvar_filter_q(value))
+        hgmd_filter = (pathogenicity or {}).get(HGMD_KEY)
+        if hgmd_filter:
+            filters_by_field[HGMD_KEY] = self._hgmd_filter(hgmd_filter)
+
+        if self.has_annotation(CLINVAR_KEY):
+            clinvar_q = self._clinvar_filter_q(pathogenicity)
+            if clinvar_q is not None:
+                filter_qs.append(clinvar_q)
 
         filter_qs += [
             Q(**{lookup_template.format(field=field): value})
@@ -644,8 +662,12 @@ class AnnotationsQuerySet(SearchQuerySet):
         return Q(clinvar__0__range=path_range, clinvar_key__isnull=False)
 
     @staticmethod
-    def _clinvar_conflicting_path_filter(conflicting_filter):
-        return Q(clinvar__5__array_exists=conflicting_filter, clinvar_key__isnull=False)
+    def _clinvar_star_q(min_stars):
+        return Q(clinvar__4__gte=min_stars, clinvar_key__isnull=False)
+
+    @staticmethod
+    def _clinvar_conflicting_path_filter(array_func, conflicting_filter):
+        return {f'clinvar__5__{array_func}': conflicting_filter, 'clinvar__5__not_empty': True, 'clinvar_key__isnull': False}
 
     def explode_gene_id(self, gene_id_key):
         consequence_field = self.GENE_CONSEQUENCE_FIELD if self.has_annotation(self.GENE_CONSEQUENCE_FIELD) else self.transcript_field
@@ -789,8 +811,15 @@ class EntriesManager(SearchQuerySet):
         return Q(clinvar_join__pathogenicity__range=path_range)
 
     @staticmethod
-    def _clinvar_conflicting_path_filter(conflicting_filter):
-        return Q(clinvar_join__conflicting_pathogenicities__array_exists=conflicting_filter)
+    def _clinvar_star_q(min_stars):
+        return Q(clinvar_join__gold_stars__gte=min_stars)
+
+    @staticmethod
+    def _clinvar_conflicting_path_filter(array_func, conflicting_filter):
+        return {
+            f'clinvar_join__conflicting_pathogenicities__{array_func}': conflicting_filter,
+            'clinvar_join__conflicting_pathogenicities__not_empty': True,
+        }
 
     def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, skip_individual_guid=False, **kwargs):
        project_guids = sample_data['project_guids']
