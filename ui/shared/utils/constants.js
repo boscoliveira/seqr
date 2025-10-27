@@ -1744,6 +1744,14 @@ export const SV_FREQUENCIES = [
 
 export const FREQUENCIES = [...SNP_FREQUENCIES, ...MITO_FREQUENCIES, ...SV_FREQUENCIES]
 
+export const GENE_SEARCH_FREQUENCIES = {
+  ...FREQUENCIES.filter(({ name }) => name !== TOPMED_FREQUENCY).reduce(
+    (acc, { name }) => ({ ...acc, [name]: { af: 0.03 } }), {},
+  ),
+  [THIS_CALLSET_FREQUENCY]: { ac: 3000 },
+  [SV_CALLSET_FREQUENCY]: { ac: 300 },
+}
+
 const VARIANT_ICON_COLORS = {
   red: '#eaa8a8',
   amber: '#f5d55c',
