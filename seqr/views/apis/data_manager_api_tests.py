@@ -652,26 +652,22 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqTpm,
             'data_type': 'T',
             'message_data_type': 'Expression',
-            'header': ['sample_id', 'project', 'gene_id', 'individual_id', 'tissue', 'TPM'],
-            'optional_headers': ['individual_id'],
-            'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000135953', 'NA19675_D3', 'muscle', 1.34],
-            'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19678', 'muscle', 0.064],
-            'duplicated_indiv_id_data': [
-                ['NA20870', 'Test Reprocessed Project', 'ENSG00000240361', 'NA20870', 'muscle', 7.8],
-                ['NA20870', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA20870', 'fibroblasts', 0.0],
-            ],
+            'header': ['sample_id', 'gene_id', 'TPM', 'Description'],
+            'optional_headers': ['Description'],
+            'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 1.34, ''],
+            'no_existing_data': ['NA19678', 'ENSG00000233750', 0.064, ''],
             'write_data': {'{"gene_id": "ENSG00000240361", "tpm": "7.8"}\n',
                            '{"gene_id": "ENSG00000233750", "tpm": "0.0"}\n'},
             'new_data': [
                 # existing sample NA19675_D2
-                ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'NA19675_D2', 'muscle', 7.8],
-                ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19675_D2', 'muscle', 0.0],
+                ['NA19675_D2', 'ENSG00000240361', 7.8, 'some gene of interest'],
+                ['NA19675_D2', 'ENSG00000233750', 0.0, ''],
                 # no matched individual NA19675_D3
-                ['NA19675_D3', '1kg project nåme with uniçøde', 'ENSG00000233750', 'NA19675_D3', 'fibroblasts', 0.064],
+                ['NA19675_D3', 'ENSG00000233750', 0.064, ''],
                 # a different project sample NA20888
-                ['NA20888', 'Test Reprocessed Project', 'ENSG00000240361', 'NA20888', 'muscle', 0.112],
+                ['NA20888', 'ENSG00000240361', 0.112, ''],
                 # a project mismatched sample NA20878
-                ['NA20878', 'Test Reprocessed Project', 'ENSG00000233750', 'NA20878', 'fibroblasts', 0.064],
+                ['NA20878', 'ENSG00000233750', 0.064, ''],
             ],
             'skipped_samples': 'NA19675_D3 (1kg project nåme with uniçøde), NA20878 (Test Reprocessed Project)',
             'sample_tissue_type': 'M',
@@ -830,11 +826,10 @@ class DataManagerAPITest(AirtableTest):
                      f'{", ".join(sorted([col for col in header if col not in params["optional_headers"]]))}',
         })
 
-        missing_sample_row = ['NA19675_D3'] + loaded_data_row[1:]
-        _set_file_iter_stdout([header, loaded_data_row, missing_sample_row])
+        _set_file_iter_stdout([header, loaded_data_row])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
-        self.assertDictEqual(response.json(), {'errors': ['Unable to find matches for the following samples: NA19675_D3 (1kg project nåme with uniçøde)'], 'warnings': None})
+        self.assertDictEqual(response.json(), {'errors': ['Unable to find matches for the following samples: NA19675_D2'], 'warnings': None})
 
         unknown_gene_id_row1 = loaded_data_row[:2] + ['NOT_A_GENE_ID1'] + loaded_data_row[3:]
         unknown_gene_id_row2 = loaded_data_row[:2] + ['NOT_A_GENE_ID2'] + loaded_data_row[3:]
