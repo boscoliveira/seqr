@@ -34,6 +34,9 @@ const mapDispatchToProps = (dispatch, ownProps) => ({
     if (ownProps.svType) {
       search.annotations = { [VEP_GROUP_SV]: [ownProps.svType, `gCNV_${ownProps.svType}`] }
     }
+    if (ownProps.excludeSvs) {
+      search.exclude_svs = ownProps.excludeSvs
+    }
     const familyGuids = ownProps.familyGuid ? [ownProps.familyGuid] : ownProps.familyGuids
     const projectFamilies = familyGuids && [{ familyGuids }]
     dispatch(navigateSavedHashedSearch(
