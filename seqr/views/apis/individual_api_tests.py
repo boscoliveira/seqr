@@ -90,6 +90,12 @@ INDIVIDUAL_FAMILY_UPDATE_DATA = {
     "individualId": UPDATED_MATERNAL_ID,
 }
 
+INDIVIDUAL_CLEAR_PARENT_UPDATE_DATA = {
+    'individualGuid': INDIVIDUAL_GUID,
+    'paternalId': UPDATED_ID,
+    'maternalId': '',
+}
+
 LOAD_PARTICIPANT_TABLE = deepcopy(PARTICIPANT_TABLE)
 for row in LOAD_PARTICIPANT_TABLE[4:]:
     row[7] = row[7].replace('Broad_', '')
@@ -244,6 +250,20 @@ class IndividualAPITest(object):
         self.assertSetEqual({ID_UPDATE_GUID}, set(response_json['individualsByGuid']))
         self.assertEqual(response_json['individualsByGuid'][ID_UPDATE_GUID]['individualId'], UPDATED_ID)
         self.assertEqual(response_json['individualsByGuid'][ID_UPDATE_GUID]['maternalId'], 'NA19679')
+
+        response = self.client.post(edit_individuals_url, content_type='application/json', data=json.dumps({
+            'individuals': [{
+                'individualGuid': INDIVIDUAL_GUID,
+                'familyId': '1',
+                'individualId': 'NA19675_1',
+                'paternalId': '',
+            }]
+        }))
+        self.assertEqual(response.status_code, 200)
+        response_json = response.json()
+        self.assertSetEqual({INDIVIDUAL_GUID}, set(response_json['individualsByGuid']))
+        self.assertIsNone(response_json['individualsByGuid'][INDIVIDUAL_GUID]['paternalId'])
+        self.assertEqual(response_json['individualsByGuid'][INDIVIDUAL_GUID]['maternalId'], 'NA19679')
 
         # Test PM permission
         pm_required_edit_individuals_url = reverse(edit_individuals_handler, args=[PM_REQUIRED_PROJECT_GUID])
