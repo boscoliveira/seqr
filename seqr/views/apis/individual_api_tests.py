@@ -90,12 +90,6 @@ INDIVIDUAL_FAMILY_UPDATE_DATA = {
     "individualId": UPDATED_MATERNAL_ID,
 }
 
-INDIVIDUAL_CLEAR_PARENT_UPDATE_DATA = {
-    'individualGuid': INDIVIDUAL_GUID,
-    'paternalId': UPDATED_ID,
-    'maternalId': '',
-}
-
 LOAD_PARTICIPANT_TABLE = deepcopy(PARTICIPANT_TABLE)
 for row in LOAD_PARTICIPANT_TABLE[4:]:
     row[7] = row[7].replace('Broad_', '')
