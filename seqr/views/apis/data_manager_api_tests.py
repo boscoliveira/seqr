@@ -468,8 +468,11 @@ AIRTABLE_RNA_SAMPLE_RECORDS = [
         'id': 'recW56C2CJW5lT6c5',
         'fields': {
             'CollaboratorSampleID': 'NA19678',
-            'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
-            'PDOStatus': ['RNA ready to load'],
+            'SeqrProject': [
+                'https://seqr.broadinstitute.org/project/R0001_1kg/project_page',
+                'https://seqr.broadinstitute.org/project/R0003_test/project_page',
+            ],
+            'PDOStatus': ['RNA ready to load', 'Available in seqr'],
             'TissueOfOrigin': ['Muscle'],
         }
     },
