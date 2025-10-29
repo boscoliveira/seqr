@@ -13,7 +13,7 @@ import { BooleanCheckbox, Select } from 'shared/components/form/Inputs'
 import AddWorkspaceDataForm from 'shared/components/panel/LoadWorkspaceDataForm'
 import { DATASET_TYPE_SNV_INDEL_CALLS, DATASET_TYPE_SV_CALLS, DATASET_TYPE_MITO_CALLS, LOAD_RNA_FIELDS, TISSUE_DISPLAY } from 'shared/utils/constants'
 
-import { addVariantsDataset, addIGVDataset } from '../reducers'
+import { addVariantsDataset, addIGVDataset, uploadRnaSeq } from '../reducers'
 import { getCurrentProject, getProjectGuid } from '../selectors'
 
 const MODAL_NAME = 'Datasets'
@@ -25,7 +25,7 @@ const ADD_RNA_FORM = 'rna'
 const SUBMIT_FUNCTIONS = {
   [ADD_VARIANT_FORM]: addVariantsDataset,
   [ADD_IGV_FORM]: addIGVDataset,
-  [ADD_RNA_FORM]: addVariantsDataset, // TODO
+  [ADD_RNA_FORM]: uploadRnaSeq,
 }
 
 const BaseUpdateDatasetForm = React.memo(({ formType, formFields, initialValues, onSubmit }) => (

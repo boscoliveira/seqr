@@ -8,7 +8,7 @@ import {
   loadProjectAnalysisGroups,
 } from 'redux/utils/reducerUtils'
 import { SHOW_ALL, SORT_BY_FAMILY_GUID, NOTE_TAG_NAME } from 'shared/utils/constants'
-import { HttpRequestHelper } from 'shared/utils/httpRequestHelper'
+import { HttpRequestHelper, loadMultipleData } from 'shared/utils/httpRequestHelper'
 import { SHOW_IN_REVIEW, SORT_BY_FAMILY_NAME, SORT_BY_FAMILY_ADDED_DATE, CASE_REVIEW_TABLE_NAME } from './constants'
 
 // action creators and reducers in one file as suggested by https://github.com/erikras/ducks-modular-redux
@@ -222,6 +222,16 @@ export const addIGVDataset = ({ mappingFile, ...values }) => (dispatch) => {
     }
   })
 }
+
+export const uploadRnaSeq = values => (dispatch, getState) => loadMultipleData(
+  `/api/project/${getState().currentProjectGuid}/update_rna_seq`,
+  ({ sampleGuids, fileName }, { dataType }) => sampleGuids.map(sampleGuid => ([
+    `/api/load_rna_seq_sample/${sampleGuid}`, sampleGuid, { fileName, dataType },
+  ])),
+  RECEIVE_DATA,
+  numLoaded => `Successfully loaded data for ${numLoaded} RNA-seq samples`,
+  10,
+)(values)(dispatch)
 
 export const updateLocusLists = values => (dispatch, getState) => {
   const projectGuid = getState().currentProjectGuid
