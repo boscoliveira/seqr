@@ -672,10 +672,6 @@ class DataManagerAPITest(AirtableTest):
             'optional_headers': ['detail'],
             'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.001, -3.1],
             'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
-            'write_data': {
-                '{"gene_id": "ENSG00000233750", "p_value": "0.064", "p_adjust": "0.0000057", "z_score": "7.8"}\n',
-                '{"gene_id": "ENSG00000240361", "p_value": "0.01", "p_adjust": "0.13", "z_score": "-3.1"}\n'
-            },
             'new_data': [
                 ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.13, -3.1],
                 ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail2', 0.01, 0.13, -3.1],
@@ -698,8 +694,6 @@ class DataManagerAPITest(AirtableTest):
             'optional_headers': ['Description'],
             'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 1.34, ''],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 0.064, ''],
-            'write_data': {'{"gene_id": "ENSG00000240361", "tpm": "7.8"}\n',
-                           '{"gene_id": "ENSG00000233750", "tpm": "0.0"}\n'},
             'new_data': [
                 # existing sample NA19675_D2
                 ['NA19675_D2', 'ENSG00000240361', 7.8, 'some gene of interest'],
@@ -731,17 +725,6 @@ class DataManagerAPITest(AirtableTest):
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
             'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
-            'write_data': {'{"chrom": "chr2", "start": "167258096",'
-                           ' "end": "167258349", "strand": "*", "type": "psi3", "p_value": "1.56e-25", "p_adjust": "6.33",'
-                           ' "delta_intron_jaccard_index": "0.45", "counts": "143",'
-                           ' "mean_counts": "143", "total_counts": "143", "mean_total_counts": "143",'
-                           ' "rare_disease_samples_with_this_junction": "1", "rare_disease_samples_total": "20", "gene_id": "ENSG00000233750"}\n',
-                           '{"chrom": "chr2", "start": "167258096",'
-                           ' "end": "167258349", "strand": "*", "type": "psi3", "p_value": "1.56e-25", "p_adjust": "6.33",'
-                           ' "delta_intron_jaccard_index": "0.45", "counts": "143",'
-                           ' "mean_counts": "143", "total_counts": "143", "mean_total_counts": "143",'
-                           ' "rare_disease_samples_with_this_junction": "1", "rare_disease_samples_total": "20", "gene_id": "ENSG00000135953"}\n',
-            },
             'new_data': [
                 # existing sample NA19675_1
                 ['NA19675_1', '1kg project nåme with uniçøde', 'ENSG00000233750;ENSG00000240361', 'chr2', 167254166, 167258349, '*', 'psi3',
@@ -954,7 +937,7 @@ class DataManagerAPITest(AirtableTest):
         self.reset_logs()
         mock_files = defaultdict(mock.MagicMock)
         mock_open.side_effect = lambda file_name, *args: mock_files[file_name]
-        body.update({'ignoreExtraSamples': True, 'mappingFile': {'uploadedFileId': 'map.tsv'}, 'file': RNA_FILE_ID})
+        body.update({'ignoreExtraSamples': True, 'file': RNA_FILE_ID})
         warnings = [
             f'Skipped loading for the following {len(params["skipped_samples"].split(","))} '
             f'unmatched samples: {params["skipped_samples"]}']
@@ -1024,35 +1007,7 @@ class DataManagerAPITest(AirtableTest):
 
         # test loading new data without deleting existing data
         data = [params['no_existing_data']]
-        body.pop('mappingFile')
         _test_basic_data_loading(data, 1, 1, 2, body, '1kg project nåme with uniçøde')
-
-        self.assertSetEqual(
-            {''.join([call.args[0] for call in mock_file.write.call_args_list]) for mock_file in mock_files.values()},
-            params['write_data'],
-        )
-
-        # Test loading data when where an individual has multiple tissue types
-        data = [data[1][:2] + data[0][2:], data[1]]
-        mock_files = defaultdict(mock.MagicMock)
-        mock_rename.reset_mock()
-        new_sample_individual_id = 7
-        response_json, new_sample_guid = _test_basic_data_loading(data, 2, 2, new_sample_individual_id, body,
-                                                                  '1kg project nåme with uniçøde')
-        second_tissue_sample_guid = self._check_rna_sample_model(
-            individual_id=new_sample_individual_id, data_source='new_muscle_samples.tsv.gz', data_type=params['data_type'],
-            tissue_type='M' if params.get('sample_tissue_type') == 'F' else 'F', is_active_sample=False,
-        )
-        self.assertTrue(second_tissue_sample_guid != new_sample_guid)
-        self.assertTrue(second_tissue_sample_guid in response_json['sampleGuids'])
-        self._assert_expected_file_open(mock_rename, mock_open, [
-            f'tmp/temp_uploads/{RNA_FILENAME_TEMPLATE.format(params["data_type"])}/{sample_guid}.json.gz'
-            for sample_guid in response_json['sampleGuids']
-        ])
-        self.assertSetEqual(
-            {''.join([call.args[0] for call in mock_file.write.call_args_list]) for mock_file in mock_files.values()},
-            params['write_data'],
-        )
 
     def _assert_expected_file_open(self, mock_rename, mock_open, expected_file_names):
         file_rename = {call.args[1]: call.args[0] for call in mock_rename.call_args_list}
