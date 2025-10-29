@@ -668,16 +668,16 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqOutlier,
             'data_type': 'E',
             'message_data_type': 'Expression Outlier',
-            'header': ['sampleID', 'project', 'geneID', 'tissue', 'detail', 'pValue', 'padjust', 'zScore'],
+            'header': ['sampleID', 'geneID', 'detail', 'pValue', 'padjust', 'zScore'],
             'optional_headers': ['detail'],
-            'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.001, -3.1],
-            'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
+            'loaded_data_row': ['NA19675_D2', 'ENSG00000240361', 'detail1', 0.01, 0.001, -3.1],
+            'no_existing_data': ['NA19678', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
             'new_data': [
-                ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.13, -3.1],
-                ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail2', 0.01, 0.13, -3.1],
-                ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
-                ['NA19675_D3', 'Test Reprocessed Project', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
-                ['NA20888', 'Test Reprocessed Project', 'ENSG00000240361', 'muscle', '', 0.04, 0.112, 1.9],
+                ['NA19675_D2', 'ENSG00000240361', 'detail1', 0.01, 0.13, -3.1],
+                ['NA19675_D2', 'ENSG00000240361', 'detail2', 0.01, 0.13, -3.1],
+                ['NA19675_D2', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
+                ['NA19675_D3', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
+                ['NA20888', 'ENSG00000240361', '', 0.04, 0.112, 1.9],
             ],
             'skipped_samples': 'NA19675_D3',
             'sample_tissue_type': 'M',
@@ -717,29 +717,29 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqSpliceOutlier,
             'data_type': 'S',
             'message_data_type': 'Splice Outlier',
-            'header': ['sampleID', 'projectName', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
-                       'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'tissue', 'rareDiseaseSamplesWithThisJunction',
+            'header': ['sampleID', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
+                       'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'rareDiseaseSamplesWithThisJunction',
                        'rareDiseaseSamplesTotal'],
             'optional_headers': [],
-            'loaded_data_row': ['NA19675_1', '1kg project nåme with uniçøde', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
-                                'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
-            'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
-                                'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
+            'loaded_data_row': ['NA19675_1', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
+                                'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 0.53953638, 1, 20],
+            'no_existing_data': ['NA19678', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
+                                'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 0.53953638, 1, 20],
             'new_data': [
                 # existing sample NA19675_1
-                ['NA19675_1', '1kg project nåme with uniçøde', 'ENSG00000233750;ENSG00000240361', 'chr2', 167254166, 167258349, '*', 'psi3',
-                 1.56E-25, -4.9, -0.46, 166, 16.6, 1660, 1.66, 'fibroblasts', 1, 20],
-                ['NA19675_1', '1kg project nåme with uniçøde', 'ENSG00000240361', 'chr7', 132885746, 132975168, '*', 'psi5',
-                 1.08E-56, -6.53, -0.85, 231, 0.231, 2313, 231.3, 'fibroblasts', 1, 20],
+                ['NA19675_1', 'ENSG00000233750;ENSG00000240361', 'chr2', 167254166, 167258349, '*', 'psi3',
+                 1.56E-25, -4.9, -0.46, 166, 16.6, 1660, 1.66, 1, 20],
+                ['NA19675_1', 'ENSG00000240361', 'chr7', 132885746, 132975168, '*', 'psi5',
+                 1.08E-56, -6.53, -0.85, 231, 0.231, 2313, 231.3, 1, 20],
                 # no matched individual NA19675_D3
-                ['NA19675_D3', '1kg project nåme with uniçøde', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*',
-                 'psi3', 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 'muscle', 1, 20],
+                ['NA19675_D3', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*',
+                 'psi3', 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 1, 20],
                 # a new sample NA20888
-                ['NA20888', 'Test Reprocessed Project', '', 'chr2', 167258096, 167258349, '*',
-                 'psi3', 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 'fibroblasts', 1, 20],
+                ['NA20888', '', 'chr2', 167258096, 167258349, '*',
+                 'psi3', 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 1, 20],
                 # a project mismatched sample NA20878
-                ['NA20878', 'Test Reprocessed Project', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*', 'psi3',
-                 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 'fibroblasts', 1, 20],
+                ['NA20878', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*', 'psi3',
+                 1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 1, 20],
             ],
             'skipped_samples': 'NA19675_D3, NA20878',
             'sample_tissue_type': 'F',
@@ -852,7 +852,7 @@ class DataManagerAPITest(AirtableTest):
         _set_file_iter_stdout([header, loaded_data_row])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
-        self.assertDictEqual(response.json(), {'errors': ['Unable to find matches for the following samples: NA19675_D2'], 'warnings': None})
+        self.assertDictEqual(response.json(), {'errors': [f'Unable to find matches for the following samples: {loaded_data_row[0]}'], 'warnings': None})
 
         responses.replace(responses.GET, samples_url, json=AIRTABLE_RNA_SAMPLE_RECORDS)
         unknown_gene_id_row1 = loaded_data_row[:1] + ['NOT_A_GENE_ID1'] + loaded_data_row[2:]
