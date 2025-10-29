@@ -424,8 +424,8 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
         row_dict = {**row_dict, GENE_ID_COL: gene_id}
         if sample_id not in sample_files:
             file_name = _get_sample_file_path(file_dir, sample_id)
-            sample_files[sample_id] = gzip.open(file_name, 'at')
-        sample_files[sample_id].write(f'{json.dumps(row_dict)}\n')
+            sample_files[individual['individual_id']] = gzip.open(file_name, 'at')
+        sample_files[individual['individual_id']].write(f'{json.dumps(row_dict)}\n')
 
 
 def _get_sample_file_path(file_dir, sample_guid):
