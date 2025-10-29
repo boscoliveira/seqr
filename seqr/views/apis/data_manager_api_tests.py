@@ -454,51 +454,48 @@ INVALID_AIRTABLE_SAMPLE_RECORDS = {
     ],
 }
 
-AIRTABLE_RNA_SAMPLE_RECORDS = {
-    'records': [
-        {
-            'id': 'recW24C2CJW5lT75K',
-            'fields': {
-                'SeqrCollaboratorSampleID': 'NA19675_1',
-                'CollaboratorSampleID': 'NA19675_D2',
-                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
-                'PDOStatus': ['RNA ready to load'],
-                'TissueOfOrigin': ['Muscle'],
-            }
-        },
-        {
-            'id': 'recW56C2CJW5lT6c5',
-            'fields': {
-                'CollaboratorSampleID': 'NA19678',
-                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
-                'PDOStatus': ['RNA ready to load'],
-                'TissueOfOrigin': ['Muscle'],
-            }
-        },
-        {
-            'id': 'recW56C2CJW5lT75x',
-            'fields': {
-                'CollaboratorSampleID': 'NA20888',
-                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0003_test/project_page'],
-                'PDOStatus': ['RNA ready to load'],
-                'TissueOfOrigin': ['Muscle'],
-            }
-        },
-        {
-            'id': 'rec2B6OGmVpAkQW3s',
-            'fields': {
-                'CollaboratorSampleID': 'NA12345',
-                'SeqrProject': [
-                    'https://seqr.broadinstitute.org/project/R0002_empty/project_page',
-                    'https://seqr.broadinstitute.org/project/R0004_non_analyst_project/project_page',
-                ],
-                'PDOStatus': ['RNA ready to load', 'RNA ready to load'],
-                'TissueOfOrigin': ['Muscle', 'Brain'],
-            }
-        },
-        *INVALID_AIRTABLE_SAMPLE_RECORDS['records'],
-    ],
-}
+AIRTABLE_RNA_SAMPLE_RECORDS = [
+    {
+        'id': 'recW24C2CJW5lT75K',
+        'fields': {
+            'SeqrCollaboratorSampleID': 'NA19675_1',
+            'CollaboratorSampleID': 'NA19675_D2',
+            'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
+            'PDOStatus': ['RNA ready to load'],
+        }
+    },
+    {
+        'id': 'recW56C2CJW5lT6c5',
+        'fields': {
+            'CollaboratorSampleID': 'NA19678',
+            'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
+            'PDOStatus': ['RNA ready to load'],
+            'TissueOfOrigin': ['Muscle'],
+        }
+    },
+    {
+        'id': 'recW56C2CJW5lT75x',
+        'fields': {
+            'CollaboratorSampleID': 'NA20888',
+            'SeqrProject': ['https://seqr.broadinstitute.org/project/R0003_test/project_page'],
+            'PDOStatus': ['RNA ready to load'],
+            'TissueOfOrigin': ['Muscle'],
+        }
+    },
+    {
+        'id': 'rec2B6OGmVpAkQW3s',
+        'fields': {
+            'CollaboratorSampleID': 'NA12345',
+            'SeqrProject': [
+                'https://seqr.broadinstitute.org/project/R0002_empty/project_page',
+                'https://seqr.broadinstitute.org/project/R0004_non_analyst_project/project_page',
+            ],
+            'PDOStatus': ['RNA ready to load', 'RNA ready to load'],
+            'TissueOfOrigin': ['Muscle', 'Brain'],
+        }
+    },
+    *INVALID_AIRTABLE_SAMPLE_RECORDS['records'],
+]
 
 VCF_SAMPLES = [
     'ABC123', 'NA19675_1', 'NA19678', 'NA19679', 'HG00731', 'HG00732', 'HG00733', 'NA20874', 'NA21234', 'NA21987',
@@ -680,7 +677,7 @@ class DataManagerAPITest(AirtableTest):
                 ['NA20888', 'ENSG00000240361', '', 0.04, 0.112, 1.9],
             ],
             'skipped_samples': 'NA19675_D3',
-            'sample_tissue_type': 'M',
+            'sample_tissue_type': 'Muscle',
             'num_parsed_samples': 3,
             'initial_model_count': 3,
             'parsed_file_data': RNA_OUTLIER_SAMPLE_DATA,
@@ -706,7 +703,7 @@ class DataManagerAPITest(AirtableTest):
                 ['NA20878', 'ENSG00000233750', 0.064, ''],
             ],
             'skipped_samples': 'NA19675_D3, NA20878',
-            'sample_tissue_type': 'M',
+            'sample_tissue_type': 'Muscle',
             'num_parsed_samples': 4,
             'initial_model_count': 4,
             'deleted_count': 3,
@@ -742,7 +739,7 @@ class DataManagerAPITest(AirtableTest):
                  1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 1, 20],
             ],
             'skipped_samples': 'NA19675_D3, NA20878',
-            'sample_tissue_type': 'F',
+            'sample_tissue_type': 'Fibroblast',
             'num_parsed_samples': 4,
             'initial_model_count': 7,
             'deleted_count': 4,
@@ -773,6 +770,7 @@ class DataManagerAPITest(AirtableTest):
         self.assert_json_logs(user, expected_logs)
 
     def _check_rna_sample_model(self, individual_id, data_source, data_type, tissue_type, is_active_sample=True):
+        tissue_type = tissue_type[0]
         rna_samples = RnaSample.objects.filter(
             individual_id=individual_id, tissue_type=tissue_type, data_source=data_source, data_type=data_type,
         )
@@ -854,7 +852,17 @@ class DataManagerAPITest(AirtableTest):
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'errors': [f'Unable to find matches for the following samples: {loaded_data_row[0]}'], 'warnings': None})
 
-        responses.replace(responses.GET, samples_url, json=AIRTABLE_RNA_SAMPLE_RECORDS)
+        airtable_sample_records = [
+            {
+                **AIRTABLE_RNA_SAMPLE_RECORDS[0],
+                'fields': {
+                    **AIRTABLE_RNA_SAMPLE_RECORDS[0]['fields'],
+                    'TissueOfOrigin': [params['sample_tissue_type']],
+                }
+            },
+            *AIRTABLE_RNA_SAMPLE_RECORDS[1:],
+        ]
+        responses.replace(responses.GET, samples_url, json={'records': airtable_sample_records})
         unknown_gene_id_row1 = loaded_data_row[:1] + ['NOT_A_GENE_ID1'] + loaded_data_row[2:]
         unknown_gene_id_row2 = loaded_data_row[:1] + ['NOT_A_GENE_ID2'] + loaded_data_row[2:]
         _set_file_iter_stdout([header, unknown_gene_id_row1, unknown_gene_id_row2])
@@ -911,7 +919,7 @@ class DataManagerAPITest(AirtableTest):
                                                  'fileName': file_name})
             new_sample_guid = self._check_rna_sample_model(
                 individual_id=new_sample_individual_id, data_source='new_muscle_samples.tsv.gz', data_type=params['data_type'],
-                tissue_type=params.get('sample_tissue_type'), is_active_sample=False,
+                tissue_type='M', is_active_sample=False,
             )
             self.assertTrue(new_sample_guid in response_json['sampleGuids'])
             additional_logs = [(f'create {num_created_samples} RnaSamples', {'dbUpdate': {
