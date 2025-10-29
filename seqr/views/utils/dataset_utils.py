@@ -122,12 +122,13 @@ def _create_rna_samples(sample_data, sample_guid_ids_to_load, user, **kwargs):
     new_samples = [RnaSample(**sample, **kwargs) for sample in sample_data]
     new_sample_models = RnaSample.bulk_create(user, new_samples)
     new_sample_ids = [s.id for s in new_sample_models]
-    sample_key_map = _get_rna_sample_data_by_key(id__in=new_sample_ids)
-    sample_guid_ids_to_load.update({s['guid']: sample_key[0] for sample_key, s in sample_key_map.items()})
+    sample_guid_ids_to_load.update(
+        dict(RnaSample.objects.filter(id__in=new_sample_ids).values_list('guid', 'individual__individual_id'))
+    )
 
 
 def _get_rna_sample_data_by_key(values=None, **kwargs):
-    key_fields = ['individual__individual_id', 'tissue_type']
+    key_fields = ['individual_id', 'tissue_type']
     return {
         tuple(s.pop(k) for k in key_fields): s
         for s in RnaSample.objects.filter(**kwargs).values('guid', *key_fields, **(values or {}))
@@ -376,7 +377,7 @@ def _load_rna_seq_file(
     if samples_to_create:
         _create_rna_samples(samples_to_create.values(), sample_guid_ids_to_load, user, data_source=data_source, data_type=data_type)
 
-    prev_loaded_individual_ids = _update_existing_sample_models(model_cls, user, data_type, samples_to_create, loaded_samples)
+    prev_loaded_individual_ids = _update_existing_sample_models(model_cls, user, data_type, samples_to_create.values(), loaded_samples)
 
     return warnings, len(loaded_samples) + len(unmatched_samples), sample_guid_ids_to_load, prev_loaded_individual_ids
 
@@ -400,17 +401,15 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
         return
 
     tissue_type = TISSUE_TYPE_MAP[individual['tissue']]
-    sample_key = (sample_id, tissue_type)
-
-    potential_sample = potential_samples.get(sample_key)
+    potential_sample = potential_samples.get((individual['id'], tissue_type))
     if (potential_sample or {}).get('active'):
         loaded_samples.add(potential_sample['guid'])
         return
 
     if potential_sample:
         sample_guid_ids_to_load[potential_sample['guid']] = sample_id
-    elif sample_key not in samples_to_create:
-        samples_to_create[sample_key] = {'individual_id': individual['id'], 'tissue_type': tissue_type}
+    elif sample_id not in samples_to_create:
+        samples_to_create[sample_id] = {'individual_id': individual['id'], 'tissue_type': tissue_type}
 
     if missing_required_fields or (unmatched_samples and not ignore_extra_samples):
         # If there are definite errors, do not process/save data, just continue to check for additional errors
@@ -420,12 +419,13 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
     if any(row_gene_ids):
         gene_ids.update(row_gene_ids)
 
+    individual_id = individual['individual_id']
     for gene_id in row_gene_ids:
         row_dict = {**row_dict, GENE_ID_COL: gene_id}
-        if sample_id not in sample_files:
-            file_name = _get_sample_file_path(file_dir, sample_id)
-            sample_files[individual['individual_id']] = gzip.open(file_name, 'at')
-        sample_files[individual['individual_id']].write(f'{json.dumps(row_dict)}\n')
+        if individual_id not in sample_files:
+            file_name = _get_sample_file_path(file_dir, individual_id)
+            sample_files[individual_id] = gzip.open(file_name, 'at')
+        sample_files[individual_id].write(f'{json.dumps(row_dict)}\n')
 
 
 def _get_sample_file_path(file_dir, sample_guid):
@@ -460,19 +460,18 @@ def _process_rna_errors(gene_ids, missing_required_fields, unmatched_samples, ig
 
 
 def _update_existing_sample_models(model_cls, user, data_type, samples_to_create, loaded_samples):
-    loaded_individual_ids = [s['individual_id'] for s in samples_to_create.values()]
+    individual_tissues_to_create = {s['individual_id']: s['tissue_type'] for s in samples_to_create}
     potential_inactivate_samples_by_key = _get_rna_sample_data_by_key(
-        individual_id__in=loaded_individual_ids, data_type=data_type, is_active=True, values={
-            'individual_db_id': F('individual_id'),
-        },
+        individual_id__in=individual_tissues_to_create.keys(), data_type=data_type, is_active=True,
     )
-    inactivate_samples_by_key = {
-        key: sample for key, sample in potential_inactivate_samples_by_key.items()
-        if key in samples_to_create and sample['guid'] not in loaded_samples
+    sample_keys_to_create = set(individual_tissues_to_create.items())
+    inactivate_samples = {
+        sample['guid']: key[0] for key, sample in potential_inactivate_samples_by_key.items()
+        if key in sample_keys_to_create and sample['guid'] not in loaded_samples
     }
 
     inactivate_sample_guids = RnaSample.bulk_update(
-        user, {'is_active': False}, guid__in=[s['guid'] for s in inactivate_samples_by_key.values()],
+        user, {'is_active': False}, guid__in=inactivate_samples.keys(),
     )
 
     # Delete old data
@@ -480,7 +479,7 @@ def _update_existing_sample_models(model_cls, user, data_type, samples_to_create
     if to_delete:
         model_cls.bulk_delete(user, to_delete)
 
-    return {s['individual_db_id'] for s in inactivate_samples_by_key.values()}
+    return set(inactivate_samples.values())
 
 
 def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):

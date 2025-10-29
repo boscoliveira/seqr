@@ -852,7 +852,6 @@ class DataManagerAPITest(AirtableTest):
         unknown_gene_id_row2 = loaded_data_row[:2] + ['NOT_A_GENE_ID2'] + loaded_data_row[3:]
         _set_file_iter_stdout([header, unknown_gene_id_row1, unknown_gene_id_row2])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
-        import pdb; pdb.set_trace()
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['errors'][0], 'Unknown Gene IDs: NOT_A_GENE_ID1, NOT_A_GENE_ID2')
 
