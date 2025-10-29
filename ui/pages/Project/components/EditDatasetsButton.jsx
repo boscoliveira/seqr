@@ -19,10 +19,12 @@ const MODAL_NAME = 'Datasets'
 
 const ADD_VARIANT_FORM = 'variants'
 const ADD_IGV_FORM = 'igv'
+const ADD_RNA_FORM = 'rna'
 
 const SUBMIT_FUNCTIONS = {
   [ADD_VARIANT_FORM]: addVariantsDataset,
   [ADD_IGV_FORM]: addIGVDataset,
+  [ADD_RNA_FORM]: addVariantsDataset, // TODO
 }
 
 const BaseUpdateDatasetForm = React.memo(({ formType, formFields, initialValues, onSubmit }) => (
@@ -98,7 +100,7 @@ const UPLOAD_IGV_FIELDS = [
 
 const DEFAULT_UPLOAD_CALLSET_VALUE = { datasetType: DATASET_TYPE_SNV_INDEL_CALLS }
 
-const PANES = [
+const ES_ENABLED_PANES = [
   {
     title: 'Upload New Callset',
     formType: ADD_VARIANT_FORM,
@@ -109,6 +111,11 @@ const PANES = [
     title: 'Add IGV Paths',
     formType: ADD_IGV_FORM,
     formFields: UPLOAD_IGV_FIELDS,
+  },
+  {
+    title: 'Add RNA Data',
+    formType: ADD_RNA_FORM,
+    formFields: UPLOAD_CALLSET_FIELDS, // TODO
   },
 ].map(({ title, formType, formFields, initialValues }) => ({
   menuItem: title,
@@ -123,7 +130,21 @@ const PANES = [
   ),
 }))
 
-const IGV_ONLY_PANES = [PANES[1]]
+const PANES = ES_ENABLED_PANES.slice(1)
+
+const WORKSPACE_DATA_PANES = [
+  {
+    menuItem: 'Add VCF Data',
+    render: () => (
+      <Tab.Pane key="loadData">
+        <AddProjectWorkspaceDataForm
+          successMessage="Your request to load data has been submitted. Loading data from AnVIL to seqr is a slow process, and generally takes a week. You will receive an email letting you know once your new data is available."
+        />
+      </Tab.Pane>
+    ),
+  },
+  ES_ENABLED_PANES[2],
+]
 
 const mapAddDataStateToProps = state => ({
   params: getCurrentProject(state),
@@ -134,21 +155,21 @@ const AddProjectWorkspaceDataForm = connect(mapAddDataStateToProps)(AddWorkspace
 const EditDatasetsButton = React.memo(({ showLoadWorkspaceData, elasticsearchEnabled, user }) => {
   const showEditDatasets = user.isDataManager || user.isPm
   const showAddCallset = user.isDataManager && elasticsearchEnabled
-  return (
-    (showEditDatasets || showLoadWorkspaceData) ? (
-      <Modal
-        modalName={MODAL_NAME}
-        title={showEditDatasets ? 'Datasets' : 'Load Additional Data From AnVIL Workspace'}
-        size="small"
-        trigger={<ButtonLink>{showEditDatasets ? 'Edit Datasets' : 'Load Additional Data'}</ButtonLink>}
-      >
-        {showEditDatasets ? <Tab panes={showAddCallset ? PANES : IGV_ONLY_PANES} /> : (
-          <AddProjectWorkspaceDataForm
-            successMessage="Your request to load data has been submitted. Loading data from AnVIL to seqr is a slow process, and generally takes a week. You will receive an email letting you know once your new data is available."
-          />
-        )}
-      </Modal>
-    ) : null
+  let panes = null
+  if (showEditDatasets) {
+    panes = showAddCallset ? ES_ENABLED_PANES : PANES
+  } else if (showLoadWorkspaceData) {
+    panes = WORKSPACE_DATA_PANES
+  }
+  return panes && (
+    <Modal
+      modalName={MODAL_NAME}
+      title={showEditDatasets ? 'Datasets' : 'Load Additional Data From AnVIL Workspace'}
+      size="small"
+      trigger={<ButtonLink>{showEditDatasets ? 'Edit Datasets' : 'Load Additional Data'}</ButtonLink>}
+    >
+      <Tab panes={panes} />
+    </Modal>
   )
 })
 
