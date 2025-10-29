@@ -848,15 +848,15 @@ class DataManagerAPITest(AirtableTest):
         self.assertDictEqual(response.json(), {'errors': ['Unable to find matches for the following samples: NA19675_D2'], 'warnings': None})
 
         responses.replace(responses.GET, samples_url, json=AIRTABLE_RNA_SAMPLE_RECORDS)
-        unknown_gene_id_row1 = loaded_data_row[:2] + ['NOT_A_GENE_ID1'] + loaded_data_row[3:]
-        unknown_gene_id_row2 = loaded_data_row[:2] + ['NOT_A_GENE_ID2'] + loaded_data_row[3:]
+        unknown_gene_id_row1 = loaded_data_row[:1] + ['NOT_A_GENE_ID1'] + loaded_data_row[2:]
+        unknown_gene_id_row2 = loaded_data_row[:1] + ['NOT_A_GENE_ID2'] + loaded_data_row[2:]
         _set_file_iter_stdout([header, unknown_gene_id_row1, unknown_gene_id_row2])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         self.assertEqual(response.json()['errors'][0], 'Unknown Gene IDs: NOT_A_GENE_ID1, NOT_A_GENE_ID2')
 
         if not params.get('allow_missing_gene'):
-            _set_file_iter_stdout([header, loaded_data_row[:2] + [''] + loaded_data_row[3:]])
+            _set_file_iter_stdout([header, loaded_data_row[:1] + [''] + loaded_data_row[2:]])
             response = self.client.post(url, content_type='application/json', data=json.dumps(body))
             self.assertEqual(response.status_code, 400)
             self.assertEqual(response.json()['errors'][0], 'Samples missing required "gene_id": NA19675_D2')

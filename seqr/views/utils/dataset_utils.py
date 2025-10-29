@@ -395,6 +395,10 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
     if missing_cols:
         return
 
+    row_gene_ids = row_dict[GENE_ID_COL].split(';')
+    if any(row_gene_ids):
+        gene_ids.update(row_gene_ids)
+
     individual = individual_data_by_id.get(sample_id)
     if not individual:
         unmatched_samples.add(sample_id)
@@ -414,10 +418,6 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
     if missing_required_fields or (unmatched_samples and not ignore_extra_samples):
         # If there are definite errors, do not process/save data, just continue to check for additional errors
         return
-
-    row_gene_ids = row_dict[GENE_ID_COL].split(';')
-    if any(row_gene_ids):
-        gene_ids.update(row_gene_ids)
 
     individual_id = individual['individual_id']
     for gene_id in row_gene_ids:
