@@ -27,7 +27,8 @@ from seqr.views.utils.orm_to_json_utils import _get_json_for_project, get_json_f
     FAMILY_ADDITIONAL_VALUES
 from seqr.views.utils.permissions_utils import get_project_and_check_permissions, check_project_permissions, \
     check_user_created_object_permissions, pm_required, user_is_pm, login_and_policies_required, \
-    has_workspace_perm, has_case_review_permissions, is_internal_anvil_project, pm_or_data_manager_required
+    has_workspace_perm, has_case_review_permissions, is_internal_anvil_project, get_project_and_check_pm_permissions, \
+    check_project_pm_permission, user_is_data_manager, external_anvil_project_can_edit
 from seqr.views.utils.project_context_utils import families_discovery_tags, \
     add_project_tag_type_counts, get_project_analysis_groups, get_project_locus_lists
 from seqr.views.utils.terra_api_utils import is_anvil_authenticated, anvil_enabled
@@ -464,18 +465,25 @@ def _delete_project(project_guid, user):
         )
 
 
-#  TODO change permission check function here
-@pm_or_data_manager_required
+def is_data_manager_or_external_anvil_edit(project, user):
+    return user_is_data_manager(user) or external_anvil_project_can_edit(project, user)
+
+
+@login_and_policies_required
 def update_rna_seq(request, project_guid):
+    get_project_and_check_pm_permissions(project_guid, request.user, override_permission_func=is_data_manager_or_external_anvil_edit)
+
     request_json = json.loads(request.body)
     response_json, status = load_rna_seq(request_json, request.user, project_guid=project_guid)
     return create_json_response(response_json, status=status)
 
 
-#  TODO change permission check function here
-@pm_or_data_manager_required
+@login_and_policies_required
 def load_rna_seq_sample_data(request, sample_guid):
     sample = RnaSample.objects.get(guid=sample_guid)
+
+    check_project_pm_permission(sample.individual.family.project, request.user, override_permission_func=is_data_manager_or_external_anvil_edit)
+
     logger.info(f'Loading outlier data for {sample.individual.individual_id}', request.user)
 
     request_json = json.loads(request.body)
