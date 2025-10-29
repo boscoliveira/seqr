@@ -34,6 +34,7 @@ const REQUEST_INDIVIDUALS = 'REQUEST_INDIVIDUALS'
 const REQUEST_MME_SUBMISSIONS = 'REQUEST_MME_SUBMISSIONS'
 const REQUEST_LOCUS_LISTS = 'REQUEST_LOCUS_LISTS'
 const RECEIVE_LOCUS_LISTS = 'RECEIVE_LOCUS_LISTS'
+const RECEIVE_RNA_SEQ_UPLOAD_STATS = 'RECEIVE_RNA_SEQ_UPLOAD_STATS'
 
 // Data actions
 
@@ -228,7 +229,7 @@ export const uploadRnaSeq = values => (dispatch, getState) => loadMultipleData(
   ({ sampleGuids, fileName }, { dataType }) => sampleGuids.map(sampleGuid => ([
     `/api/load_rna_seq_sample/${sampleGuid}`, sampleGuid, { fileName, dataType },
   ])),
-  RECEIVE_DATA,
+  RECEIVE_RNA_SEQ_UPLOAD_STATS,
   numLoaded => `Successfully loaded data for ${numLoaded} RNA-seq samples`,
   10,
 )(values)(dispatch)
@@ -447,6 +448,7 @@ export const reducers = {
     page: 1,
     recordsPerPage: 25,
   }, false),
+  rnaSeqUploadStats: createSingleValueReducer(RECEIVE_RNA_SEQ_UPLOAD_STATS, {}),
 }
 
 const rootReducer = combineReducers(reducers)

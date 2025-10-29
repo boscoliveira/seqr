@@ -1,7 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types'
 import { connect } from 'react-redux'
-import { Tab } from 'semantic-ui-react'
+import { Message, Tab } from 'semantic-ui-react'
 
 import Modal from 'shared/components/modal/Modal'
 import { ButtonLink } from 'shared/components/StyledComponents'
@@ -14,7 +14,7 @@ import AddWorkspaceDataForm from 'shared/components/panel/LoadWorkspaceDataForm'
 import { DATASET_TYPE_SNV_INDEL_CALLS, DATASET_TYPE_SV_CALLS, DATASET_TYPE_MITO_CALLS, LOAD_RNA_FIELDS, TISSUE_DISPLAY } from 'shared/utils/constants'
 
 import { addVariantsDataset, addIGVDataset, uploadRnaSeq } from '../reducers'
-import { getCurrentProject, getProjectGuid } from '../selectors'
+import { getCurrentProject, getProjectGuid, getRnaSeqUploadStats } from '../selectors'
 
 const MODAL_NAME = 'Datasets'
 
@@ -28,22 +28,21 @@ const SUBMIT_FUNCTIONS = {
   [ADD_RNA_FORM]: uploadRnaSeq,
 }
 
-const BaseUpdateDatasetForm = React.memo(({ formType, formFields, initialValues, onSubmit }) => (
+const BaseUpdateDatasetForm = React.memo(({ formType, formFields, ...props }) => (
   <FormWrapper
     modalName={MODAL_NAME}
-    onSubmit={onSubmit}
     confirmCloseIfNotSaved
     showErrorPanel
     size="small"
     fields={formFields}
     liveValidate={formType === ADD_IGV_FORM}
-    initialValues={initialValues}
+    {...props}
   />
 ))
 
 BaseUpdateDatasetForm.propTypes = {
   formFields: PropTypes.arrayOf(PropTypes.object).isRequired,
-  formType: PropTypes.string.isRequired,
+  formType: PropTypes.string,
   initialValues: PropTypes.object,
   onSubmit: PropTypes.func,
 }
@@ -111,9 +110,45 @@ const PROJECT_LOAD_RNA_FIELDS = [
   ...LOAD_RNA_FIELDS.slice(-1),
 ]
 
+const BaseRnaUpdateForm = ({ onSubmit, uploadStats }) => (
+  <div>
+    <BaseUpdateDatasetForm
+      onSubmit={onSubmit}
+      closeOnSuccess={false}
+      formFields={PROJECT_LOAD_RNA_FIELDS}
+    />
+    {uploadStats?.info?.length > 0 && <Message info list={uploadStats.info} />}
+    {uploadStats?.warnings?.length > 0 && <Message warning list={uploadStats.warnings} />}
+  </div>
+)
+
+BaseRnaUpdateForm.propTypes = {
+  onSubmit: PropTypes.func,
+  uploadStats: PropTypes.object,
+}
+
+const mapRnaStateToProps = state => ({
+  uploadStats: getRnaSeqUploadStats(state),
+})
+
+const mapRnaDispatchToProps = {
+  onSubmit: uploadRnaSeq,
+}
+
+const RnaUpdateForm = connect(mapRnaStateToProps, mapRnaDispatchToProps)(BaseRnaUpdateForm)
+
 const DEFAULT_UPLOAD_CALLSET_VALUE = { datasetType: DATASET_TYPE_SNV_INDEL_CALLS }
 
-const ES_ENABLED_PANES = [
+const ADD_RNA_DATA_PANE = {
+  menuItem: 'Add RNA Data',
+  render: () => (
+    <Tab.Pane key="loadRna">
+      <RnaUpdateForm />
+    </Tab.Pane>
+  ),
+}
+
+const ES_ENABLED_PANES = [...[
   {
     title: 'Upload New Callset',
     formType: ADD_VARIANT_FORM,
@@ -124,11 +159,6 @@ const ES_ENABLED_PANES = [
     title: 'Add IGV Paths',
     formType: ADD_IGV_FORM,
     formFields: UPLOAD_IGV_FIELDS,
-  },
-  {
-    title: 'Add RNA Data',
-    formType: ADD_RNA_FORM,
-    formFields: PROJECT_LOAD_RNA_FIELDS,
   },
 ].map(({ title, formType, formFields, initialValues }) => ({
   menuItem: title,
@@ -141,7 +171,7 @@ const ES_ENABLED_PANES = [
       />
     </Tab.Pane>
   ),
-}))
+})), ADD_RNA_DATA_PANE]
 
 const PANES = ES_ENABLED_PANES.slice(1)
 
