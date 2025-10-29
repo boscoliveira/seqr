@@ -479,7 +479,23 @@ def _update_existing_sample_models(model_cls, user, data_type, samples_to_create
     return set(inactivate_samples.values())
 
 
-def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
+def load_rna_seq(file_path, *args, **kwargs):
+    try:
+        sample_guids, file_name_prefix, info, warnings = _load_rna_seq(file_path,*args, **kwargs)
+    except FileNotFoundError:
+        return {'error': f'File not found: {file_path}'}, 400
+    except ValueError as e:
+        return {'error': str(e)}, 400
+
+    return {
+        'info': info,
+        'warnings': warnings,
+        'fileName': file_name_prefix,
+        'sampleGuids': sample_guids,
+    }, 200
+
+
+def _load_rna_seq(file_path, data_type, user, sample_metadata_mapping, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
     model_cls = config['model_class']
     data_source = file_path.split('/')[-1].split('_-_')[-1]

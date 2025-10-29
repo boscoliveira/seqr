@@ -464,6 +464,7 @@ def _delete_project(project_guid, user):
         )
 
 
+#  TODO change permission check function here
 @pm_or_data_manager_required
 def load_rna_seq_sample_data(request, sample_guid):
     sample = RnaSample.objects.get(guid=sample_guid)

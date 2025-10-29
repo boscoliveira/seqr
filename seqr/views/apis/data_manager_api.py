@@ -79,22 +79,11 @@ def update_rna_seq(request):
     if misconfigured_samples:
         logger.warning(f'Skipping samples associated with multiple conflicting PDOs in Airtable: {", ".join(sorted(misconfigured_samples))}', request.user)
 
-    try:
-        sample_guids, file_name_prefix, info, warnings = load_rna_seq(
-            data_type, file_path, request.user, sample_metadata_mapping=sample_metadata_mapping,
-            ignore_extra_samples=request_json.get('ignoreExtraSamples'),
-        )
-    except FileNotFoundError:
-        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
-    except ValueError as e:
-        return create_json_response({'error': str(e)}, status=400)
-
-    return create_json_response({
-        'info': info,
-        'warnings': warnings,
-        'fileName': file_name_prefix,
-        'sampleGuids': sample_guids,
-    })
+    response_json, status = load_rna_seq(
+        file_path, data_type, request.user, sample_metadata_mapping=sample_metadata_mapping,
+        ignore_extra_samples=request_json.get('ignoreExtraSamples'),
+    )
+    return create_json_response(response_json, status=status)
 
 
 def _get_sample_file_path(file_dir, sample_guid):
