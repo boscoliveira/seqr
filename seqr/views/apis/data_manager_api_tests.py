@@ -912,6 +912,7 @@ class DataManagerAPITest(AirtableTest):
         def _test_basic_data_loading(data, num_parsed_samples, num_loaded_samples, new_sample_individual_id, body,
                                      project_names, num_created_samples=1, warnings=None, additional_logs=None):
             self.reset_logs()
+            responses.calls.reset()
             _set_file_iter_stdout([header] + data)
             response = self.client.post(url, content_type='application/json', data=json.dumps(body))
             self.assertEqual(response.status_code, 200)
@@ -937,6 +938,13 @@ class DataManagerAPITest(AirtableTest):
             self._has_expected_file_loading_logs(
                 'gs://rna_data/new_muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user,
                 additional_logs=additional_logs, additional_logs_offset=6)
+
+            self.assertEqual(len(responses.calls), 1)
+            self.assert_expected_airtable_call(
+                call_index=0,
+                filter_formula="AND(LEN({PassingCollaboratorSampleIDs})>0,LEN({TissueOfOrigin})>0,OR(SEARCH('RNA ready to load',ARRAYJOIN(PDOStatus,';'))))",
+                fields=['CollaboratorSampleID', 'SeqrCollaboratorSampleID', 'PDOStatus', 'SeqrProject', 'TissueOfOrigin'],
+            )
 
             return response_json, new_sample_guid
 
