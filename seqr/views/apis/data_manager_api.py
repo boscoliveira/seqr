@@ -61,9 +61,6 @@ TISSUE_FIELD = 'TissueOfOrigin'
 def update_rna_seq(request):
     request_json = json.loads(request.body)
 
-    data_type = request_json['dataType']
-    file_path = request_json['file']
-
     airtable_samples = _get_dataset_type_samples_for_matched_pdos(
         ['RNA ready to load'], request.user, RNA, None, sample_fields=[TISSUE_FIELD], skip_invalid_pdos=True,
     )
@@ -79,10 +76,7 @@ def update_rna_seq(request):
     if misconfigured_samples:
         logger.warning(f'Skipping samples associated with multiple conflicting PDOs in Airtable: {", ".join(sorted(misconfigured_samples))}', request.user)
 
-    response_json, status = load_rna_seq(
-        file_path, data_type, request.user, sample_metadata_mapping=sample_metadata_mapping,
-        ignore_extra_samples=request_json.get('ignoreExtraSamples'),
-    )
+    response_json, status = load_rna_seq(request_json, request.user, sample_metadata_mapping=sample_metadata_mapping)
     return create_json_response(response_json, status=status)
 
 

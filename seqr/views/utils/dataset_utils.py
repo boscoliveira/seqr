@@ -479,9 +479,14 @@ def _update_existing_sample_models(model_cls, user, data_type, samples_to_create
     return set(inactivate_samples.values())
 
 
-def load_rna_seq(file_path, *args, **kwargs):
+def load_rna_seq(request_json, user, **kwargs):
+    data_type = request_json['dataType']
+    file_path = request_json['file']
+
     try:
-        sample_guids, file_name_prefix, info, warnings = _load_rna_seq(file_path,*args, **kwargs)
+        sample_guids, file_name_prefix, info, warnings = _load_rna_seq(
+            data_type, file_path, user, **kwargs, ignore_extra_samples=request_json.get('ignoreExtraSamples'),
+        )
     except FileNotFoundError:
         return {'error': f'File not found: {file_path}'}, 400
     except ValueError as e:
@@ -495,7 +500,7 @@ def load_rna_seq(file_path, *args, **kwargs):
     }, 200
 
 
-def _load_rna_seq(file_path, data_type, user, sample_metadata_mapping, **kwargs):
+def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
     model_cls = config['model_class']
     data_source = file_path.split('/')[-1].split('_-_')[-1]
