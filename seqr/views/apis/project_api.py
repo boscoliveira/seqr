@@ -16,7 +16,7 @@ from seqr.models import Project, Family, Individual, Sample, RnaSample, FamilyNo
 from seqr.utils.file_utils import file_iter
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.views.utils.airtable_utils import AirtableSession, ANVIL_REQUEST_TRACKING_TABLE
-from seqr.views.utils.dataset_utils import post_process_rna_data, RNA_DATA_TYPE_CONFIGS
+from seqr.views.utils.dataset_utils import post_process_rna_data, load_rna_seq, RNA_DATA_TYPE_CONFIGS
 from seqr.views.utils.file_utils import get_temp_file_path
 from seqr.views.utils.individual_utils import delete_individuals
 from seqr.views.utils.json_utils import create_json_response, _to_snake_case, _to_camel_case
@@ -462,6 +462,14 @@ def _delete_project(project_guid, user):
             record_and_filters={'AnVIL Project URL': f'{BASE_URL}project/{project_guid}/project_page'},
             update={'Status': 'Project Deleted'},
         )
+
+
+#  TODO change permission check function here
+@pm_or_data_manager_required
+def update_rna_seq(request, project_guid):
+    request_json = json.loads(request.body)
+    response_json, status = load_rna_seq(request_json, request.user, project_guid=project_guid)
+    return create_json_response(response_json, status=status)
 
 
 #  TODO change permission check function here
