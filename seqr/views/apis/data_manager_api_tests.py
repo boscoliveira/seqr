@@ -467,6 +467,24 @@ AIRTABLE_RNA_SAMPLE_RECORDS = {
             }
         },
         {
+            'id': 'recW56C2CJW5lT6c5',
+            'fields': {
+                'CollaboratorSampleID': 'NA19678',
+                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0001_1kg/project_page'],
+                'PDOStatus': ['RNA ready to load'],
+                'TissueOfOrigin': ['Muscle'],
+            }
+        },
+        {
+            'id': 'recW56C2CJW5lT75x',
+            'fields': {
+                'CollaboratorSampleID': 'NA20888',
+                'SeqrProject': ['https://seqr.broadinstitute.org/project/R0003_test/project_page'],
+                'PDOStatus': ['RNA ready to load'],
+                'TissueOfOrigin': ['Muscle'],
+            }
+        },
+        {
             'id': 'rec2B6OGmVpAkQW3s',
             'fields': {
                 'CollaboratorSampleID': 'NA12345',
@@ -665,7 +683,7 @@ class DataManagerAPITest(AirtableTest):
                 ['NA19675_D3', 'Test Reprocessed Project', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
                 ['NA20888', 'Test Reprocessed Project', 'ENSG00000240361', 'muscle', '', 0.04, 0.112, 1.9],
             ],
-            'skipped_samples': 'NA19675_D3 (Test Reprocessed Project)',
+            'skipped_samples': 'NA19675_D3',
             'sample_tissue_type': 'M',
             'num_parsed_samples': 3,
             'initial_model_count': 3,
@@ -693,7 +711,7 @@ class DataManagerAPITest(AirtableTest):
                 # a project mismatched sample NA20878
                 ['NA20878', 'ENSG00000233750', 0.064, ''],
             ],
-            'skipped_samples': 'NA19675_D3 (1kg project nåme with uniçøde), NA20878 (Test Reprocessed Project)',
+            'skipped_samples': 'NA19675_D3, NA20878',
             'sample_tissue_type': 'M',
             'num_parsed_samples': 4,
             'initial_model_count': 4,
@@ -740,7 +758,7 @@ class DataManagerAPITest(AirtableTest):
                 ['NA20878', 'Test Reprocessed Project', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*', 'psi3',
                  1.56E-25, 6.33, 0.45, 143, 14.3, 1433, 143.3, 'fibroblasts', 1, 20],
             ],
-            'skipped_samples': 'NA19675_D3 (1kg project nåme with uniçøde), NA20878 (Test Reprocessed Project)',
+            'skipped_samples': 'NA19675_D3, NA20878',
             'sample_tissue_type': 'F',
             'num_parsed_samples': 4,
             'initial_model_count': 7,
@@ -754,7 +772,7 @@ class DataManagerAPITest(AirtableTest):
     def _has_expected_file_loading_logs(self, file, user, info=None, warnings=None, additional_logs=None, additional_logs_offset=None):
         expected_logs = [
             ('Fetching Samples records 0-1 from airtable', None),
-            ('Fetched 4 Samples records from airtable', None),
+            ('Fetched 6 Samples records from airtable', None),
             ('Skipping samples associated with misconfigured PDOs in Airtable: HG00731, NA21234', {'severity': 'WARNING'}),
             ('Skipping samples associated with multiple conflicting PDOs in Airtable: NA12345', {'severity': 'WARNING'}),
             (f'==> gsutil ls {file}', None),
@@ -917,8 +935,8 @@ class DataManagerAPITest(AirtableTest):
                 'entityIds': response_json['sampleGuids'] if num_created_samples > 1 else [new_sample_guid],
             }})] + (additional_logs or [])
             self._has_expected_file_loading_logs(
-                'gs://rna_data/new_muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.pm_user,
-                additional_logs=additional_logs, additional_logs_offset=2)
+                'gs://rna_data/new_muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user,
+                additional_logs=additional_logs, additional_logs_offset=6)
 
             return response_json, new_sample_guid
 
