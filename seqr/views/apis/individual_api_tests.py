@@ -245,6 +245,20 @@ class IndividualAPITest(object):
         self.assertEqual(response_json['individualsByGuid'][ID_UPDATE_GUID]['individualId'], UPDATED_ID)
         self.assertEqual(response_json['individualsByGuid'][ID_UPDATE_GUID]['maternalId'], 'NA19679')
 
+        response = self.client.post(edit_individuals_url, content_type='application/json', data=json.dumps({
+            'individuals': [{
+                'individualGuid': INDIVIDUAL_GUID,
+                'familyId': '1',
+                'individualId': 'NA19675_1',
+                'paternalId': '',
+            }]
+        }))
+        self.assertEqual(response.status_code, 200)
+        response_json = response.json()
+        self.assertSetEqual({INDIVIDUAL_GUID}, set(response_json['individualsByGuid']))
+        self.assertIsNone(response_json['individualsByGuid'][INDIVIDUAL_GUID]['paternalId'])
+        self.assertEqual(response_json['individualsByGuid'][INDIVIDUAL_GUID]['maternalId'], 'NA19679')
+
         # Test PM permission
         pm_required_edit_individuals_url = reverse(edit_individuals_handler, args=[PM_REQUIRED_PROJECT_GUID])
         response = self.client.post(pm_required_edit_individuals_url, content_type='application/json', data=json.dumps({

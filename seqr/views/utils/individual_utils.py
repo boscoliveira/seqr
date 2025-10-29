@@ -143,7 +143,7 @@ def _update_from_record(record, user, families_by_id, individual_lookup, updated
             'mother': record.pop('mother', None),
             'father': record.pop('father', None),
         })
-    elif record.get('maternalId') or record.get('paternalId'):
+    elif record.get('maternalId') is not None or record.get('paternalId') is not None:
         parent_updates.append({
             'individual': individual,
             'maternalId': record.pop('maternalId', None),
