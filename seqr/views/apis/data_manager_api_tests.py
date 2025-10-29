@@ -1774,14 +1774,14 @@ class AnvilDataManagerAPITest(AnvilAuthenticationTestCase, DataManagerAPITest):
                 fields=['CollaboratorSampleID', 'SeqrCollaboratorSampleID', 'PDOStatus', 'SeqrProject'],
             )
 
-    def _assert_expected_pm_access(self, get_response, **kwargs):
+    def _assert_expected_pm_access(self, get_response, *args, **kwargs):
         response = get_response()
         self.assertEqual(response.status_code, 403)
         self.assert_json_logs(self.pm_user, [
             ('PermissionDenied: Error: To access RDG airtable user must login with Broad email.', {'severity': 'WARNING'})
         ])
         self.login_data_manager_user()
-        return super()._assert_expected_pm_access(get_response, **kwargs)
+        return super()._assert_expected_pm_access(get_response, *args, **kwargs)
 
     def _assert_expected_load_data_requests(self, *args, dataset_type='SNV_INDEL', skip_project=False, **kwargs):
         num_calls = 1
