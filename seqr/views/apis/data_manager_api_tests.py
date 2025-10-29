@@ -749,17 +749,20 @@ class DataManagerAPITest(AirtableTest):
         },
     }
 
-    def _has_expected_file_loading_logs(self, file, user, info=None, warnings=None, additional_logs=None, additional_logs_offset=None):
+    def _has_expected_file_loading_logs(self, file, user, info=None, warnings=None, additional_logs=None, additional_logs_offset=None, include_airtable_logs=False):
         expected_logs = [
-            ('Fetching Samples records 0-1 from airtable', None),
-            ('Fetched 6 Samples records from airtable', None),
-            ('Skipping samples associated with misconfigured PDOs in Airtable: HG00731, NA21234', {'severity': 'WARNING'}),
-            ('Skipping samples associated with multiple conflicting PDOs in Airtable: NA12345', {'severity': 'WARNING'}),
             (f'==> gsutil ls {file}', None),
             (f'==> gsutil cat {file} | gunzip -c -q - ', None),
         ] + [(info_log, None) for info_log in info or []] + [
             (warn_log, {'severity': 'WARNING'}) for warn_log in warnings or []
         ]
+        if include_airtable_logs:
+            expected_logs = [
+                ('Fetching Samples records 0-1 from airtable', None),
+                ('Fetched 6 Samples records from airtable', None),
+                ('Skipping samples associated with misconfigured PDOs in Airtable: HG00731, NA21234', {'severity': 'WARNING'}),
+                ('Skipping samples associated with multiple conflicting PDOs in Airtable: NA12345', {'severity': 'WARNING'}),
+            ] + expected_logs
         if additional_logs:
             if additional_logs_offset:
                 for log in reversed(additional_logs):
@@ -890,7 +893,7 @@ class DataManagerAPITest(AirtableTest):
         ]
         warnings = ['Skipped loading for 1 samples already loaded from this file']
         self.assertDictEqual(response.json(), {'info': info, 'warnings': warnings, 'sampleGuids': [], 'fileName': mock.ANY})
-        self._has_expected_file_loading_logs('gs://rna_data/muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user)
+        self._has_expected_file_loading_logs('gs://rna_data/muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user, include_airtable_logs=True)
         self.assertEqual(model_cls.objects.count(), params['initial_model_count'])
         mock_send_slack.assert_not_called()
         mock_send_email.assert_not_called()
@@ -928,7 +931,7 @@ class DataManagerAPITest(AirtableTest):
             }})] + (additional_logs or [])
             self._has_expected_file_loading_logs(
                 'gs://rna_data/new_muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user,
-                additional_logs=additional_logs, additional_logs_offset=6)
+                additional_logs=additional_logs, additional_logs_offset=6, include_airtable_logs=True)
 
             self.assertEqual(len(responses.calls), 1)
             self.assert_expected_airtable_call(
