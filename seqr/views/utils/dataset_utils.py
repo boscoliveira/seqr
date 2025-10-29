@@ -285,18 +285,6 @@ SPLICE_OUTLIER_HEADER_COLS.update({
     SAMPLE_ID_COL: SAMPLE_ID_HEADER_COL, GENE_ID_COL: GENE_ID_HEADER_COL,
 })
 
-AIRTABLE_TISSUE_TYPE_MAP = {
-    'whole_blood': 'Blood',
-    'fibroblasts': 'Fibroblast',
-    'muscle':  'Muscle',
-    'airway_cultured_epithelium': 'Nasal Epithelium',
-    'brain': 'Brain',
-}
-TISSUE_TYPE_MAP = {
-    AIRTABLE_TISSUE_TYPE_MAP[name]: type
-    for type, name in RnaSample.TISSUE_TYPE_CHOICES if name in AIRTABLE_TISSUE_TYPE_MAP
-}
-
 
 def _get_splice_id(row):
     return '-'.join([row[GENE_ID_COL], row[CHROM_COL], str(row[START_COL]), str(row[END_COL]), row[STRAND_COL],
@@ -401,7 +389,7 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
         unmatched_samples.add(sample_id)
         return
 
-    tissue_type = TISSUE_TYPE_MAP[individual['tissue']]
+    tissue_type = individual['tissue']
     potential_sample = potential_samples.get((individual['id'], tissue_type))
     if (potential_sample or {}).get('active'):
         loaded_samples.add(potential_sample['guid'])

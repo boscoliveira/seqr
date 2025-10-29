@@ -27,7 +27,7 @@ from seqr.views.utils.pedigree_info_utils import get_validated_related_individua
 from seqr.views.utils.permissions_utils import data_manager_required, pm_or_data_manager_required, get_internal_projects
 from seqr.views.utils.terra_api_utils import anvil_enabled
 
-from seqr.models import Sample, Individual, Project, PhenotypePrioritization
+from seqr.models import Sample, RnaSample, Individual, Project, PhenotypePrioritization
 
 from settings import KIBANA_SERVER, KIBANA_ELASTICSEARCH_PASSWORD, KIBANA_ELASTICSEARCH_USER, \
     LOADING_DATASETS_DIR, LUIGI_UI_SERVICE_HOSTNAME, LUIGI_UI_SERVICE_PORT
@@ -56,6 +56,17 @@ def delete_index(request):
 
 RNA = 'RNA'
 TISSUE_FIELD = 'TissueOfOrigin'
+AIRTABLE_TISSUE_TYPE_MAP = {
+    'whole_blood': 'Blood',
+    'fibroblasts': 'Fibroblast',
+    'muscle':  'Muscle',
+    'airway_cultured_epithelium': 'Nasal Epithelium',
+    'brain': 'Brain',
+}
+TISSUE_TYPE_MAP = {
+    AIRTABLE_TISSUE_TYPE_MAP[name]: type
+    for type, name in RnaSample.TISSUE_TYPE_CHOICES if name in AIRTABLE_TISSUE_TYPE_MAP
+}
 
 @pm_or_data_manager_required
 def update_rna_seq(request):
@@ -66,7 +77,7 @@ def update_rna_seq(request):
     )
     sample_metadata_mapping = {
         sample['sample_id']: {
-            'tissue': sample[TISSUE_FIELD][0],
+            'tissue': TISSUE_TYPE_MAP[sample[TISSUE_FIELD][0]],
             'project_guid': sample['pdos'][0]['project_guid'],
             'sample_id': sample.get('CollaboratorSampleID') or sample['sample_id'],
         }
