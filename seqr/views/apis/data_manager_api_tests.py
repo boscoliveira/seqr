@@ -664,9 +664,8 @@ class DataManagerAPITest(AirtableTest):
         self._test_request_proxy('pipeline-runner-ui:8082', url, proxy_path='/api/task_list')
 
     RNA_DATA_TYPE_PARAMS = {
-        'outlier': {
+        'E': {
             'model_cls': RnaSeqOutlier,
-            'data_type': 'E',
             'message_data_type': 'Expression Outlier',
             'header': ['sampleID', 'geneID', 'detail', 'pValue', 'padjust', 'zScore'],
             'optional_headers': ['detail'],
@@ -686,9 +685,8 @@ class DataManagerAPITest(AirtableTest):
             'parsed_file_data': RNA_OUTLIER_SAMPLE_DATA,
             'sample_guid': RNA_OUTLIER_MUSCLE_SAMPLE_GUID,
         },
-        'tpm': {
+        'T': {
             'model_cls': RnaSeqTpm,
-            'data_type': 'T',
             'message_data_type': 'Expression',
             'header': ['sample_id', 'gene_id', 'TPM', 'Description'],
             'optional_headers': ['Description'],
@@ -713,9 +711,8 @@ class DataManagerAPITest(AirtableTest):
             'parsed_file_data': RNA_TPM_SAMPLE_DATA,
             'sample_guid': RNA_TPM_MUSCLE_SAMPLE_GUID,
         },
-        'splice_outlier': {
+        'S': {
             'model_cls': RnaSeqSpliceOutlier,
-            'data_type': 'S',
             'message_data_type': 'Splice Outlier',
             'header': ['sampleID', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
                        'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'rareDiseaseSamplesWithThisJunction',
@@ -787,13 +784,13 @@ class DataManagerAPITest(AirtableTest):
         return sample.guid
 
     def test_update_rna_outlier(self, *args, **kwargs):
-        self._test_update_rna_seq('outlier', *args, **kwargs)
+        self._test_update_rna_seq('E', *args, **kwargs)
 
     def test_update_rna_tpm(self, *args, **kwargs):
-        self._test_update_rna_seq('tpm', *args, **kwargs)
+        self._test_update_rna_seq('T', *args, **kwargs)
 
     def test_update_rna_splice_outlier(self, *args, **kwargs):
-        self._test_update_rna_seq('splice_outlier', *args, **kwargs)
+        self._test_update_rna_seq('S', *args, **kwargs)
 
     @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://seqr.broadinstitute.org/')
     @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
@@ -919,12 +916,12 @@ class DataManagerAPITest(AirtableTest):
                 f'Attempted data loading for {num_loaded_samples} RNA-seq samples in the following {num_projects}'
                 f' projects: {project_names}'
             ]
-            file_name = RNA_FILENAME_TEMPLATE.format(params['data_type'])
+            file_name = RNA_FILENAME_TEMPLATE.format(data_type)
             response_json = response.json()
             self.assertDictEqual(response_json, {'info': info, 'warnings': warnings or [], 'sampleGuids': mock.ANY,
                                                  'fileName': file_name})
             new_sample_guid = self._check_rna_sample_model(
-                individual_id=new_sample_individual_id, data_source='new_muscle_samples.tsv.gz', data_type=params['data_type'],
+                individual_id=new_sample_individual_id, data_source='new_muscle_samples.tsv.gz', data_type=data_type,
                 tissue_type='M', is_active_sample=False,
             )
             self.assertTrue(new_sample_guid in response_json['sampleGuids'])
@@ -989,12 +986,12 @@ class DataManagerAPITest(AirtableTest):
 
         # test database models are correct
         self.assertEqual(model_cls.objects.count(), params['initial_model_count'] - deleted_count)
-        sample_guid = self._check_rna_sample_model(individual_id=1, data_source='new_muscle_samples.tsv.gz', data_type=params['data_type'],
+        sample_guid = self._check_rna_sample_model(individual_id=1, data_source='new_muscle_samples.tsv.gz', data_type=data_type,
                                                    tissue_type=params.get('sample_tissue_type'), is_active_sample=False)
         self.assertSetEqual(set(response_json['sampleGuids']), {sample_guid, new_sample_guid})
 
         # test correct file interactions
-        file_path = RNA_FILENAME_TEMPLATE.format(params['data_type'])
+        file_path = RNA_FILENAME_TEMPLATE.format(data_type)
         expected_subprocess_calls = [
             f'gsutil ls {RNA_FILE_ID}',
             f'gsutil cat {RNA_FILE_ID} | gunzip -c -q - ',

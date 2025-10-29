@@ -663,7 +663,7 @@ class ProjectAPITest(object):
 
     def test_load_rna_outlier_sample_data(self, *args, **kwargs):
         models = self._test_load_rna_seq_sample_data(
-            'outlier', RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_OUTLIER_SAMPLE_DATA, RnaSeqOutlier, *args, **kwargs,
+            'E', RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_OUTLIER_SAMPLE_DATA, RnaSeqOutlier, *args, **kwargs,
         )
 
         expected_models = [
@@ -674,7 +674,7 @@ class ProjectAPITest(object):
 
     def test_load_rna_tpm_sample_data(self, *args, **kwargs):
         models = self._test_load_rna_seq_sample_data(
-            'tpm', RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, RnaSeqTpm, *args, **kwargs, mismatch_field='tpm',
+            'T', RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, RnaSeqTpm, *args, **kwargs, mismatch_field='tpm',
         )
 
         expected_models = [('ENSG00000240361', 7.8), ('ENSG00000233750', 0.0)]
@@ -683,7 +683,7 @@ class ProjectAPITest(object):
 
     def test_load_rna_splice_outlier_sample_data(self, *args, **kwargs):
         models = self._test_load_rna_seq_sample_data(
-            'splice_outlier', RNA_SPLICE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RnaSeqSpliceOutlier, *args, **kwargs,
+            'S', RNA_SPLICE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RnaSeqSpliceOutlier, *args, **kwargs,
             row_id='ENSG00000233750-2-167254166-167258349-*-psi3',
         )
 

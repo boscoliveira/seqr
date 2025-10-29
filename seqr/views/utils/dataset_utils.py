@@ -304,22 +304,19 @@ def _get_splice_id(row):
 
 
 RNA_DATA_TYPE_CONFIGS = {
-    'outlier': {
+    RnaSample.DATA_TYPE_EXPRESSION_OUTLIER: {
         'model_class': RnaSeqOutlier,
         'columns': RNA_OUTLIER_COLUMNS,
-        'data_type': RnaSample.DATA_TYPE_EXPRESSION_OUTLIER,
         'additional_kwargs': {},
     },
-    'tpm': {
+    RnaSample.DATA_TYPE_TPM: {
         'model_class': RnaSeqTpm,
         'columns': TPM_HEADER_COLS,
-        'data_type': RnaSample.DATA_TYPE_TPM,
         'additional_kwargs': {},
     },
-    'splice_outlier': {
+    RnaSample.DATA_TYPE_SPLICE_OUTLIER: {
         'model_class': RnaSeqSpliceOutlier,
         'columns': SPLICE_OUTLIER_HEADER_COLS,
-        'data_type': RnaSample.DATA_TYPE_SPLICE_OUTLIER,
         'additional_kwargs': {
             'allow_missing_gene': True,
         },
@@ -484,7 +481,6 @@ def _update_existing_sample_models(model_cls, user, data_type, samples_to_create
 
 def load_rna_seq(data_type, file_path, user, sample_metadata_mapping, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
-    data_type = config['data_type']
     model_cls = config['model_class']
     data_source = file_path.split('/')[-1].split('_-_')[-1]
 
