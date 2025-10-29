@@ -485,7 +485,8 @@ def load_rna_seq(request_json, user, **kwargs):
 
     try:
         sample_guids, file_name_prefix, info, warnings = _load_rna_seq(
-            data_type, file_path, user, **kwargs, ignore_extra_samples=request_json.get('ignoreExtraSamples'),
+            data_type, file_path, user, **kwargs,
+            tissue=request_json.get('tissue'), ignore_extra_samples=request_json.get('ignoreExtraSamples'),
         )
     except FileNotFoundError:
         return {'error': f'File not found: {file_path}'}, 400
@@ -500,26 +501,20 @@ def load_rna_seq(request_json, user, **kwargs):
     }, 200
 
 
-def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, **kwargs):
+def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, project_guid=None, tissue=None, **kwargs):
     config = RNA_DATA_TYPE_CONFIGS[data_type]
     model_cls = config['model_class']
     data_source = file_path.split('/')[-1].split('_-_')[-1]
 
-    projects = Project.objects.filter(guid__in={metadata['project_guid'] for metadata in sample_metadata_mapping.values()})
+    project_guids = [project_guid] if project_guid else {
+        metadata['project_guid'] for metadata in sample_metadata_mapping.values()
+    }
+    projects = Project.objects.filter(guid__in=project_guids)
 
-    individuals = Individual.objects.filter(
-        family__project__in=projects, individual_id__in=list(sample_metadata_mapping.keys()),
-    ).values('id', 'individual_id', 'family__project__guid')
-    individual_data_by_id = {}
-    for indiv in individuals:
-        individual_id = indiv['individual_id']
-        sample_metadata = sample_metadata_mapping[individual_id]
-        if indiv.pop('family__project__guid') == sample_metadata['project_guid']:
-            individual_data = {**indiv, 'tissue': sample_metadata['tissue']}
-            individual_data_by_id[individual_id] = individual_data
-            # Support when data is provided using either the raw sample ID or the already mapped seqr ID
-            if individual_id != sample_metadata['sample_id']:
-                individual_data_by_id[sample_metadata['sample_id']] = individual_data
+    individuals = Individual.objects.filter(family__project__in=projects)
+    individual_data_by_id = _get_individual_metadata_mapping(sample_metadata_mapping, individuals) if sample_metadata_mapping else {
+        i['individual_id']: {**i, 'tissue': tissue} for i in individuals.values('id', 'individual_id')
+    }
     potential_samples = _get_rna_sample_data_by_key(
         individual_id__in={i['id'] for i in individual_data_by_id.values()},
         data_type=data_type, data_source=data_source, values={
@@ -565,6 +560,23 @@ def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, **kw
         persist_temp_file(file_name_prefix, user)
 
     return sorted(sample_guid_ids_to_load.keys()), file_name_prefix, info, warnings
+
+
+def _get_individual_metadata_mapping(sample_metadata_mapping, individuals):
+    individuals = individuals.filter(
+        individual_id__in=list(sample_metadata_mapping.keys()),
+    ).values('id', 'individual_id', 'family__project__guid')
+    individual_data_by_id = {}
+    for indiv in individuals:
+        individual_id = indiv['individual_id']
+        sample_metadata = sample_metadata_mapping[individual_id]
+        if indiv.pop('family__project__guid') == sample_metadata['project_guid']:
+            individual_data = {**indiv, 'tissue': sample_metadata['tissue']}
+            individual_data_by_id[individual_id] = individual_data
+            # Support when data is provided using either the raw sample ID or the already mapped seqr ID
+            if individual_id != sample_metadata['sample_id']:
+                individual_data_by_id[sample_metadata['sample_id']] = individual_data
+    return individual_data_by_id
 
 
 def post_process_rna_data(sample_guid, data, get_unique_key=None, format_fields=None):

@@ -470,8 +470,10 @@ def is_data_manager_or_external_anvil_edit(project, user):
 
 
 @login_and_policies_required
-def update_rna_seq(request, project_guid):
-    get_project_and_check_pm_permissions(project_guid, request.user, override_permission_func=is_data_manager_or_external_anvil_edit)
+def update_project_rna_seq(request, project_guid):
+    get_project_and_check_pm_permissions(
+        project_guid, request.user, override_permission_func=is_data_manager_or_external_anvil_edit,
+    )
 
     request_json = json.loads(request.body)
     response_json, status = load_rna_seq(request_json, request.user, project_guid=project_guid)
@@ -482,7 +484,9 @@ def update_rna_seq(request, project_guid):
 def load_rna_seq_sample_data(request, sample_guid):
     sample = RnaSample.objects.get(guid=sample_guid)
 
-    check_project_pm_permission(sample.individual.family.project, request.user, override_permission_func=is_data_manager_or_external_anvil_edit)
+    check_project_pm_permission(
+        sample.individual.family.project, request.user, override_permission_func=is_data_manager_or_external_anvil_edit,
+    )
 
     logger.info(f'Loading outlier data for {sample.individual.individual_id}', request.user)
 
