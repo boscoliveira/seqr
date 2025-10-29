@@ -5,12 +5,13 @@ import { Tab } from 'semantic-ui-react'
 
 import Modal from 'shared/components/modal/Modal'
 import { ButtonLink } from 'shared/components/StyledComponents'
+import { validators } from 'shared/components/form/FormHelpers'
 import FormWrapper from 'shared/components/form/FormWrapper'
 import { UPLOAD_PROJECT_IGV_FIELD } from 'shared/components/form/IGVUploadField'
 import FileUploadField from 'shared/components/form/XHRUploaderField'
 import { BooleanCheckbox, Select } from 'shared/components/form/Inputs'
 import AddWorkspaceDataForm from 'shared/components/panel/LoadWorkspaceDataForm'
-import { DATASET_TYPE_SNV_INDEL_CALLS, DATASET_TYPE_SV_CALLS, DATASET_TYPE_MITO_CALLS } from 'shared/utils/constants'
+import { DATASET_TYPE_SNV_INDEL_CALLS, DATASET_TYPE_SV_CALLS, DATASET_TYPE_MITO_CALLS, LOAD_RNA_FIELDS, TISSUE_DISPLAY } from 'shared/utils/constants'
 
 import { addVariantsDataset, addIGVDataset } from '../reducers'
 import { getCurrentProject, getProjectGuid } from '../selectors'
@@ -98,6 +99,18 @@ const UPLOAD_IGV_FIELDS = [
   },
 ]
 
+const PROJECT_LOAD_RNA_FIELDS = [
+  ...LOAD_RNA_FIELDS.slice(0, -1),
+  {
+    name: 'tissue',
+    label: 'Tissue',
+    component: Select,
+    options: Object.entries(TISSUE_DISPLAY).map(([value, name]) => ({ value, name })),
+    validate: validators.required,
+  },
+  ...LOAD_RNA_FIELDS.slice(-1),
+]
+
 const DEFAULT_UPLOAD_CALLSET_VALUE = { datasetType: DATASET_TYPE_SNV_INDEL_CALLS }
 
 const ES_ENABLED_PANES = [
@@ -115,7 +128,7 @@ const ES_ENABLED_PANES = [
   {
     title: 'Add RNA Data',
     formType: ADD_RNA_FORM,
-    formFields: UPLOAD_CALLSET_FIELDS, // TODO
+    formFields: PROJECT_LOAD_RNA_FIELDS,
   },
 ].map(({ title, formType, formFields, initialValues }) => ({
   menuItem: title,

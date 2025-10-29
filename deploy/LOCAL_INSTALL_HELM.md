@@ -134,6 +134,8 @@ helm upgrade YOUR_INSTITUTION_NAME-seqr seqr-helm/seqr-platform -f my-values.yam
 
 ## Loading RNASeq datasets
 
+TODO UPDATE THIS SECTION
+
 Currently, seqr has a preliminary integration for RNA data, which requires the use of publicly available 
 pipelines run outside of the seqr platform. After these pipelines are run, the output must be annotated with metadata 
 from seqr to ensure samples are properly associated with the correct seqr families. After calling is completed, it can
