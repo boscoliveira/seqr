@@ -75,6 +75,9 @@ def update_rna_seq(request):
         }
         for sample in airtable_samples if len(sample[TISSUE_FIELD]) == 1 and len(sample['pdos']) == 1
     }
+    misconfigured_samples = [s['sample_id'] for s in airtable_samples if s['sample_id'] not in sample_metadata_mapping]
+    if misconfigured_samples:
+        logger.warning(f'Skipping samples associated with multiple conflicting PDOs in Airtable: {", ".join(sorted(misconfigured_samples))}', request.user)
 
     try:
         sample_guids, file_name_prefix, info, warnings = load_rna_seq(

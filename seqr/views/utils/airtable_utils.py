@@ -215,10 +215,10 @@ Desired update:
 
         if invalid_pdo_samples:
             samples = ', '.join(sorted(invalid_pdo_samples))
-            error = f'samples are associated with misconfigured PDOs in Airtable: {samples}'
+            error = f'associated with misconfigured PDOs in Airtable: {samples}'
             if skip_invalid_pdos:
-                logger.warning(f'Skipping {error}', self._user)
+                logger.warning(f'Skipping samples {error}', self._user)
             else:
-                raise ValueError(f'The following {error}')
+                raise ValueError(f'The following samples are {error}')
 
         return {record_id: sample for record_id, sample in sample_records.items() if sample.get('pdos')}

@@ -466,6 +466,18 @@ AIRTABLE_RNA_SAMPLE_RECORDS = {
                 'TissueOfOrigin': ['Muscle'],
             }
         },
+        {
+            'id': 'rec2B6OGmVpAkQW3s',
+            'fields': {
+                'CollaboratorSampleID': 'NA12345',
+                'SeqrProject': [
+                    'https://seqr.broadinstitute.org/project/R0002_empty/project_page',
+                    'https://seqr.broadinstitute.org/project/R0004_non_analyst_project/project_page',
+                ],
+                'PDOStatus': ['RNA ready to load', 'RNA ready to load'],
+                'TissueOfOrigin': ['Muscle', 'Brain'],
+            }
+        },
         *INVALID_AIRTABLE_SAMPLE_RECORDS['records'],
     ],
 }
@@ -642,10 +654,6 @@ class DataManagerAPITest(AirtableTest):
             'optional_headers': ['detail'],
             'loaded_data_row': ['NA19675_D2', '1kg project nåme with uniçøde', 'ENSG00000240361', 'muscle', 'detail1', 0.01, 0.001, -3.1],
             'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
-            'duplicated_indiv_id_data': [
-                ['NA20870', 'Test Reprocessed Project', 'ENSG00000233750', 'muscle', 'detail1', 0.064, '0.0000057', 7.8],
-                ['NA20870', '1kg project nåme with uniçøde', 'ENSG00000240361', 'fibroblasts', 'detail2', 0.01, 0.13, -3.1],
-            ],
             'write_data': {
                 '{"gene_id": "ENSG00000233750", "p_value": "0.064", "p_adjust": "0.0000057", "z_score": "7.8"}\n',
                 '{"gene_id": "ENSG00000240361", "p_value": "0.01", "p_adjust": "0.13", "z_score": "-3.1"}\n'
@@ -705,12 +713,6 @@ class DataManagerAPITest(AirtableTest):
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
             'no_existing_data': ['NA19678', '1kg project nåme with uniçøde', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 'fibroblasts', 0.53953638, 1, 20],
-            'duplicated_indiv_id_data': [
-                ['NA20870', 'Test Reprocessed Project', 'ENSG00000233750', 'chr2', 167258096, 167258349, '*',
-                 'psi3', 1.56E-25, 6.33, 0.45, 143, 143, 143, 143, 'fibroblasts', 1, 20],
-                ['NA20870', '1kg project nåme with uniçøde', 'ENSG00000135953', 'chr2', 167258096, 167258349, '*',
-                 'psi3', 1.56E-25, 6.33, 0.45, 143, 143, 143, 143, 'muscle', 1, 20],
-            ],
             'write_data': {'{"chrom": "chr2", "start": "167258096",'
                            ' "end": "167258349", "strand": "*", "type": "psi3", "p_value": "1.56e-25", "p_adjust": "6.33",'
                            ' "delta_intron_jaccard_index": "0.45", "counts": "143",'
@@ -751,6 +753,10 @@ class DataManagerAPITest(AirtableTest):
 
     def _has_expected_file_loading_logs(self, file, user, info=None, warnings=None, additional_logs=None, additional_logs_offset=None):
         expected_logs = [
+            ('Fetching Samples records 0-1 from airtable', None),
+            ('Fetched 4 Samples records from airtable', None),
+            ('Skipping samples associated with misconfigured PDOs in Airtable: HG00731, NA21234', {'severity': 'WARNING'}),
+            ('Skipping samples associated with multiple conflicting PDOs in Airtable: NA12345', {'severity': 'WARNING'}),
             (f'==> gsutil ls {file}', None),
             (f'==> gsutil cat {file} | gunzip -c -q - ', None),
         ] + [(info_log, None) for info_log in info or []] + [
@@ -875,7 +881,7 @@ class DataManagerAPITest(AirtableTest):
         ]
         warnings = ['Skipped loading for 1 samples already loaded from this file']
         self.assertDictEqual(response.json(), {'info': info, 'warnings': warnings, 'sampleGuids': [], 'fileName': mock.ANY})
-        self._has_expected_file_loading_logs('gs://rna_data/muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.pm_user)
+        self._has_expected_file_loading_logs('gs://rna_data/muscle_samples.tsv.gz', info=info, warnings=warnings, user=self.data_manager_user)
         self.assertEqual(model_cls.objects.count(), params['initial_model_count'])
         mock_send_slack.assert_not_called()
         mock_send_email.assert_not_called()
@@ -994,12 +1000,6 @@ class DataManagerAPITest(AirtableTest):
         data = [params['no_existing_data']]
         body.pop('mappingFile')
         _test_basic_data_loading(data, 1, 1, 2, body, '1kg project nåme with uniçøde')
-
-        # Test loading data when where are duplicated individual ids in different projects.
-        data = params['duplicated_indiv_id_data']
-        mock_files = defaultdict(mock.MagicMock)
-        _test_basic_data_loading(data, 2, 2, 20, body, '1kg project nåme with uniçøde, Test Reprocessed Project',
-                                 num_created_samples=2)
 
         self.assertSetEqual(
             {''.join([call.args[0] for call in mock_file.write.call_args_list]) for mock_file in mock_files.values()},
