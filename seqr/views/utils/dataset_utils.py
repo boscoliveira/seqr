@@ -244,7 +244,9 @@ RNA_OUTLIER_COLUMNS = {GENE_ID_COL: GENE_ID_HEADER_COL, 'p_value': 'pValue', 'p_
                        SAMPLE_ID_COL: SAMPLE_ID_HEADER_COL}
 
 TPM_COL = 'TPM'
-TPM_HEADER_COLS = {col.lower(): col for col in [GENE_ID_COL, TPM_COL]}
+TPM_HEADER_COLS = {
+    col.lower(): col for col in [GENE_ID_COL, TPM_COL]
+}
 
 CHROM_COL = 'chrom'
 START_COL = 'start'
@@ -346,10 +348,21 @@ def _load_rna_seq_file(
     missing_required_fields = defaultdict(set)
     gene_ids = set()
     for line in tqdm(parsed_f, unit=' rows'):
+        row = dict(zip(header, line))
+        row_dict = {mapped_key: row[col] for mapped_key, col in column_map.items()}
+
+        missing_cols = {col_id for col, col_id in required_column_map.items() if not row.get(col)}
+        sample_id = row_dict.pop(SAMPLE_ID_COL) if SAMPLE_ID_COL in row_dict else row[SAMPLE_ID_COL]
+        if missing_cols:
+            for col in missing_cols:
+                missing_required_fields[col].add(sample_id)
+        if missing_cols:
+            continue
+
         _parse_rna_row(
-            dict(zip(header, line)), column_map, required_column_map, missing_required_fields,
-            potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load,
-            samples_to_create, unmatched_samples, individual_data_by_id, sample_files, file_dir, ignore_extra_samples,
+            sample_id, row_dict, potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load,
+            samples_to_create, unmatched_samples, individual_data_by_id, sample_files, file_dir,
+            has_errors=missing_required_fields or (unmatched_samples and not ignore_extra_samples),
         )
 
     errors, warnings = _process_rna_errors(
@@ -367,18 +380,8 @@ def _load_rna_seq_file(
     return warnings, len(loaded_samples) + len(unmatched_samples), sample_guid_ids_to_load, prev_loaded_individual_ids
 
 
-def _parse_rna_row(row, column_map, required_column_map, missing_required_fields,
-                   potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load, samples_to_create,
-                   unmatched_samples, individual_data_by_id, sample_files, file_dir, ignore_extra_samples):
-    row_dict = {mapped_key: row[col] for mapped_key, col in column_map.items()}
-
-    missing_cols = {col_id for col, col_id in required_column_map.items() if not row.get(col)}
-    sample_id = row_dict.pop(SAMPLE_ID_COL) if SAMPLE_ID_COL in row_dict else row[SAMPLE_ID_COL]
-    if missing_cols:
-        for col in missing_cols:
-            missing_required_fields[col].add(sample_id)
-    if missing_cols:
-        return
+def _parse_rna_row(sample_id, row_dict, potential_samples, loaded_samples, gene_ids, sample_guid_ids_to_load, samples_to_create,
+                   unmatched_samples, individual_data_by_id, sample_files, file_dir, has_errors):
 
     row_gene_ids = row_dict[GENE_ID_COL].split(';')
     if any(row_gene_ids):
@@ -400,7 +403,7 @@ def _parse_rna_row(row, column_map, required_column_map, missing_required_fields
     elif sample_id not in samples_to_create:
         samples_to_create[sample_id] = {'individual_id': individual['id'], 'tissue_type': tissue_type}
 
-    if missing_required_fields or (unmatched_samples and not ignore_extra_samples):
+    if has_errors:
         # If there are definite errors, do not process/save data, just continue to check for additional errors
         return
 
