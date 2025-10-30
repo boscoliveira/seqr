@@ -43,6 +43,26 @@ MOCK_RECORDS = {'records': [
     {'id': 'recSgwrXNkmlIB5eM', 'fields': {'Status': 'Available in Seqr'}},
 ]}
 
+RNA_DATA_TYPE_PARAMS = {
+    'E': {
+        'model_cls': RnaSeqOutlier,
+        'sample_guid': RNA_OUTLIER_MUSCLE_SAMPLE_GUID,
+        'parsed_file_data': RNA_OUTLIER_SAMPLE_DATA,
+    },
+    'T': {
+        'model_cls': RnaSeqTpm,
+        'sample_guid': RNA_TPM_MUSCLE_SAMPLE_GUID,
+        'parsed_file_data': RNA_TPM_SAMPLE_DATA,
+        'mismatch_field': 'tpm',
+    },
+    'S': {
+        'model_cls': RnaSeqSpliceOutlier,
+        'sample_guid': RNA_SPLICE_SAMPLE_GUID,
+        'parsed_file_data': RNA_SPLICE_SAMPLE_DATA,
+        'row_id': 'ENSG00000233750-2-167254166-167258349-*-psi3',
+    }
+}
+
 
 class ProjectAPITest(object):
     CREATE_PROJECT_JSON = WORKSPACE_CREATE_PROJECT_JSON
@@ -661,10 +681,8 @@ class ProjectAPITest(object):
         self.assertDictEqual(response.json(), {'isSubscriber': True})
         self.assertTrue(self.collaborator_user.groups.filter(name='subscribers').exists())
 
-    def test_load_rna_outlier_sample_data(self, *args, **kwargs):
-        models = self._test_load_rna_seq_sample_data(
-            'E', RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_OUTLIER_SAMPLE_DATA, RnaSeqOutlier, *args, **kwargs,
-        )
+    def test_load_rna_outlier_sample_data(self):
+        models = self._test_load_rna_seq_sample_data('E', **RNA_DATA_TYPE_PARAMS['E'])
 
         expected_models = [
             ('ENSG00000240361', 0.13, 0.01, -3.1), ('ENSG00000233750', 0.0000057, 0.064, 7.8),
@@ -672,20 +690,15 @@ class ProjectAPITest(object):
         self.assertEqual(models.count(), len(expected_models))
         self.assertListEqual(list(models.values_list('gene_id', 'p_adjust', 'p_value', 'z_score')), expected_models)
 
-    def test_load_rna_tpm_sample_data(self, *args, **kwargs):
-        models = self._test_load_rna_seq_sample_data(
-            'T', RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, RnaSeqTpm, *args, **kwargs, mismatch_field='tpm',
-        )
+    def test_load_rna_tpm_sample_data(self):
+        models = self._test_load_rna_seq_sample_data('T', **RNA_DATA_TYPE_PARAMS['T'])
 
         expected_models = [('ENSG00000240361', 7.8), ('ENSG00000233750', 0.0)]
         self.assertEqual(models.count(), len(expected_models))
         self.assertListEqual(list(models.values_list('gene_id', 'tpm')), expected_models)
 
-    def test_load_rna_splice_outlier_sample_data(self, *args, **kwargs):
-        models = self._test_load_rna_seq_sample_data(
-            'S', RNA_SPLICE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RnaSeqSpliceOutlier, *args, **kwargs,
-            row_id='ENSG00000233750-2-167254166-167258349-*-psi3',
-        )
+    def test_load_rna_splice_outlier_sample_data(self):
+        models = self._test_load_rna_seq_sample_data('S', **RNA_DATA_TYPE_PARAMS['S'])
 
         expected_models = [
             ('ENSG00000233750', '2', 167254166, 167258349, '*', 'psi3', 1.56e-25, -4.9, -0.46, 166, 1, 20),
@@ -702,7 +715,7 @@ class ProjectAPITest(object):
     @mock.patch('seqr.utils.file_utils.gzip.open')
     @mock.patch('seqr.utils.file_utils.os.path.isfile')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
-    def _test_load_rna_seq_sample_data(self, data_type, sample_guid, parsed_file_data, model_cls, mock_subprocess, mock_does_file_exist, mock_open, mock_pm_group, mismatch_field='p_value', row_id=None):
+    def _test_load_rna_seq_sample_data(self, data_type, mock_subprocess, mock_does_file_exist, mock_open, mock_pm_group, sample_guid=None, parsed_file_data=None, model_cls=None,  mismatch_field='p_value', row_id=None):
         url = reverse(load_rna_seq_sample_data, args=[sample_guid])
         self.check_manager_login(url)
 
