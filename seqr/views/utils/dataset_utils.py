@@ -542,6 +542,7 @@ def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, proj
             filter=~Q(family__individual__id__in=prev_loaded_individual_ids) if prev_loaded_individual_ids else None
         ))
     project_names = ', '.join(sorted([project['name'] for project in sample_projects]))
+    #  TODO better message for single project!
     message = f'Attempted data loading for {len(sample_guid_ids_to_load)} RNA-seq samples in the following {len(sample_projects)} projects: {project_names}'
     info.append(message)
     logger.info(message, user)
@@ -624,6 +625,7 @@ def _notify_rna_loading(model_cls, sample_projects, internal_projects):
     data_type = RNA_MODEL_DISPLAY_NAME[model_cls]
     for project_agg in sample_projects:
         new_ids = project_agg["new_sample_ids"]
+        # TODO better slack notification
         send_project_notification(
             project=projects_by_name[project_agg["name"]],
             notification=f'{len(new_ids)} new RNA {data_type} sample(s)',

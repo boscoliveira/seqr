@@ -7,13 +7,16 @@ from django.db import connections
 from django.urls.base import reverse
 import responses
 
-from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier, Family
+from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier, RnaSample, Family
+from seqr.utils.communication_utils import _set_bulk_notification_stream
 from seqr.views.apis.project_api import create_project_handler, delete_project_handler, update_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
-    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, load_rna_seq_sample_data
+    project_samples, project_notifications, mark_read_project_notifications, subscribe_project_notifications, \
+    update_project_rna_seq, load_rna_seq_sample_data
 from seqr.views.apis.data_manager_api_tests import RNA_OUTLIER_SAMPLE_DATA, RNA_OUTLIER_MUSCLE_SAMPLE_GUID, RNA_TPM_SAMPLE_DATA, \
-    RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RNA_SPLICE_SAMPLE_GUID
+    RNA_TPM_MUSCLE_SAMPLE_GUID, RNA_SPLICE_SAMPLE_DATA, RNA_SPLICE_SAMPLE_GUID, PLACEHOLDER_GUID, \
+    RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS,RNA_OUTLIER_REQUIRED_COLUMNS, RNA_TPM_REQUIRED_COLUMNS
 from seqr.views.utils.terra_api_utils import TerraAPIException, TerraRefreshTokenFailedException
 from seqr.views.utils.test_utils import AuthenticationTestCase, AnvilAuthenticationTestCase, \
     PROJECT_FIELDS, LOCUS_LIST_FIELDS, PA_LOCUS_LIST_FIELDS, NO_INTERNAL_CASE_REVIEW_INDIVIDUAL_FIELDS, \
@@ -48,18 +51,33 @@ RNA_DATA_TYPE_PARAMS = {
         'model_cls': RnaSeqOutlier,
         'sample_guid': RNA_OUTLIER_MUSCLE_SAMPLE_GUID,
         'parsed_file_data': RNA_OUTLIER_SAMPLE_DATA,
+        'required_columns': RNA_OUTLIER_REQUIRED_COLUMNS,
+        'rows': [
+            'sampleID\tgeneID\tFDR set\tpValue\tpadjust\tzScore',
+            'NA19675_1\tENSG00000240361\tdetail1\t0.01\t0.13\t-3.1',
+            'NA19675_1\tENSG00000240361\tdetail2\t0.01\t0.13\t-3.1',
+            'NA19675_1\tENSG00000233750\tdetail1\t0.064\t0.0000057\t7.8',
+            'NA21234\tENSG00000233750\tdetail1\t0.064\t0.0000057\t7.8',
+            'HG00731\tENSG00000240361\t\t0.04\t0.112\t1.9',
+            'NA21234\tNOT_A_GENE_ID1\tdetail1\t0.064\t0.0000057\t7.8',
+            'NA19675_1\t\tdetail1\t0.064\t0.0000057\t7.8',
+        ],
     },
     'T': {
         'model_cls': RnaSeqTpm,
         'sample_guid': RNA_TPM_MUSCLE_SAMPLE_GUID,
         'parsed_file_data': RNA_TPM_SAMPLE_DATA,
+        'required_columns': RNA_TPM_REQUIRED_COLUMNS,
         'mismatch_field': 'tpm',
+        'rows': [],
     },
     'S': {
         'model_cls': RnaSeqSpliceOutlier,
         'sample_guid': RNA_SPLICE_SAMPLE_GUID,
         'parsed_file_data': RNA_SPLICE_SAMPLE_DATA,
+        'required_columns': RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS,
         'row_id': 'ENSG00000233750-2-167254166-167258349-*-psi3',
+        'rows': [],
     }
 }
 
@@ -681,6 +699,151 @@ class ProjectAPITest(object):
         self.assertDictEqual(response.json(), {'isSubscriber': True})
         self.assertTrue(self.collaborator_user.groups.filter(name='subscribers').exists())
 
+    def test_update_project_rna_outlier(self):
+        self._test_update_project_rna('E', **RNA_DATA_TYPE_PARAMS['E'])
+
+    @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
+    @mock.patch('seqr.views.utils.file_utils.tempfile.gettempdir', lambda: 'tmp/')
+    @mock.patch('seqr.views.utils.dataset_utils.datetime')
+    @mock.patch('seqr.utils.communication_utils.send_html_email')
+    @mock.patch('seqr.utils.communication_utils.safe_post_to_slack')
+    @mock.patch('seqr.views.utils.dataset_utils.os')
+    @mock.patch('seqr.utils.file_utils.gzip.open')
+    @mock.patch('seqr.utils.file_utils.os.path.isfile')
+    @mock.patch('seqr.utils.file_utils.subprocess.Popen')
+    def _test_update_project_rna(self, data_type, mock_subprocess, mock_does_file_exist, mock_open, mock_os,
+                                 mock_send_slack, mock_send_email, mock_datetime, sample_guid=None, model_cls=None,
+                                 rows=None, parsed_file_data=None, required_columns=None,  allow_missing_gene=False,
+                                 tissue='M', message_data_type=None, **kwargs):
+        mock_datetime.now.return_value = datetime(2025, 4, 15)
+        initial_model_count = model_cls.objects.count()
+        initial_sample_model_count = model_cls.objects.filter(sample__guid=sample_guid).count()
+
+        self.check_pm_login(reverse(update_project_rna_seq, args=[DEMO_PROJECT_GUID]))
+        url = reverse(update_project_rna_seq, args=[PROJECT_GUID])
+        self.login_manager()
+
+        # Test errors
+        file = f'{self.TEMP_DIR}/new_samples.tsv.gz'
+        body = {'dataType': data_type, 'file': file, 'tissue': tissue}
+        self._set_file_not_found(file, mock_subprocess, mock_does_file_exist, mock_open)
+        self.reset_logs()
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 400)
+        self.assertDictEqual(response.json(), {'error': f'File not found: {file}'})
+
+        self._set_file_iter([], mock_subprocess, mock_does_file_exist, mock_open)
+        invalid_file_ext = file.replace('tsv.gz', 'xlsx')
+        invalid_body = {**body, 'file': invalid_file_ext}
+        response = self.client.post(url, content_type='application/json', data=json.dumps(invalid_body))
+        self.assertEqual(response.status_code, 400)
+        self.assertDictEqual(response.json(), {'error': f'Unexpected iterated file type: {invalid_file_ext}'})
+
+        self._set_file_iter([''], mock_subprocess, mock_does_file_exist, mock_open)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 400)
+        self.assertDictEqual(response.json(), {'error': f'Invalid file: missing column(s): {required_columns}'})
+
+        self._set_file_iter(rows, mock_subprocess, mock_does_file_exist, mock_open)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 400)
+        errors = [
+            'Unknown Gene IDs: NOT_A_GENE_ID1',
+            'Unable to find matches for the following samples: NA21234',
+        ]
+        if not allow_missing_gene:
+            errors.insert(0, 'Samples missing required "gene_id": NA19675_1')
+        self.assertDictEqual(response.json(), {'warnings': None, 'errors': errors})
+
+        # Test loading new data
+        mock_open.reset_mock()
+        mock_subprocess.reset_mock()
+        self.reset_logs()
+        self._set_file_iter(rows[:-2], mock_subprocess, mock_does_file_exist, mock_open)
+        body.update({'ignoreExtraSamples': True, 'file': file})
+
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200)
+        info = [
+            'Parsed 3 RNA-seq samples',
+            'Attempted data loading for 2 RNA-seq samples in the following 1 projects: 1kg project nåme with uniçøde',
+        ]
+        warnings = ['Skipped loading for the following 1 unmatched samples: NA21234']
+        file_path = f'rna_sample_data__{data_type}__2025-04-15T00:00:00'
+        response_json = response.json()
+        self.assertDictEqual(response_json, {
+            'info': info, 'warnings': warnings or [], 'sampleGuids': mock.ANY, 'fileName': file_path,
+        })
+
+        # test database models are correct
+        self.assertEqual(model_cls.objects.count(), initial_model_count - initial_sample_model_count)
+        rna_samples = RnaSample.objects.filter(
+            tissue_type=tissue, data_type=data_type, data_source='new_samples.tsv.gz', is_active=False,
+        )
+        self.assertEqual(rna_samples.count(), 2)
+        existing_sample = rna_samples.get(individual_id=1)
+        self.assertEqual(existing_sample.guid, sample_guid)
+        new_sample = rna_samples.get(individual_id=4)
+        new_sample_guid = new_sample.guid
+        self.assertSetEqual(set(response_json['sampleGuids']), {sample_guid, new_sample_guid})
+
+        # test notifications
+        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_path, sample_guid)
+        self.assert_json_logs(self.data_manager_user, subprocess_logs + [
+            (info_log, None) for info_log in info] + [
+            (warn_log, {'severity': 'WARNING'}) for warn_log in warnings
+        ] + [
+            ('create 2 RnaSamples', {'dbUpdate': {
+                'dbEntity': 'RnaSample', 'updateType': 'bulk_create',
+                'entityIds': response_json['sampleGuids'],
+            }}),
+            ('update 1 RnaSamples', {'dbUpdate': {
+                'dbEntity': 'RnaSample', 'entityIds': [sample_guid],
+                'updateType': 'bulk_update', 'updateFields': ['is_active']}}),
+            (f'delete {model_cls.__name__}s', {'dbUpdate': {
+                'dbEntity': model_cls.__name__, 'numEntities': initial_sample_model_count,
+                'parentEntityIds': [sample_guid], 'updateType': 'bulk_delete'}}),
+        ])
+
+        self.assertEqual(mock_send_slack.call_count, 1)
+        mock_send_slack.assert_called_with(
+            'seqr-data-loading',
+            f'1 new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
+        )
+
+        self.assertEqual(mock_send_email.call_count, 1)
+        project_link = f'<a href=https://test-seqr.org/project/{PROJECT_GUID}/project_page>1kg project nåme with uniçøde</a>'
+        mock_send_email.assert_called_with(
+            email_body=(
+                f'Dear seqr user,\n\nThis is to notify you that data for 1 new RNA {message_data_type} sample(s) '
+                f'has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
+            ),
+            subject=f'New RNA {message_data_type} data available in seqr',
+            to=['test_user_manager@test.com'],
+            process_message=_set_bulk_notification_stream,
+        )
+
+        # test correct file interactions
+        self.assertEqual(mock_open.call_count, 2)
+        mock_open.assert_has_calls([
+            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', 'at'),
+            mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at'),
+        ])
+        mock_os.rename.assert_has_calls([
+            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', f'tmp/temp_uploads/{file_path}/{sample_guid}.json.gz'),
+            mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', f'tmp/temp_uploads/{file_path}/{new_sample_guid}.json.gz'),
+        ])
+        self.assertEqual(
+            ''.join([call.args[0] for call in mock_open.return_value[0].write.call_args_list]),
+            parsed_file_data[sample_guid],
+        )
+        self.assertEqual(
+            ''.join([call.args[0] for call in mock_open.return_value[1].write.call_args_list]),
+            parsed_file_data[PLACEHOLDER_GUID],
+        )
+
+        # TODO test anvil external project access
+
     def test_load_rna_outlier_sample_data(self):
         models = self._test_load_rna_seq_sample_data('E', **RNA_DATA_TYPE_PARAMS['E'])
 
@@ -715,7 +878,7 @@ class ProjectAPITest(object):
     @mock.patch('seqr.utils.file_utils.gzip.open')
     @mock.patch('seqr.utils.file_utils.os.path.isfile')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
-    def _test_load_rna_seq_sample_data(self, data_type, mock_subprocess, mock_does_file_exist, mock_open, mock_pm_group, sample_guid=None, parsed_file_data=None, model_cls=None,  mismatch_field='p_value', row_id=None):
+    def _test_load_rna_seq_sample_data(self, data_type, mock_subprocess, mock_does_file_exist, mock_open, mock_pm_group, sample_guid=None, parsed_file_data=None, model_cls=None,  mismatch_field='p_value', row_id=None, **kwargs):
         url = reverse(load_rna_seq_sample_data, args=[sample_guid])
         self.check_manager_login(url)
 

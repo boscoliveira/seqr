@@ -283,6 +283,9 @@ RNA_SPLICE_SAMPLE_DATA = {
     PLACEHOLDER_GUID: json.dumps(SAMPLE_GENE_SPLICE_DATA2) + '\n',
 }
 RNA_FILENAME_TEMPLATE = 'rna_sample_data__{}__2020-04-15T00:00:00'
+RNA_OUTLIER_REQUIRED_COLUMNS = 'geneID, pValue, padjust, sampleID, zScore'
+RNA_TPM_REQUIRED_COLUMNS = 'Name OR gene_id, TPM, sample_id'
+RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS = 'chrom OR seqnames, counts, deltaIntronJaccardIndex OR deltaPsi, end, geneID OR hgncSymbol, meanCounts, meanTotalCounts, pAdjust OR padjust, pValue, sampleID, start, strand, totalCounts, type'
 
 PHENOTYPE_PRIORITIZATION_HEADER = [['tool', 'project', 'sampleId', 'rank', 'geneId', 'diseaseId', 'diseaseName',
                                    'scoreName1', 'score1', 'scoreName2', 'score2', 'scoreName3', 'score3']]
@@ -668,7 +671,7 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqOutlier,
             'message_data_type': 'Expression Outlier',
             'header': ['sampleID', 'geneID', 'detail', 'pValue', 'padjust', 'zScore'],
-            'required_columns': 'geneID, pValue, padjust, sampleID, zScore',
+            'required_columns': RNA_OUTLIER_REQUIRED_COLUMNS,
             'loaded_data_row': ['NA19675_D2', 'ENSG00000240361', 'detail1', 0.01, 0.001, -3.1],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
             'new_data': [
@@ -689,7 +692,7 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqTpm,
             'message_data_type': 'Expression',
             'header': ['sample_id', 'gene_id', 'TPM', 'Description'],
-            'required_columns': 'Name OR gene_id, TPM, sample_id',
+            'required_columns': RNA_TPM_REQUIRED_COLUMNS,
             'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 1.34, ''],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 0.064, ''],
             'new_data': [
@@ -717,7 +720,7 @@ class DataManagerAPITest(AirtableTest):
             'header': ['sampleID', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
                        'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'rareDiseaseSamplesWithThisJunction',
                        'rareDiseaseSamplesTotal'],
-            'required_columns': 'chrom OR seqnames, counts, deltaIntronJaccardIndex OR deltaPsi, end, geneID OR hgncSymbol, meanCounts, meanTotalCounts, pAdjust OR padjust, pValue, sampleID, start, strand, totalCounts, type',
+            'required_columns': RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS,
             'loaded_data_row': ['NA19675_1', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 0.53953638, 1, 20],
             'no_existing_data': ['NA19678', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
