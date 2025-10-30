@@ -311,6 +311,7 @@ RNA_DATA_TYPE_CONFIGS = {
         'columns': SPLICE_OUTLIER_HEADER_COLS,
         'additional_kwargs': {
             'allow_missing_gene': True,
+            'optional_columns': {RARE_DISEASE_SAMPLES_WITH_JUNCTION, RARE_DISEASE_SAMPLES_TOTAL},
         },
         'post_process_kwargs': {
             'get_unique_key': _get_splice_id,
@@ -320,8 +321,8 @@ RNA_DATA_TYPE_CONFIGS = {
 }
 
 
-def _validate_rna_header(header, allowed_column_map):
-    expected_cols = set(allowed_column_map.values())
+def _validate_rna_header(header, allowed_column_map, optional_columns):
+    expected_cols = set(allowed_column_map.values()) - set(optional_columns or [])
     column_map = {allowed_column_map[col]: col for col in header if col in allowed_column_map}
     missing_cols = expected_cols - set(column_map.keys())
     if missing_cols:
@@ -336,12 +337,12 @@ def _validate_rna_header(header, allowed_column_map):
 
 def _load_rna_seq_file(
         file_path, data_source, user, data_type, model_cls, potential_samples, sample_files, file_dir, individual_data_by_id,
-        allowed_column_map, allow_missing_gene=False, ignore_extra_samples=False,
+        allowed_column_map, allow_missing_gene=False, ignore_extra_samples=False, optional_columns=None,
 ):
     f = file_iter(file_path, user=user)
     parsed_f = parse_file(file_path.replace('.gz', ''), f, iter_file=True)
     header = next(parsed_f)
-    column_map = _validate_rna_header(header, allowed_column_map)
+    column_map = _validate_rna_header(header, allowed_column_map, optional_columns)
 
     loaded_samples = set()
     unmatched_samples = set()

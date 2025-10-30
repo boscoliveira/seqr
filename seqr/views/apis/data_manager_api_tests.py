@@ -717,7 +717,7 @@ class DataManagerAPITest(AirtableTest):
             'header': ['sampleID', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
                        'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'rareDiseaseSamplesWithThisJunction',
                        'rareDiseaseSamplesTotal'],
-            'required_columns': 'chrom OR seqnames, counts, deltaIntronJaccardIndex OR deltaPsi, end, geneID OR hgncSymbol, meanCounts, meanTotalCounts, pAdjust OR padjust, pValue, rareDiseaseSamplesTotal, rareDiseaseSamplesWithThisJunction, sampleID, start, strand, totalCounts, type',
+            'required_columns': 'chrom OR seqnames, counts, deltaIntronJaccardIndex OR deltaPsi, end, geneID OR hgncSymbol, meanCounts, meanTotalCounts, pAdjust OR padjust, pValue, sampleID, start, strand, totalCounts, type',
             'loaded_data_row': ['NA19675_1', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 0.53953638, 1, 20],
             'no_existing_data': ['NA19678', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
