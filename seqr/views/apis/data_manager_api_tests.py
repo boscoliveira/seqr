@@ -689,7 +689,7 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqTpm,
             'message_data_type': 'Expression',
             'header': ['sample_id', 'gene_id', 'TPM', 'Description'],
-            'required_columns': 'TPM, gene_id, sample_id',
+            'required_columns': 'Name OR gene_id, TPM, sample_id',
             'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 1.34, ''],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 0.064, ''],
             'new_data': [
