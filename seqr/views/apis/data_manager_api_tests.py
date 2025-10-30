@@ -668,7 +668,7 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqOutlier,
             'message_data_type': 'Expression Outlier',
             'header': ['sampleID', 'geneID', 'detail', 'pValue', 'padjust', 'zScore'],
-            'optional_headers': ['detail'],
+            'required_columns': 'geneID, pValue, padjust, sampleID, zScore',
             'loaded_data_row': ['NA19675_D2', 'ENSG00000240361', 'detail1', 0.01, 0.001, -3.1],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 'detail1', 0.064, '0.0000057', 7.8],
             'new_data': [
@@ -689,7 +689,7 @@ class DataManagerAPITest(AirtableTest):
             'model_cls': RnaSeqTpm,
             'message_data_type': 'Expression',
             'header': ['sample_id', 'gene_id', 'TPM', 'Description'],
-            'optional_headers': ['Description'],
+            'required_columns': 'TPM, gene_id, sample_id',
             'loaded_data_row': ['NA19675_D2', 'ENSG00000135953', 1.34, ''],
             'no_existing_data': ['NA19678', 'ENSG00000233750', 0.064, ''],
             'new_data': [
@@ -717,7 +717,7 @@ class DataManagerAPITest(AirtableTest):
             'header': ['sampleID', 'geneID', 'chrom', 'start', 'end', 'strand', 'type', 'pValue', 'pAdjust',
                        'deltaIntronJaccardIndex', 'counts', 'meanCounts', 'totalCounts', 'meanTotalCounts', 'rareDiseaseSamplesWithThisJunction',
                        'rareDiseaseSamplesTotal'],
-            'optional_headers': [],
+            'required_columns': 'chrom OR seqnames, counts, deltaIntronJaccardIndex OR deltaPsi, end, geneID OR hgncSymbol, meanCounts, meanTotalCounts, pAdjust OR padjust, pValue, rareDiseaseSamplesTotal, rareDiseaseSamplesWithThisJunction, sampleID, start, strand, totalCounts, type',
             'loaded_data_row': ['NA19675_1', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
                                 'psi5', 1.08E-56, 3.08E-56, 12.34, 1297, 197, 129, 1297, 0.53953638, 1, 20],
             'no_existing_data': ['NA19678', 'ENSG00000240361', 'chr7', 132885746, 132886973, '*',
@@ -845,9 +845,9 @@ class DataManagerAPITest(AirtableTest):
         _set_file_iter_stdout([['']])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
+        self.maxDiff = None
         self.assertDictEqual(response.json(), {
-            'error': f'Invalid file: missing column(s): '
-                     f'{", ".join(sorted([col for col in header if col not in params["optional_headers"]]))}',
+            'error': f'Invalid file: missing column(s): {params["required_columns"]}',
         })
 
         _set_file_iter_stdout([header, loaded_data_row])
