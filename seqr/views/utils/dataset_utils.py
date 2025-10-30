@@ -240,12 +240,12 @@ SAMPLE_ID_COL = 'sample_id'
 SAMPLE_ID_HEADER_COL = 'sampleID'
 GENE_ID_COL = 'gene_id'
 GENE_ID_HEADER_COL = 'geneID'
-RNA_OUTLIER_COLUMNS = {GENE_ID_COL: GENE_ID_HEADER_COL, 'p_value': 'pValue', 'p_adjust': 'padjust', 'z_score': 'zScore',
-                       SAMPLE_ID_COL: SAMPLE_ID_HEADER_COL}
+RNA_OUTLIER_COLUMNS = {GENE_ID_HEADER_COL: GENE_ID_COL, 'pValue': 'p_value', 'padjust': 'p_adjust', 'zScore': 'z_score',
+                       SAMPLE_ID_HEADER_COL: SAMPLE_ID_COL}
 
 TPM_COL = 'TPM'
 TPM_HEADER_COLS = {
-    col.lower(): col for col in [GENE_ID_COL, TPM_COL]
+    col: col.lower() for col in [SAMPLE_ID_COL, GENE_ID_COL, TPM_COL]
 }
 
 CHROM_COL = 'chrom'
@@ -282,9 +282,9 @@ SPLICE_OUTLIER_FORMATTER = {
     DELTA_INDEX_COL: float,
 }
 
-SPLICE_OUTLIER_HEADER_COLS = {col: _to_camel_case(col) for col in SPLICE_OUTLIER_COLS}
+SPLICE_OUTLIER_HEADER_COLS = {_to_camel_case(col): col for col in SPLICE_OUTLIER_COLS}
 SPLICE_OUTLIER_HEADER_COLS.update({
-    SAMPLE_ID_COL: SAMPLE_ID_HEADER_COL, GENE_ID_COL: GENE_ID_HEADER_COL,
+    SAMPLE_ID_HEADER_COL: SAMPLE_ID_COL, GENE_ID_HEADER_COL: GENE_ID_COL,
 })
 
 
@@ -318,28 +318,28 @@ RNA_DATA_TYPE_CONFIGS = {
 }
 
 
-def _validate_rna_header(header, column_map):
-    required_column_map = {
-        column_map.get(col, col): col for col in [SAMPLE_ID_COL, GENE_ID_COL]
-    }
-    expected_cols = set(column_map.values())
-    expected_cols.update(required_column_map.keys())
-    missing_cols = expected_cols - set(header)
+def _validate_rna_header(header, allowed_column_map):
+    expected_cols = set(allowed_column_map.values())
+    column_map = {allowed_column_map[col]: col for col in header if col in allowed_column_map}
+    missing_cols = expected_cols - set(column_map.keys())
     if missing_cols:
-        raise ValueError(f'Invalid file: missing column(s): {", ".join(sorted(missing_cols))}')
-    return required_column_map
+        mapped_missing = defaultdict(list)
+        for col, mapped_col in allowed_column_map.items():
+            if mapped_col in missing_cols:
+                mapped_missing[mapped_col].append(col)
+        missing_summary = [cols[0] if len(cols) == 1 else ' OR '.join(sorted(cols)) for cols in mapped_missing.values()]
+        raise ValueError(f'Invalid file: missing column(s): {", ".join(sorted(missing_summary))}')
+    return column_map
 
 
 def _load_rna_seq_file(
         file_path, data_source, user, data_type, model_cls, potential_samples, sample_files, file_dir, individual_data_by_id,
-        column_map, allow_missing_gene=False, ignore_extra_samples=False,
+        allowed_column_map, allow_missing_gene=False, ignore_extra_samples=False,
 ):
     f = file_iter(file_path, user=user)
     parsed_f = parse_file(file_path.replace('.gz', ''), f, iter_file=True)
     header = next(parsed_f)
-    required_column_map = _validate_rna_header(header, column_map)
-    if allow_missing_gene:
-        required_column_map = {k: v for k, v in required_column_map.items() if v != GENE_ID_COL}
+    column_map = _validate_rna_header(header, allowed_column_map)
 
     loaded_samples = set()
     unmatched_samples = set()
@@ -351,12 +351,9 @@ def _load_rna_seq_file(
         row = dict(zip(header, line))
         row_dict = {mapped_key: row[col] for mapped_key, col in column_map.items()}
 
-        missing_cols = {col_id for col, col_id in required_column_map.items() if not row.get(col)}
-        sample_id = row_dict.pop(SAMPLE_ID_COL) if SAMPLE_ID_COL in row_dict else row[SAMPLE_ID_COL]
-        if missing_cols:
-            for col in missing_cols:
-                missing_required_fields[col].add(sample_id)
-        if missing_cols:
+        sample_id = row_dict.pop(SAMPLE_ID_COL)
+        if not (allow_missing_gene or row_dict.get(GENE_ID_COL)):
+            missing_required_fields[GENE_ID_COL].add(sample_id)
             continue
 
         _parse_rna_row(

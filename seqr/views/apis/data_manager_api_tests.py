@@ -246,29 +246,29 @@ SAMPLE_GENE_TPM_DATA = [
 ]
 SAMPLE_GENE_SPLICE_DATA = [
     {
-        'chrom': 'chr2', 'start': '167254166', 'end': '167258349', 'strand': '*', 'type': 'psi3',
+        'gene_id': 'ENSG00000233750', 'chrom': 'chr2', 'start': '167254166', 'end': '167258349', 'strand': '*', 'type': 'psi3',
         'p_value': '1.56e-25', 'p_adjust': '-4.9', 'delta_intron_jaccard_index': '-0.46', 'counts': '166',
         'mean_counts': '16.6', 'total_counts': '1660', 'mean_total_counts': '1.66',
-        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20', 'gene_id': 'ENSG00000233750',
+        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20',
     },
     {
-        'chrom': 'chr2', 'start': '167254166', 'end': '167258349', 'strand': '*', 'type': 'psi3',
+        'gene_id': 'ENSG00000240361', 'chrom': 'chr2', 'start': '167254166', 'end': '167258349', 'strand': '*', 'type': 'psi3',
         'p_value': '1.56e-25', 'p_adjust': '-4.9', 'delta_intron_jaccard_index': '-0.46', 'counts': '166',
         'mean_counts': '16.6', 'total_counts': '1660', 'mean_total_counts': '1.66',
-        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20', 'gene_id': 'ENSG00000240361',
+        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20',
     },
     {
-        'chrom': 'chr7', 'start': '132885746', 'end': '132975168', 'strand': '*', 'type': 'psi5',
+        'gene_id': 'ENSG00000240361', 'chrom': 'chr7', 'start': '132885746', 'end': '132975168', 'strand': '*', 'type': 'psi5',
         'p_value': '1.08e-56', 'p_adjust': '-6.53', 'delta_intron_jaccard_index': '-0.85', 'counts': '231',
         'mean_counts': '0.231', 'total_counts': '2313', 'mean_total_counts': '231.3',
-        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20', 'gene_id': 'ENSG00000240361',
+        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20',
     },
 ]
 SAMPLE_GENE_SPLICE_DATA2 = {
-        'chrom': 'chr2', 'start': '167258096', 'end': '167258349', 'strand': '*', 'type': 'psi3',
+        'gene_id': '', 'chrom': 'chr2', 'start': '167258096', 'end': '167258349', 'strand': '*', 'type': 'psi3',
         'p_value': '1.56e-25', 'p_adjust': '6.33', 'delta_intron_jaccard_index': '0.45', 'counts': '143',
         'mean_counts': '14.3', 'total_counts': '1433', 'mean_total_counts': '143.3',
-        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20', 'gene_id': '',
+        'rare_disease_samples_with_this_junction': '1', 'rare_disease_samples_total': '20',
     }
 RNA_OUTLIER_SAMPLE_DATA = {
     RNA_OUTLIER_MUSCLE_SAMPLE_GUID: '\n'.join([json.dumps(row) for row in SAMPLE_GENE_OUTLIER_DATA]) + '\n',
@@ -1011,6 +1011,7 @@ class DataManagerAPITest(AirtableTest):
         self.assertIn(filename, expected_files)
         file_rename = self._assert_expected_file_open(mock_rename, mock_open, expected_files.keys())
         for filename in expected_files:
+            self.maxDiff = None
             self.assertEqual(
                 ''.join([call.args[0] for call in mock_files[file_rename[filename]].write.call_args_list]),
                 expected_files[filename],
