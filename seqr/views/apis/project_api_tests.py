@@ -7,7 +7,7 @@ from django.db import connections
 from django.urls.base import reverse
 import responses
 
-from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier
+from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier, Family
 from seqr.views.apis.project_api import create_project_handler, delete_project_handler, update_project_handler, \
     project_page_data, project_families, project_overview, project_mme_submisssions, project_individuals, \
     project_analysis_groups, update_project_workspace, project_family_notes, project_collaborators, project_locus_lists, \
@@ -698,13 +698,13 @@ class ProjectAPITest(object):
             'counts', 'rare_disease_samples_with_this_junction', 'rare_disease_samples_total',
         )))
 
-    @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
+    @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP')
     @mock.patch('seqr.utils.file_utils.gzip.open')
     @mock.patch('seqr.utils.file_utils.os.path.isfile')
     @mock.patch('seqr.utils.file_utils.subprocess.Popen')
-    def _test_load_rna_seq_sample_data(self, data_type, sample_guid, parsed_file_data, model_cls, mock_subprocess, mock_does_file_exist, mock_open, mismatch_field='p_value', row_id=None):
+    def _test_load_rna_seq_sample_data(self, data_type, sample_guid, parsed_file_data, model_cls, mock_subprocess, mock_does_file_exist, mock_open, mock_pm_group, mismatch_field='p_value', row_id=None):
         url = reverse(load_rna_seq_sample_data, args=[sample_guid])
-        self.check_pm_login(url)
+        self.check_manager_login(url)
 
         model_cls.objects.all().delete()
         self.reset_logs()
@@ -719,7 +719,7 @@ class ProjectAPITest(object):
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'error': 'Data for this sample was not properly parsed. Please re-upload the data'})
-        self.assert_json_logs(self.pm_user, [
+        self.assert_json_logs(self.manager_user, [
             ('Loading outlier data for NA19675_1', None),
             *not_found_logs,
             (f'No saved temp data found for {sample_guid} with file prefix {file_name}', {
@@ -741,7 +741,7 @@ class ProjectAPITest(object):
 
         subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid)
 
-        self.assert_json_logs(self.pm_user, [
+        self.assert_json_logs(self.manager_user, [
             ('Loading outlier data for NA19675_1', None),
             *subprocess_logs,
             (f'create {model_cls.__name__}s', {'dbUpdate': {
@@ -757,6 +757,33 @@ class ProjectAPITest(object):
         self.assertDictEqual(response.json(), {
             'error': f'Error in {sample_guid.split("_", 1)[-1].upper()}: mismatched entries for {row_id or mismatch_row["gene_id"]}'
         })
+
+        # Test manager access to AnVIL external projects
+        self._set_file_iter([], mock_subprocess, mock_does_file_exist, mock_open)
+        Family.objects.filter(id=1).update(project_id=4)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200 if self.CLICKHOUSE_HOSTNAME else 403)
+
+        # Test PM permission
+        Family.objects.filter(id=1).update(project_id=3)
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 403)
+
+        self.login_pm_user()
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 403)
+
+        self._set_file_iter([], mock_subprocess, mock_does_file_exist, mock_open)
+        self.login_data_manager_user()
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200)
+
+        mock_pm_group.resolve_expression.return_value = 'project-managers'
+        mock_pm_group.__eq__.side_effect = lambda s: s == 'project-managers'
+        self._set_file_iter([], mock_subprocess, mock_does_file_exist, mock_open)
+        self.login_pm_user()
+        response = self.client.post(url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200)
 
         return models
 
