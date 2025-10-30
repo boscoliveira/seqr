@@ -23,7 +23,7 @@ def _get_record_individual_id(record):
     return record.get(JsonConstants.PREVIOUS_INDIVIDUAL_ID_COLUMN) or record[JsonConstants.INDIVIDUAL_ID_COLUMN]
 
 
-def add_or_update_individuals_and_families(project, individual_records, user, get_update_json=True, get_updated_individual_db_ids=False, get_created_counts=False, allow_features_update=False):
+def add_or_update_individuals_and_families(project, individual_records, user, get_update_json=True, get_updated_individual_db_ids=False, get_created_counts=False, allow_features_update=False, skip_gt_stats_rebuild=False):
     """
     Add or update individual and family records in the given project.
 
@@ -85,7 +85,7 @@ def add_or_update_individuals_and_families(project, individual_records, user, ge
 
     updated_family_models = Family.objects.filter(id__in=updated_family_ids)
     _remove_pedigree_images(updated_family_models, user)
-    if updated_affected:
+    if updated_affected and not skip_gt_stats_rebuild:
         backend_specific_call(lambda *args: True, trigger_rebuild_gt_stats)(project, user)
 
     pedigree_json = None
