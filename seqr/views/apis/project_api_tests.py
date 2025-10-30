@@ -62,6 +62,7 @@ RNA_DATA_TYPE_PARAMS = {
             'NA21234\tNOT_A_GENE_ID1\tdetail1\t0.064\t0.0000057\t7.8',
             'NA19675_1\t\tdetail1\t0.064\t0.0000057\t7.8',
         ],
+        'message_data_type': 'Expression Outlier',
     },
     'T': {
         'model_cls': RnaSeqTpm,
@@ -70,6 +71,7 @@ RNA_DATA_TYPE_PARAMS = {
         'required_columns': RNA_TPM_REQUIRED_COLUMNS,
         'mismatch_field': 'tpm',
         'rows': [],
+        'message_data_type': 'Expression',
     },
     'S': {
         'model_cls': RnaSeqSpliceOutlier,
@@ -78,6 +80,7 @@ RNA_DATA_TYPE_PARAMS = {
         'required_columns': RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS,
         'row_id': 'ENSG00000233750-2-167254166-167258349-*-psi3',
         'rows': [],
+        'message_data_type': 'Splice Outlier',
     }
 }
 
@@ -702,6 +705,13 @@ class ProjectAPITest(object):
     def test_update_project_rna_outlier(self):
         self._test_update_project_rna('E', **RNA_DATA_TYPE_PARAMS['E'])
 
+    def test_update_project_rna_tpm(self):
+        self._test_update_project_rna('T', **RNA_DATA_TYPE_PARAMS['T'])
+
+    def test_update_project_rna_splice_outlier(self):
+        self._test_update_project_rna('S', **RNA_DATA_TYPE_PARAMS['S'])
+
+    @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
     @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
     @mock.patch('seqr.views.utils.file_utils.tempfile.gettempdir', lambda: 'tmp/')
     @mock.patch('seqr.views.utils.dataset_utils.datetime')
@@ -716,6 +726,7 @@ class ProjectAPITest(object):
                                  rows=None, parsed_file_data=None, required_columns=None,  allow_missing_gene=False,
                                  tissue='M', message_data_type=None, **kwargs):
         mock_datetime.now.return_value = datetime(2025, 4, 15)
+        mock_os.path.join.side_effect = lambda *args: '/'.join(args)
         initial_model_count = model_cls.objects.count()
         initial_sample_model_count = model_cls.objects.filter(sample__guid=sample_guid).count()
 
@@ -781,18 +792,13 @@ class ProjectAPITest(object):
             tissue_type=tissue, data_type=data_type, data_source='new_samples.tsv.gz', is_active=False,
         )
         self.assertEqual(rna_samples.count(), 2)
-        existing_sample = rna_samples.get(individual_id=1)
-        self.assertEqual(existing_sample.guid, sample_guid)
-        new_sample = rna_samples.get(individual_id=4)
-        new_sample_guid = new_sample.guid
-        self.assertSetEqual(set(response_json['sampleGuids']), {sample_guid, new_sample_guid})
+        replacement_sample_guid = rna_samples.get(individual_id=1).guid
+        new_sample_guid =  rna_samples.get(individual_id=4).guid
+        self.assertSetEqual(set(response_json['sampleGuids']), {replacement_sample_guid, new_sample_guid})
 
         # test notifications
-        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_path, sample_guid)
-        self.assert_json_logs(self.data_manager_user, subprocess_logs + [
-            (info_log, None) for info_log in info] + [
-            (warn_log, {'severity': 'WARNING'}) for warn_log in warnings
-        ] + [
+        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_path, replacement_sample_guid)
+        self.assert_json_logs(self.manager_user, subprocess_logs + [
             ('create 2 RnaSamples', {'dbUpdate': {
                 'dbEntity': 'RnaSample', 'updateType': 'bulk_create',
                 'entityIds': response_json['sampleGuids'],
@@ -803,12 +809,15 @@ class ProjectAPITest(object):
             (f'delete {model_cls.__name__}s', {'dbUpdate': {
                 'dbEntity': model_cls.__name__, 'numEntities': initial_sample_model_count,
                 'parentEntityIds': [sample_guid], 'updateType': 'bulk_delete'}}),
-        ])
+        ] + [
+            (info_log, None) for info_log in info] + [
+            (warn_log, {'severity': 'WARNING'}) for warn_log in warnings
+        ] )
 
         self.assertEqual(mock_send_slack.call_count, 1)
         mock_send_slack.assert_called_with(
             'seqr-data-loading',
-            f'1 new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
+            f'1 new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>\n```HG00731```',
         )
 
         self.assertEqual(mock_send_email.call_count, 1)
@@ -824,23 +833,19 @@ class ProjectAPITest(object):
         )
 
         # test correct file interactions
-        self.assertEqual(mock_open.call_count, 2)
+        self.assertEqual(mock_open.call_count, 3)
         mock_open.assert_has_calls([
+            mock.call(file, 'r'),
+            mock.call().__enter__(),
+            mock.call().__enter__().__iter__(),
             mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', 'at'),
+        ] + [mock.call().write(row + '\n') for row in parsed_file_data[sample_guid].split('\n') if row] + [
             mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at'),
-        ])
+        ] + [mock.call().write(row + '\n') for row in parsed_file_data[PLACEHOLDER_GUID].split('\n') if row])
         mock_os.rename.assert_has_calls([
-            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', f'tmp/temp_uploads/{file_path}/{sample_guid}.json.gz'),
+            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', f'tmp/temp_uploads/{file_path}/{replacement_sample_guid}.json.gz'),
             mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', f'tmp/temp_uploads/{file_path}/{new_sample_guid}.json.gz'),
         ])
-        self.assertEqual(
-            ''.join([call.args[0] for call in mock_open.return_value[0].write.call_args_list]),
-            parsed_file_data[sample_guid],
-        )
-        self.assertEqual(
-            ''.join([call.args[0] for call in mock_open.return_value[1].write.call_args_list]),
-            parsed_file_data[PLACEHOLDER_GUID],
-        )
 
         # TODO test anvil external project access
 
