@@ -14,6 +14,7 @@ from seqr.utils.file_utils import file_iter
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
 from seqr.utils.xpos_utils import format_chrom
+from seqr.views.apis.gene_api_tests import GENE_ID
 from seqr.views.utils.file_utils import parse_file, get_temp_file_path, persist_temp_file
 from seqr.views.utils.json_utils import _to_snake_case, _to_camel_case
 from reference_data.models import GeneInfo
@@ -284,7 +285,8 @@ SPLICE_OUTLIER_FORMATTER = {
 
 SPLICE_OUTLIER_HEADER_COLS = {_to_camel_case(col): col for col in SPLICE_OUTLIER_COLS}
 SPLICE_OUTLIER_HEADER_COLS.update({
-    SAMPLE_ID_HEADER_COL: SAMPLE_ID_COL, GENE_ID_HEADER_COL: GENE_ID_COL,
+    SAMPLE_ID_HEADER_COL: SAMPLE_ID_COL, GENE_ID_HEADER_COL: GENE_ID_COL, 'hgncSymbol': GENE_ID_COL,
+    'seqnames': CHROM_COL, 'padjust': P_ADJUST_COL, 'deltaPsi': DELTA_INDEX_COL,
 })
 
 
