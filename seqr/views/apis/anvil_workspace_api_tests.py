@@ -30,7 +30,7 @@ LOAD_SAMPLE_DATA_NO_AFFECTED = LOAD_SAMPLE_DATA + [["22", "HG00736", "", "", "",
 
 LOAD_SAMPLE_DATA_ALL_PENDING = LOAD_SAMPLE_DATA + [
     ["2", "HG00731", "", "HG00732", "HG00733", "Female", "Affected", "HP:0001508", "", ""],
-    ["2", "HG00732", "", "", "", "Male", "Unaffected", "", "", ""],
+    ["2", "HG00732", "", "", "", "Male", "Affected", "HP:0001508", "", ""],
     ["2", "HG00733", "", "", "", "Female", "Unaffected", "", "", ""],
     ["3", "NA20870", "", "", "", "Male", "Affected", "HP:0001508", "", ""],
     ["4", "NA20872", "", "", "", "Male", "Affected", "HP:0001508", "", ""],
@@ -831,7 +831,7 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
             'skip_check_sex_and_relatedness': True,
             'skip_expect_tdr_metrics': True,
         }
-        self._assert_expected_requests(variables, project, num_samples=14 if test_add_data else 3, status='Loading')
+        self._assert_expected_requests(variables, project, num_samples=14 if test_add_data else 3, status='Loading', updated_affected=test_add_data)
         self.assert_expected_airtable_headers(-1)
 
         sample_summary = '13 new and 7 re-loaded' if test_add_data else '3 new'
@@ -869,17 +869,20 @@ class LoadAnvilDataAPITest(AnvilAuthenticationTestCase, AirtableTest):
             'father__individual_id': None, 'sex': 'F', 'affected': 'N', 'notes': 'a individual note', 'features': [],
         }, individual_model_data)
 
-    def _assert_expected_requests(self, variables, project, num_samples, status):
-        self.assertEqual(len(responses.calls), 3)
+    def _assert_expected_requests(self, variables, project, num_samples, status, updated_affected=False):
+        self.assertEqual(len(responses.calls), 3 if updated_affected else 2)
 
-        self.assertEqual(responses.calls[0].request.url, f'{PIPELINE_RUNNER_HOST}/rebuild_gt_stats_enqueue')
-        self.assertDictEqual(json.loads(responses.calls[0].request.body), {'project_guids': [project.guid]})
+        index = 0
+        if updated_affected:
+            self.assertEqual(responses.calls[index].request.url, f'{PIPELINE_RUNNER_HOST}/rebuild_gt_stats_enqueue')
+            self.assertDictEqual(json.loads(responses.calls[index].request.body), {'project_guids': [project.guid]})
+            index = 1
 
-        self.assertEqual(responses.calls[1].request.url, PIPELINE_RUNNER_URL)
-        self.assertDictEqual(json.loads(responses.calls[1].request.body), variables)
+        self.assertEqual(responses.calls[index].request.url, PIPELINE_RUNNER_URL)
+        self.assertDictEqual(json.loads(responses.calls[index].request.body), variables)
 
         # create airtable record
-        self.assertDictEqual(json.loads(responses.calls[2].request.body), {'records': [{'fields': {
+        self.assertDictEqual(json.loads(responses.calls[index + 1].request.body), {'records': [{'fields': {
             'Requester Name': 'Test Manager User',
             'Requester Email': 'test_user_manager@test.com',
             'AnVIL Project URL': f'http://testserver/project/{project.guid}/project_page',
