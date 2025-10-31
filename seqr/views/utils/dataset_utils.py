@@ -542,8 +542,8 @@ def _load_rna_seq(data_type, file_path, user, sample_metadata_mapping=None, proj
             filter=~Q(family__individual__id__in=prev_loaded_individual_ids) if prev_loaded_individual_ids else None
         ))
     project_names = ', '.join(sorted([project['name'] for project in sample_projects]))
-    #  TODO better message for single project!
-    message = f'Attempted data loading for {len(sample_guid_ids_to_load)} RNA-seq samples in the following {len(sample_projects)} projects: {project_names}'
+    project_summary = '' if project_guid else f' in the following {len(sample_projects)} projects: {project_names}'
+    message = f'Attempted data loading for {len(sample_guid_ids_to_load)} RNA-seq samples{project_summary}'
     info.append(message)
     logger.info(message, user)
 

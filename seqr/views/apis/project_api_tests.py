@@ -807,7 +807,7 @@ class ProjectAPITest(object):
         self.assertEqual(response.status_code, 200)
         info = [
             f'Parsed {1 if single_sample_file else 3} RNA-seq samples',
-            f'Attempted data loading for {1 if single_sample_file else 2} RNA-seq samples in the following 1 projects: 1kg project nåme with uniçøde',
+            f'Attempted data loading for {1 if single_sample_file else 2} RNA-seq samples',
         ]
         warnings = [] if single_sample_file else ['Skipped loading for the following 1 unmatched samples: NA21234']
         file_path = f'rna_sample_data__{data_type}__2025-04-15T00:00:00'
