@@ -854,7 +854,11 @@ class ProjectAPITest(object):
             mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', f'tmp/temp_uploads/{file_path}/{new_sample_guid}.json.gz'),
         ])
 
-        # TODO test anvil external project access
+        # test anvil external project access
+        self._set_file_iter(rows[:-2], mock_subprocess, mock_does_file_exist, mock_open)
+        external_project_url = url.replace(PROJECT_GUID, 'R0004_non_analyst_project')
+        response = self.client.post(external_project_url, content_type='application/json', data=json.dumps(body))
+        self.assertEqual(response.status_code, 200 if self.CLICKHOUSE_HOSTNAME else 403)
 
     def test_load_rna_outlier_sample_data(self):
         models = self._test_load_rna_seq_sample_data('E', **RNA_DATA_TYPE_PARAMS['E'])
