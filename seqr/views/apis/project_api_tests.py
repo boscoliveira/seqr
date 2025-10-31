@@ -6,6 +6,7 @@ from django.contrib.auth.models import Group
 from django.db import connections
 from django.urls.base import reverse
 import responses
+from sqlalchemy.dialects.mssql.information_schema import views
 
 from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier, RnaSample, Family
 from seqr.utils.communication_utils import _set_bulk_notification_stream
@@ -79,7 +80,15 @@ RNA_DATA_TYPE_PARAMS = {
         'parsed_file_data': RNA_SPLICE_SAMPLE_DATA,
         'required_columns': RNA_SPLICE_OUTLIER_REQUIRED_COLUMNS,
         'row_id': 'ENSG00000233750-2-167254166-167258349-*-psi3',
-        'rows': [],
+        'rows': [
+            'hgncSymbol\tseqnames\tstart\tend\tstrand\tsampleID\ttype\tpValue\tpadjust\tdeltaPsi\tcounts\tmeanCounts\ttotalCounts\tmeanTotalCounts\tnonsplitCounts',
+            'ENSG00000233750;ENSG00000240361\tchr2\t167254166\t167258349\t*\tNA19675_1\tpsi3\t1.56E-25\t-4.9\t-0.46\t166\t16.6\t1660\t1.66\t1',
+            'ENSG00000240361\tchr7\t132885746\t132975168\t*\tNA19675_1\tpsi5\t1.08E-56\t-6.53\t-0.85\t231\t0.231\t2313\t231.3\t1',
+            'ENSG00000233750\tchr2\t167258096\t167258349\t*\tNA21234\tpsi3\t1.56E-25\t6.33\t0.45\t143\t14.3\t1433\t143.3\t1',
+            '\tchr2\t167258096\t167258349\t*\tHG00731\tpsi3\t1.56E-25\t6.33\t0.45\t143\t14.3\t1433\t143.3\t1',
+            'NOT_A_GENE_ID1\tchr2\t167258096\t167258349\t*\tNA21234\tpsi3\t1.56E-25\t6.33\t0.45\t143\t14.3\t1433\t143.3\t1',
+            '\tchr2\t167258096\t167258349\t*\tNA19675_1\tpsi3\t1.56E-25\t6.33\t0.45\t143\t14.3\t1433\t143.3\t1',
+        ],
         'message_data_type': 'Splice Outlier',
     }
 }
@@ -709,7 +718,21 @@ class ProjectAPITest(object):
         self._test_update_project_rna('T', **RNA_DATA_TYPE_PARAMS['T'])
 
     def test_update_project_rna_splice_outlier(self):
-        self._test_update_project_rna('S', **RNA_DATA_TYPE_PARAMS['S'])
+        kwargs = {
+            **RNA_DATA_TYPE_PARAMS['S'],
+            'tissue': 'F',
+            'allow_missing_gene': True,
+        }
+        # Parsed data does not include optional internal-only columns
+        internal_cols =  {'rare_disease_samples_total', 'rare_disease_samples_with_this_junction'}
+        kwargs['parsed_file_data'] = {
+            sample_guid: '\n'.join([
+                json.dumps({k: v.replace('e', 'E') for k, v in json.loads(row).items() if k not in internal_cols})
+                for row in data.split('\n') if row]
+            ) + '\n' for sample_guid, data in kwargs['parsed_file_data'].items()
+        }
+
+        self._test_update_project_rna('S', **kwargs)
 
     @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
     @mock.patch('seqr.views.utils.permissions_utils.PM_USER_GROUP', 'project-managers')
