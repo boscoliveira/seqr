@@ -908,8 +908,7 @@ class ProjectAPITest(object):
             }),
         ])
 
-        file_lines = [row.encode('utf-8') for row in parsed_file_lines]
-        self._set_file_iter(file_lines, mock_subprocess, mock_does_file_exist, mock_open)
+        self._set_file_iter(parsed_file_lines, mock_subprocess, mock_does_file_exist, mock_open)
 
         self.reset_logs()
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
@@ -932,7 +931,7 @@ class ProjectAPITest(object):
         ])
 
         mismatch_row = {**json.loads(parsed_file_lines[0]), mismatch_field: '0.05'}
-        self._set_file_iter(file_lines + [json.dumps(mismatch_row).encode('utf-8')], mock_subprocess, mock_does_file_exist, mock_open)
+        self._set_file_iter(parsed_file_lines + [json.dumps(mismatch_row)], mock_subprocess, mock_does_file_exist, mock_open)
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {
@@ -1139,7 +1138,7 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
         mock_does_file_exist = mock.MagicMock()
         mock_does_file_exist.wait.return_value = 0
         mock_file_iter = mock.MagicMock()
-        mock_file_iter.stdout = stdout
+        mock_file_iter.stdout = [row.encode('utf-8') for row in stdout]
         mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter]
 
     @staticmethod
