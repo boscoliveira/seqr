@@ -6,7 +6,6 @@ from django.contrib.auth.models import Group
 from django.db import connections
 from django.urls.base import reverse
 import responses
-from sqlalchemy.dialects.mssql.information_schema import views
 
 from seqr.models import Project, RnaSeqTpm, RnaSeqSpliceOutlier, RnaSeqOutlier, RnaSample, Family
 from seqr.utils.communication_utils import _set_bulk_notification_stream
