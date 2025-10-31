@@ -61,7 +61,7 @@ RNA_DATA_TYPE_PARAMS = {
             'NA21234\tENSG00000233750\tdetail1\t0.064\t0.0000057\t7.8',
             'HG00731\tENSG00000240361\t\t0.04\t0.112\t1.9',
             'NA21234\tNOT_A_GENE_ID1\tdetail1\t0.064\t0.0000057\t7.8',
-            'NA19675_1\t\tdetail1\t0.064\t0.0000057\t7.8',
+            'NA21234\t\tdetail1\t0.064\t0.0000057\t7.8',
         ],
         'message_data_type': 'Expression Outlier',
     },
@@ -71,7 +71,13 @@ RNA_DATA_TYPE_PARAMS = {
         'parsed_file_data': RNA_TPM_SAMPLE_DATA,
         'required_columns': RNA_TPM_REQUIRED_COLUMNS,
         'mismatch_field': 'tpm',
-        'rows': [],
+        'rows': [
+            'Name\tDescription\tNA19675_1',
+            'ENSG00000240361\tsome gene of interest\t7.8',
+            'ENSG00000233750\t\t0.0',
+            'NOT_A_GENE_ID1\t\t0.064',
+            '\t\t0.064',
+        ],
         'message_data_type': 'Expression',
     },
     'S': {
@@ -715,7 +721,7 @@ class ProjectAPITest(object):
         self._test_update_project_rna('E', **RNA_DATA_TYPE_PARAMS['E'])
 
     def test_update_project_rna_tpm(self):
-        self._test_update_project_rna('T', **RNA_DATA_TYPE_PARAMS['T'])
+        self._test_update_project_rna('T', **RNA_DATA_TYPE_PARAMS['T'], single_sample_file=True)
 
     def test_update_project_rna_splice_outlier(self):
         kwargs = {
@@ -747,7 +753,7 @@ class ProjectAPITest(object):
     def _test_update_project_rna(self, data_type, mock_subprocess, mock_does_file_exist, mock_open, mock_os,
                                  mock_send_slack, mock_send_email, mock_datetime, sample_guid=None, model_cls=None,
                                  rows=None, parsed_file_data=None, required_columns=None,  allow_missing_gene=False,
-                                 tissue='M', message_data_type=None, **kwargs):
+                                 tissue='M', message_data_type=None, single_sample_file=False, **kwargs):
         mock_datetime.now.return_value = datetime(2025, 4, 15)
         mock_os.path.join.side_effect = lambda *args: '/'.join(args)
         initial_model_count = model_cls.objects.count()
@@ -778,7 +784,8 @@ class ProjectAPITest(object):
         self.assertEqual(response.status_code, 400)
         self.assertDictEqual(response.json(), {'error': f'Invalid file: missing column(s): {required_columns}'})
 
-        self._set_file_iter(rows, mock_subprocess, mock_does_file_exist, mock_open)
+        error_rows = [rows[0].replace('NA19675_1', 'NA21234')] + rows[1:] if single_sample_file else rows
+        self._set_file_iter(error_rows, mock_subprocess, mock_does_file_exist, mock_open)
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
         errors = [
@@ -786,7 +793,7 @@ class ProjectAPITest(object):
             'Unable to find matches for the following samples: NA21234',
         ]
         if not allow_missing_gene:
-            errors.insert(0, 'Samples missing required "gene_id": NA19675_1')
+            errors.insert(0, 'Samples missing required "gene_id": NA21234')
         self.assertDictEqual(response.json(), {'warnings': None, 'errors': errors})
 
         # Test loading new data
@@ -799,10 +806,10 @@ class ProjectAPITest(object):
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 200)
         info = [
-            'Parsed 3 RNA-seq samples',
-            'Attempted data loading for 2 RNA-seq samples in the following 1 projects: 1kg project nåme with uniçøde',
+            f'Parsed {1 if single_sample_file else 3} RNA-seq samples',
+            f'Attempted data loading for {1 if single_sample_file else 2} RNA-seq samples in the following 1 projects: 1kg project nåme with uniçøde',
         ]
-        warnings = ['Skipped loading for the following 1 unmatched samples: NA21234']
+        warnings = [] if single_sample_file else ['Skipped loading for the following 1 unmatched samples: NA21234']
         file_path = f'rna_sample_data__{data_type}__2025-04-15T00:00:00'
         response_json = response.json()
         self.assertDictEqual(response_json, {
@@ -814,10 +821,11 @@ class ProjectAPITest(object):
         rna_samples = RnaSample.objects.filter(
             tissue_type=tissue, data_type=data_type, data_source='new_samples.tsv.gz', is_active=False,
         )
-        self.assertEqual(rna_samples.count(), 2)
-        replacement_sample_guid = rna_samples.get(individual_id=1).guid
-        new_sample_guid =  rna_samples.get(individual_id=4).guid
-        self.assertSetEqual(set(response_json['sampleGuids']), {replacement_sample_guid, new_sample_guid})
+        self.assertEqual(rna_samples.count(), 1 if single_sample_file else 2)
+        guid_map = {'NA19675_1': rna_samples.get(individual_id=1).guid}
+        if not single_sample_file:
+            guid_map['HG00731'] = rna_samples.get(individual_id=4).guid
+        self.assertSetEqual(set(response_json['sampleGuids']), set(guid_map.values()))
 
         # test notifications
         mv_command = f'gsutil mv tmp/temp_uploads/{file_path} gs://seqr-scratch-temp/{file_path}'
@@ -825,7 +833,7 @@ class ProjectAPITest(object):
             mock_subprocess, 'new_samples.tsv.gz', additional_command=mv_command,
         )
         self.assert_json_logs(self.manager_user, subprocess_logs + [
-            ('create 2 RnaSamples', {'dbUpdate': {
+            (f'create {1 if single_sample_file else 2} RnaSamples', {'dbUpdate': {
                 'dbEntity': 'RnaSample', 'updateType': 'bulk_create',
                 'entityIds': response_json['sampleGuids'],
             }}),
@@ -841,17 +849,18 @@ class ProjectAPITest(object):
         ] )
 
         self.assertEqual(mock_send_slack.call_count, 1)
+        new_samples = '' if single_sample_file else '\n```HG00731```'
         mock_send_slack.assert_called_with(
             'seqr-data-loading',
-            f'1 new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>\n```HG00731```',
+            f'{0 if single_sample_file else 1} new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>{new_samples}',
         )
 
         self.assertEqual(mock_send_email.call_count, 1)
         project_link = f'<a href=https://test-seqr.org/project/{PROJECT_GUID}/project_page>1kg project nåme with uniçøde</a>'
         mock_send_email.assert_called_with(
             email_body=(
-                f'Dear seqr user,\n\nThis is to notify you that data for 1 new RNA {message_data_type} sample(s) '
-                f'has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
+                f'Dear seqr user,\n\nThis is to notify you that data for {0 if single_sample_file else 1} new RNA '
+                f'{message_data_type} sample(s) has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
             ),
             subject=f'New RNA {message_data_type} data available in seqr',
             to=['test_user_manager@test.com'],
@@ -859,12 +868,15 @@ class ProjectAPITest(object):
         )
 
         # test correct file interactions
-        open_call_count = 2
+        open_call_count = 1
         open_calls = [mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', 'at')] + [
             mock.call().write(row + '\n') for row in parsed_file_data[sample_guid].split('\n') if row
-        ] + [mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at')] + [
-            mock.call().write(row + '\n') for row in parsed_file_data[PLACEHOLDER_GUID].split('\n') if row
         ]
+        if not single_sample_file:
+            open_call_count += 1
+            open_calls += [mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at')] + [
+                mock.call().write(row + '\n') for row in parsed_file_data[PLACEHOLDER_GUID].split('\n') if row
+            ]
         if mock_subprocess.call_count == 0:
             open_call_count += 1
             open_calls = [
@@ -873,8 +885,8 @@ class ProjectAPITest(object):
         self.assertEqual(mock_open.call_count, open_call_count)
         mock_open.assert_has_calls(open_calls)
         mock_os.rename.assert_has_calls([
-            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', f'tmp/temp_uploads/{file_path}/{replacement_sample_guid}.json.gz'),
-            mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', f'tmp/temp_uploads/{file_path}/{new_sample_guid}.json.gz'),
+            mock.call(f'tmp/temp_uploads/{file_path}/{sample_id}.json.gz', f'tmp/temp_uploads/{file_path}/{sample_guid}.json.gz')
+            for sample_id, sample_guid in guid_map.items()
         ])
 
         # test anvil external project access
