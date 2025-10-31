@@ -797,7 +797,10 @@ class ProjectAPITest(object):
         self.assertSetEqual(set(response_json['sampleGuids']), {replacement_sample_guid, new_sample_guid})
 
         # test notifications
-        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_path, replacement_sample_guid)
+        mv_command = f'gsutil mv tmp/temp_uploads/{file_path} gs://seqr-scratch-temp/{file_path}'
+        subprocess_logs = self._get_expected_read_file_subprocess_calls(
+            mock_subprocess, 'new_samples.tsv.gz', additional_command=mv_command,
+        )
         self.assert_json_logs(self.manager_user, subprocess_logs + [
             ('create 2 RnaSamples', {'dbUpdate': {
                 'dbEntity': 'RnaSample', 'updateType': 'bulk_create',
@@ -833,15 +836,19 @@ class ProjectAPITest(object):
         )
 
         # test correct file interactions
-        self.assertEqual(mock_open.call_count, 3)
-        mock_open.assert_has_calls([
-            mock.call(file, 'r'),
-            mock.call().__enter__(),
-            mock.call().__enter__().__iter__(),
-            mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', 'at'),
-        ] + [mock.call().write(row + '\n') for row in parsed_file_data[sample_guid].split('\n') if row] + [
-            mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at'),
-        ] + [mock.call().write(row + '\n') for row in parsed_file_data[PLACEHOLDER_GUID].split('\n') if row])
+        open_call_count = 2
+        open_calls = [mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', 'at')] + [
+            mock.call().write(row + '\n') for row in parsed_file_data[sample_guid].split('\n') if row
+        ] + [mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', 'at')] + [
+            mock.call().write(row + '\n') for row in parsed_file_data[PLACEHOLDER_GUID].split('\n') if row
+        ]
+        if mock_subprocess.call_count == 0:
+            open_call_count += 1
+            open_calls = [
+                mock.call(file, 'r'), mock.call().__enter__(), mock.call().__enter__().__iter__()
+            ] + open_calls
+        self.assertEqual(mock_open.call_count, open_call_count)
+        mock_open.assert_has_calls(open_calls)
         mock_os.rename.assert_has_calls([
             mock.call(f'tmp/temp_uploads/{file_path}/NA19675_1.json.gz', f'tmp/temp_uploads/{file_path}/{replacement_sample_guid}.json.gz'),
             mock.call(f'tmp/temp_uploads/{file_path}/HG00731.json.gz', f'tmp/temp_uploads/{file_path}/{new_sample_guid}.json.gz'),
@@ -919,7 +926,7 @@ class ProjectAPITest(object):
         self.assertSetEqual({model.sample.guid for model in models}, {sample_guid})
         self.assertTrue(all(model.sample.is_active for model in models))
 
-        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid)
+        subprocess_logs = self._get_expected_read_file_subprocess_calls(mock_subprocess, f'{file_name}/{sample_guid}.json.gz')
 
         self.assert_json_logs(self.manager_user, [
             ('Loading outlier data for NA19675_1', None),
@@ -980,7 +987,7 @@ class ProjectAPITest(object):
         file_iter.return_value = stdout
 
     @staticmethod
-    def _get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid):
+    def _get_expected_read_file_subprocess_calls(mock_subprocess, file_name, additional_command=None):
         mock_subprocess.assert_not_called()
         return []
 
@@ -1139,13 +1146,13 @@ class AnvilProjectAPITest(AnvilAuthenticationTestCase, ProjectAPITest):
         mock_does_file_exist.wait.return_value = 0
         mock_file_iter = mock.MagicMock()
         mock_file_iter.stdout = [row.encode('utf-8') for row in stdout]
-        mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter]
+        mock_subprocess.side_effect = [mock_does_file_exist, mock_file_iter, mock_does_file_exist]
 
     @staticmethod
-    def _get_expected_read_file_subprocess_calls(mock_subprocess, file_name, sample_guid):
-        gsutil_cat = f'gsutil cat gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz | gunzip -c -q - '
-        mock_subprocess.assert_called_with(gsutil_cat, stdout=-1, stderr=-2, shell=True)  # nosec
-        return [
-            (f'==> gsutil ls gs://seqr-scratch-temp/{file_name}/{sample_guid}.json.gz', None),
-            (f'==> {gsutil_cat}', None),
+    def _get_expected_read_file_subprocess_calls(mock_subprocess, file_name, additional_command=False):
+        commands = [
+            f'gsutil ls gs://seqr-scratch-temp/{file_name}',
+            f'gsutil cat gs://seqr-scratch-temp/{file_name} | gunzip -c -q - ',
         ]
+        mock_subprocess.assert_has_calls([mock.call(cmd, stdout=-1, stderr=-2, shell=True) for cmd in commands])  # nosec
+        return [(f'==> {cmd}', None) for cmd in commands]
