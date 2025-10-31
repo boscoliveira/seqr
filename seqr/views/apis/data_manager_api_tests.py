@@ -848,7 +848,6 @@ class DataManagerAPITest(AirtableTest):
         _set_file_iter_stdout([['']])
         response = self.client.post(url, content_type='application/json', data=json.dumps(body))
         self.assertEqual(response.status_code, 400)
-        self.maxDiff = None
         self.assertDictEqual(response.json(), {
             'error': f'Invalid file: missing column(s): {params["required_columns"]}',
         })
@@ -1014,7 +1013,6 @@ class DataManagerAPITest(AirtableTest):
         self.assertIn(filename, expected_files)
         file_rename = self._assert_expected_file_open(mock_rename, mock_open, expected_files.keys())
         for filename in expected_files:
-            self.maxDiff = None
             self.assertEqual(
                 ''.join([call.args[0] for call in mock_files[file_rename[filename]].write.call_args_list]),
                 expected_files[filename],
