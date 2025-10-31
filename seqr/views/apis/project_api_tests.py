@@ -852,7 +852,7 @@ class ProjectAPITest(object):
         new_samples = '' if single_sample_file else '\n```HG00731```'
         mock_send_slack.assert_called_with(
             'seqr-data-loading',
-            f'{0 if single_sample_file else 1} new RNA {message_data_type} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>{new_samples}',
+            f'{0 if single_sample_file else 1} new RNA {message_data_type} samples are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>{new_samples}',
         )
 
         self.assertEqual(mock_send_email.call_count, 1)
@@ -860,7 +860,7 @@ class ProjectAPITest(object):
         mock_send_email.assert_called_with(
             email_body=(
                 f'Dear seqr user,\n\nThis is to notify you that data for {0 if single_sample_file else 1} new RNA '
-                f'{message_data_type} sample(s) has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
+                f'{message_data_type} samples has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
             ),
             subject=f'New RNA {message_data_type} data available in seqr',
             to=['test_user_manager@test.com'],
@@ -890,10 +890,17 @@ class ProjectAPITest(object):
         ])
 
         # test anvil external project access
-        self._set_file_iter(rows[:-2], mock_subprocess, mock_does_file_exist, mock_open)
+        self._set_file_iter([row.replace('NA19675_1', 'NA21234') for row in rows[:2]], mock_subprocess, mock_does_file_exist, mock_open)
         external_project_url = url.replace(PROJECT_GUID, 'R0004_non_analyst_project')
         response = self.client.post(external_project_url, content_type='application/json', data=json.dumps(body))
-        self.assertEqual(response.status_code, 200 if self.CLICKHOUSE_HOSTNAME else 403)
+        if self.CLICKHOUSE_HOSTNAME:
+            self.assertEqual(response.status_code, 200)
+            mock_send_slack.assert_called_with(
+                'anvil-data-loading',
+                f'1 new RNA {message_data_type} samples are loaded in <https://test-seqr.org/project/R0004_non_analyst_project/project_page|Non-Analyst Project>',
+            )
+        else:
+            self.assertEqual(response.status_code, 403)
 
     def test_load_rna_outlier_sample_data(self):
         models = self._test_load_rna_seq_sample_data('E', **RNA_DATA_TYPE_PARAMS['E'])

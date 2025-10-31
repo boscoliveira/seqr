@@ -16,6 +16,7 @@ from seqr.utils.search.add_data_utils import basic_notify_search_data_loaded
 from seqr.utils.xpos_utils import format_chrom
 from seqr.views.utils.file_utils import parse_file, get_temp_file_path, persist_temp_file
 from seqr.views.utils.json_utils import _to_snake_case, _to_camel_case
+from seqr.views.utils.permissions_utils import is_internal_anvil_project, project_has_anvil
 from reference_data.models import GeneInfo
 
 logger = SeqrLogger(__name__)
@@ -618,14 +619,14 @@ RNA_MODEL_DISPLAY_NAME = {
 }
 
 
-def _notify_rna_loading(model_cls, sample_projects, internal_projects):
-    projects_by_name = {project.name: project for project in internal_projects}
+def _notify_rna_loading(model_cls, sample_projects, projects):
+    projects_by_name = {project.name: project for project in projects}
     data_type = RNA_MODEL_DISPLAY_NAME[model_cls]
     for project_agg in sample_projects:
         new_ids = project_agg["new_sample_ids"]
         project = projects_by_name[project_agg["name"]]
-        #  TODO is_internal
-        basic_notify_search_data_loaded(project, data_type, 'RNA', new_ids)
+        is_internal = is_internal_anvil_project(project) or not project_has_anvil(project)
+        basic_notify_search_data_loaded(project, data_type, 'RNA', new_ids, is_internal=is_internal)
 
 
 PHENOTYPE_PRIORITIZATION_HEADER = ['tool', 'project', 'sampleId', 'rank', 'geneId', 'diseaseId', 'diseaseName']
