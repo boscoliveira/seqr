@@ -797,7 +797,7 @@ class DataManagerAPITest(AirtableTest):
 
     @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://seqr.broadinstitute.org/')
     @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
-    @mock.patch('seqr.views.utils.dataset_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
+    @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
     @mock.patch('seqr.views.utils.file_utils.tempfile.gettempdir', lambda: 'tmp/')
     @mock.patch('seqr.utils.communication_utils.send_html_email')
     @mock.patch('seqr.utils.communication_utils.safe_post_to_slack')
@@ -972,18 +972,18 @@ class DataManagerAPITest(AirtableTest):
         mock_send_slack.assert_has_calls([
             mock.call(
                 'seqr-data-loading',
-                f'0 new RNA {params["message_data_type"]} sample(s) are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
+                f'0 new RNA {params["message_data_type"]} samples are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
             ), mock.call(
                 'seqr-data-loading',
-                f'1 new RNA {params["message_data_type"]} sample(s) are loaded in <https://test-seqr.org/project/R0003_test/project_page|Test Reprocessed Project>\n```NA20888```',
+                f'1 new RNA {params["message_data_type"]} samples are loaded in <https://test-seqr.org/project/R0003_test/project_page|Test Reprocessed Project>\n```NA20888```',
             ),
         ])
         self.assertEqual(mock_send_email.call_count, 2)
         self._assert_expected_notifications(mock_send_email, [
             {'data_type': f'RNA {params["message_data_type"]}', 'user': self.data_manager_user,
-             'email_body': f'data for 0 new RNA {params["message_data_type"]} sample(s)'},
+             'email_body': f'data for 0 new RNA {params["message_data_type"]} samples'},
             {'data_type': f'RNA {params["message_data_type"]}', 'user': self.data_manager_user,
-             'email_body': f'data for 1 new RNA {params["message_data_type"]} sample(s)',
+             'email_body': f'data for 1 new RNA {params["message_data_type"]} samples',
              'project_guid': 'R0003_test', 'project_name': 'Test Reprocessed Project'}
         ])
 

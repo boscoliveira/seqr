@@ -9,16 +9,14 @@ import os
 from tqdm import tqdm
 
 from seqr.models import Sample, Individual, Family, Project, RnaSample, RnaSeqOutlier, RnaSeqTpm, RnaSeqSpliceOutlier
-from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.file_utils import file_iter
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.middleware import ErrorsWarningsException
+from seqr.utils.search.add_data_utils import basic_notify_search_data_loaded
 from seqr.utils.xpos_utils import format_chrom
-from seqr.views.apis.gene_api_tests import GENE_ID
 from seqr.views.utils.file_utils import parse_file, get_temp_file_path, persist_temp_file
 from seqr.views.utils.json_utils import _to_snake_case, _to_camel_case
 from reference_data.models import GeneInfo
-from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL
 
 logger = SeqrLogger(__name__)
 
@@ -625,14 +623,9 @@ def _notify_rna_loading(model_cls, sample_projects, internal_projects):
     data_type = RNA_MODEL_DISPLAY_NAME[model_cls]
     for project_agg in sample_projects:
         new_ids = project_agg["new_sample_ids"]
-        # TODO better slack notification
-        send_project_notification(
-            project=projects_by_name[project_agg["name"]],
-            notification=f'{len(new_ids)} new RNA {data_type} sample(s)',
-            subject=f'New RNA {data_type} data available in seqr',
-            slack_channel=SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL,
-            slack_detail=', '.join(new_ids),
-        )
+        project = projects_by_name[project_agg["name"]]
+        #  TODO is_internal
+        basic_notify_search_data_loaded(project, data_type, 'RNA', new_ids)
 
 
 PHENOTYPE_PRIORITIZATION_HEADER = ['tool', 'project', 'sampleId', 'rank', 'geneId', 'diseaseId', 'diseaseName']
