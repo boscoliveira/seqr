@@ -1,7 +1,7 @@
 {
   "geneLists": [
-    {"name": "Mendeliome", "min_confidence":  "AMBER"},
-    {"name": "Incidentalome", "min_confidence":  "GREEN"}
+    {"name": "Mendeliome", "confidences": ["AMBER", "GREEN"]},
+    {"name": "Incidentalome", "confidences": ["GREEN"]}
   ],
   "exclude": {
     "clinvar": ["likely_benign", "benign"],
