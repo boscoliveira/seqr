@@ -52,9 +52,11 @@ const ANALYST_VARIANT_NOTE_FIELDS = [{
 
 const DEPRECATED_MME_TAG = 'seqr MME (old)'
 const AIP_TAG_TYPE = 'AIP'
-const NO_EDIT_TAG_TYPES = [AIP_TAG_TYPE, GREGOR_FINDING_TAG_NAME]
+const SEQR_TAG_TYPE = 'seqr Prioritized'
+const NO_EDIT_TAG_TYPES = [AIP_TAG_TYPE, GREGOR_FINDING_TAG_NAME, SEQR_TAG_TYPE]
 const TAG_TYPE_TILES = {
   [AIP_TAG_TYPE]: 'Categories',
+  [SEQR_TAG_TYPE]: 'Matched Criteria',
   [GREGOR_FINDING_TAG_NAME]: 'Finding Detail',
 }
 
