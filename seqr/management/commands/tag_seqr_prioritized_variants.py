@@ -18,6 +18,10 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         project = Project.objects.get(guid=options['project'])
         tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
-        with open(f'{os.path.dirname(__file__)}/../../fixtures/variant_tag_types.json', 'r') as file:
-            data = json.load(file)
-        print(len(data))
+        with open(f'{os.path.dirname(__file__)}/../../fixtures/seqr_high_priority_searches.json', 'r') as file:
+            config = json.load(file)
+
+        exclude_gene_ids = config['exclude']['gene_ids']
+        for gene_list in config['geneLists']:
+            pass
+        print(len(config['searches']))

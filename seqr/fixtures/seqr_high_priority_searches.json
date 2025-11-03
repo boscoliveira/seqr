@@ -1,0 +1,30 @@
+{
+  "geneLists": [
+    {"name": "Mendeliome", "min_confidence":  "AMBER"},
+    {"name": "Incidentalome", "min_confidence":  "GREEN"}
+  ],
+  "exclude": {
+    "clinvar": ["likely_benign", "benign"],
+    "gene_ids": ["ENSG00000143631", "ENSG00000165474", "ENSG00000180210", "ENSG00000198734", "ENSG00000010704", "ENSG00000132470"]
+  },
+  "searches": {
+    "High Splice AI": {
+      "geneListMoi": "D",
+      "inheritance": "de_novo",
+      "in_silico": {
+        "splice_ai": 0.5,
+        "requireScore": true
+      },
+      "freqs": {
+        "callset": {"ac":  100},
+        "gnomad_exomes": {"ac":  100},
+        "gnomad_genomes": {"ac":  100}
+      },
+      "qualityFilter": {
+        "vcf_filter": "PASS",
+        "min_qg": 30,
+        "min_ab": 20
+      }
+    }
+  }
+}
