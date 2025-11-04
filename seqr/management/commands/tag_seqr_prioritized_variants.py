@@ -28,13 +28,13 @@ class Command(BaseCommand):
 
         exclude_genes = get_genes(config['exclude']['gene_ids'], genome_version=GENOME_VERSION_GRCh38)
         gene_by_moi = defaultdict(dict)
-        for gene_list in config['geneLists']:
+        for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
         for name, config_search in config['searches'].items():
             search = {**config_search, 'exclude': config['exclude']}
-            if config_search.get('geneListMoi'):
-                search['genes'] = gene_by_moi[config_search['geneListMoi']]
+            if config_search.get('gene_list_moi'):
+                search['genes'] = gene_by_moi[config_search['gene_list_moi']]
             else:
                 search.update({'genes': exclude_genes, 'exclude_locations': True})
 

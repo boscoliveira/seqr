@@ -1,5 +1,5 @@
 {
-  "geneLists": [
+  "gene_lists": [
     {"name": "Mendeliome", "confidences": ["AMBER", "GREEN"]},
     {"name": "Incidentalome", "confidences": ["GREEN"]}
   ],
@@ -9,8 +9,8 @@
   },
   "searches": {
     "High Splice AI": {
-      "geneListMoi": "D",
-      "inheritance": "de_novo",
+      "gene_list_moi": "D",
+      "inheritance_mode": "de_novo",
       "in_silico": {
         "splice_ai": 0.5,
         "requireScore": true
