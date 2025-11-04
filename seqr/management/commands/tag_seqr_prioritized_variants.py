@@ -4,9 +4,10 @@ from django.db.models import Q
 import json
 import os
 
+from clickhouse_search.search import get_search_queryset
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
-from seqr.models import Project, VariantTagType, LocusList
+from seqr.models import Project, VariantTagType, LocusList, Sample
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
@@ -32,11 +33,12 @@ class Command(BaseCommand):
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
         for name, config_search in config['searches'].items():
-            search = {**config_search, 'exclude': config['exclude']}
-            if config_search.get('gene_list_moi'):
-                search['genes'] = gene_by_moi[config_search['gene_list_moi']]
-            else:
-                search.update({'genes': exclude_genes, 'exclude_locations': True})
+            exclude_locations = not config_search.get('gene_list_moi')
+            search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
+            results = get_search_queryset(
+                GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
+                exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
+            ).values('key', 'xpos', 'variantId', 'familyGuids', 'genotypes')
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):
