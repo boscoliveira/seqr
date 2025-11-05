@@ -36,12 +36,12 @@ class Command(BaseCommand):
             sample_qs.values('individual__family__guid').annotate(
                 samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS))).values_list('individual__family__guid', 'samples')
         )
-        sample_data = {Sample.DATASET_TYPE_VARIANT_CALLS: {
+        sample_data = {
             'project_guids': [project.guid],
             'family_guids': samples_by_family.keys(),
             'sample_type_families': {sample_type: samples_by_family.keys()},
             'samples': [s for family_samples in samples_by_family.values() for s in family_samples],
-        }}
+        }
 
         exclude_genes = get_genes(config['exclude']['gene_ids'], genome_version=GENOME_VERSION_GRCh38)
         gene_by_moi = defaultdict(dict)
@@ -54,7 +54,7 @@ class Command(BaseCommand):
             results = get_search_queryset(
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
-            ).values('key', 'xpos', 'variantId', 'familyGuids', 'genotypes')
+            ).values('key', 'xpos', 'variant_id', 'familyGuids', 'genotypes')
 
         tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
 
@@ -85,6 +85,6 @@ class Command(BaseCommand):
 
         dominant_gene_ids = [g['gene_id'] for g in moi_gene_ids if g['is_dominant']]
         recessive_gene_ids = [g['gene_id'] for g in moi_gene_ids if g['is_recessive']]
-        genes_by_id = get_genes(dominant_gene_ids + dominant_gene_ids, genome_version=GENOME_VERSION_GRCh38)
+        genes_by_id = get_genes(dominant_gene_ids + dominant_gene_ids, genome_version=GENOME_VERSION_GRCh38, additional_model_fields=['id'])
         gene_by_moi['D'].update({gene_id: gene for gene_id, gene in genes_by_id.items() if gene_id in set(dominant_gene_ids)})
         gene_by_moi['R'].update({gene_id: gene for gene_id, gene in genes_by_id.items() if gene_id in set(recessive_gene_ids)})
