@@ -119,7 +119,7 @@ def _transcript_sort(gene_id, saved_variant_json):
     return (not is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
 
 
-def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False):
+def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False, load_new_variant_keys=False):
     all_family_ids = {family_id for family_id, _ in family_variant_data.keys()}
     all_variant_ids = {variant_id for _, variant_id in family_variant_data.keys()}
 
@@ -128,13 +128,18 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
         for v in SavedVariant.objects.filter(family_id__in=all_family_ids, variant_id__in=all_variant_ids)
     }
 
-    genome_version = project.genome_version if project else Family.objects.filter(id__in=all_family_ids).values_list('project__genome_version', flat=True).first()
-
     new_variant_keys = set(family_variant_data.keys()) - set(saved_variant_map.keys())
     if new_variant_keys:
-        new_variant_data = _search_new_saved_variants(new_variant_keys, user, genome_version) if load_new_variant_data else backend_specific_call(
-            lambda o, _: o, _get_clickhouse_variant_keys,
-        )({k: v for k, v in family_variant_data.items() if k in new_variant_keys}, genome_version)
+        if load_new_variant_data:
+            genome_version = Family.objects.filter(id__in=all_family_ids).values_list('project__genome_version', flat=True).first()
+            new_variant_data = _search_new_saved_variants(new_variant_keys, user, genome_version)
+        else:
+            new_variant_data = {k: v for k, v in family_variant_data.items() if k in new_variant_keys}
+            if load_new_variant_keys:
+                new_variant_data = backend_specific_call(
+                    lambda o, _: o, _get_clickhouse_variant_keys,
+                )(new_variant_data, project.genome_version)
+
         new_variant_models = []
         for (family_id, variant_id), variant in new_variant_data.items():
             create_json, update_json = parse_saved_variant_json(variant, family_id, variant_id=variant_id)
@@ -155,7 +160,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     num_new = 0
     for key, variant in family_variant_data.items():
         updated_tag = _set_updated_tags(
-            key, get_metadata(variant), variant['support_vars'], saved_variant_map, existing_tags, tag_type, user,
+            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user,
         )
         if updated_tag:
             update_tags.append(updated_tag)

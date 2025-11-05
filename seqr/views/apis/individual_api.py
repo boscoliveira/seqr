@@ -865,7 +865,7 @@ def import_gregor_metadata(request, project_guid):
 
     num_new, num_updated = bulk_create_tagged_variants(
         family_variant_data, tag_name=GREGOR_FINDING_TAG_TYPE, user=request.user, project=project,
-        get_metadata=lambda v: {k: v[k] for k in FINDING_METADATA_COLUMNS if k in v}
+        get_metadata=lambda v: {k: v[k] for k in FINDING_METADATA_COLUMNS if k in v}, load_new_variant_keys=True,
     )
     info.append(f'Loaded {num_new} new and {num_updated} updated findings tags')
 
