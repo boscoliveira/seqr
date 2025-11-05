@@ -65,8 +65,8 @@ class Command(BaseCommand):
 
         today = datetime.now().strftime('%Y-%m-%d')
         num_new, num_updated = bulk_create_tagged_variants(
-            family_variant_data, tag_name=SEQR_TAG_TYPE,
-            get_metadata=lambda v: {name: today for name in v['matched_searches']}, user=None,
+            family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=lambda v: {name: today for name in v['matched_searches']},
+            user=None, remove_missing_metadata=False,
         )
         logger.info(f'Tagged {num_new} new and {num_updated} variants in {project.name}')
         # TODO family tag breakdown/ notifications

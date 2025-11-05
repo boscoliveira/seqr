@@ -119,7 +119,7 @@ def _transcript_sort(gene_id, saved_variant_json):
     return (not is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
 
 
-def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False, load_new_variant_keys=False):
+def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False, load_new_variant_keys=False, remove_missing_metadata=True):
     all_family_ids = {family_id for family_id, _ in family_variant_data.keys()}
     all_variant_ids = {variant_id for _, variant_id in family_variant_data.keys()}
 
@@ -160,7 +160,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     num_new = 0
     for key, variant in family_variant_data.items():
         updated_tag = _set_updated_tags(
-            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user,
+            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user, remove_missing_metadata,
         )
         if updated_tag:
             update_tags.append(updated_tag)
@@ -174,7 +174,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
 
 def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_var_ids: list[str],
                       saved_variant_map: dict[tuple[int, str], SavedVariant], existing_tags: dict[tuple[int, ...], VariantTag],
-                      tag_type: VariantTagType, user: User):
+                      tag_type: VariantTagType, user: User, remove_missing_metadata: bool):
     variant = saved_variant_map[key]
     existing_tag = existing_tags.get(tuple([variant.id]))
     updated_tag = None
@@ -183,7 +183,7 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
         metadata = {k: existing_metadata.get(k, v) for k, v in metadata.items()}
         removed = {k: v for k, v in existing_metadata.get('removed', {}).items() if k not in metadata}
         removed.update({k: v for k, v in existing_metadata.items() if k not in metadata})
-        if removed:
+        if remove_missing_metadata and removed:
             metadata['removed'] = removed
         existing_tag.metadata = json.dumps(metadata)
         updated_tag = existing_tag
