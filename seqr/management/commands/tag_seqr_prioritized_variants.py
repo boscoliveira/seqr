@@ -58,6 +58,7 @@ class Command(BaseCommand):
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
             ).values('key', 'xpos', 'ref', 'alt', 'variant_id', 'familyGuids', 'genotypes', gene_ids=VARIANT_GENE_IDS_EXPRESSION)
+            logger.info(f'Found {len(results)} variants matching criteria "{search_name}"')
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     family_variant_data[(family_guid, variant['variant_id'])].update(variant)
