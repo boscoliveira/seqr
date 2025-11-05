@@ -14,7 +14,7 @@ from seqr.models import Project, LocusList, Sample
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only, get_search_samples
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
-from seqr.views.utils.variant_utils import bulk_create_tagged_variants
+from seqr.views.utils.variant_utils import bulk_create_tagged_variants, VARIANT_GENE_IDS_EXPRESSION
 
 import logging
 logger = logging.getLogger(__name__)
@@ -57,7 +57,7 @@ class Command(BaseCommand):
             results = get_search_queryset(
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
-            ).values('key', 'xpos', 'variant_id', 'familyGuids', 'genotypes')
+            ).values('key', 'xpos', 'ref', 'alt', 'variant_id', 'familyGuids', 'genotypes', gene_ids=VARIANT_GENE_IDS_EXPRESSION)
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     family_variant_data[(family_guid, variant['variant_id'])].update(variant)
