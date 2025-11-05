@@ -9,10 +9,11 @@ import os
 from clickhouse_search.search import get_search_queryset, SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
-from seqr.models import Project, VariantTagType, LocusList, Sample
+from seqr.models import Project, LocusList, Sample
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only, get_search_samples
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
+from seqr.views.utils.variant_utils import bulk_create_tagged_variants
 
 import logging
 logger = logging.getLogger(__name__)
@@ -48,7 +49,7 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
-        variants_by_family = defaultdict(lambda: defaultdict(lambda :({}, [])))
+        family_variant_data = defaultdict(lambda: {'matched_searches': []})
         for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
@@ -58,10 +59,12 @@ class Command(BaseCommand):
             ).values('key', 'xpos', 'variant_id', 'familyGuids', 'genotypes')
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
-                    variants_by_family[family_guid][variant['key']][0].update(variant)
-                    variants_by_family[family_guid][variant['key']][1].append(search_name)
+                    family_variant_data[(family_guid, variant['variant_id'])].update(variant)
+                    family_variant_data[(family_guid, variant['variant_id'])]['matched_searches'].append(search_name)
 
-        tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
+        num_new, num_updated = bulk_create_tagged_variants(
+            family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=self._get_variant_metadata, user=None,
+        )
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):
