@@ -1,15 +1,17 @@
 from collections import defaultdict
+from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand
 from django.db.models import Q
+from django.db.models.functions import JSONObject
 import json
 import os
 
-from clickhouse_search.search import get_search_queryset
+from clickhouse_search.search import get_search_queryset, SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, VariantTagType, LocusList, Sample
 from seqr.utils.gene_utils import get_genes
-from seqr.utils.search.utils import clickhouse_only
+from seqr.utils.search.utils import clickhouse_only, get_search_samples
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
 
 import logging
@@ -22,22 +24,29 @@ class Command(BaseCommand):
 
     @clickhouse_only
     def handle(self, *args, **options):
-        project = Project.objects.get(guid=options['project'])
-        tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
         with open(f'{os.path.dirname(__file__)}/../../fixtures/seqr_high_priority_searches.json', 'r') as file:
             config = json.load(file)
+
+        project = Project.objects.get(guid=options['project'])
+        sample_qs = get_search_samples([project]).filter(dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS)
+        sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
+        assert len(sample_types) == 1
+        sample_type = sample_types[0]
+        samples_by_family = dict(
+            sample_qs.values('individual__family__guid').annotate(
+                samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS))).values_list('individual__family__guid', 'samples')
+        )
+        sample_data = {Sample.DATASET_TYPE_VARIANT_CALLS: {
+            'project_guids': [project.guid],
+            'family_guids': samples_by_family.keys(),
+            'sample_type_families': {sample_type: samples_by_family.keys()},
+            'samples': [s for family_samples in samples_by_family.values() for s in family_samples],
+        }}
 
         exclude_genes = get_genes(config['exclude']['gene_ids'], genome_version=GENOME_VERSION_GRCh38)
         gene_by_moi = defaultdict(dict)
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
-
-        sample_data = {Sample.DATASET_TYPE_VARIANT_CALLS: {
-            'project_guids': [project.guid],
-            'family_guids': samples_by_family.keys(),
-            'sample_type_families': {sample_type: samples_by_family.keys()},
-            'samples': samples,
-        }}
 
         for name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
@@ -46,6 +55,8 @@ class Command(BaseCommand):
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
             ).values('key', 'xpos', 'variantId', 'familyGuids', 'genotypes')
+
+        tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):

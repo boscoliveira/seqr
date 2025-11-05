@@ -327,6 +327,16 @@ def _is_matched_minimal_transcript(transcript, minimal_transcript):
      and transcript.get('spliceregion', {}).get('extended_intronic_splice_region_variant') == minimal_transcript.get('extendedIntronicSpliceRegionVariant'))
 
 
+SAMPLE_DATA_FIELDS = {
+    'affected': 'individual__affected',
+    'sex': 'individual__sex',
+    'sample_id': 'sample_id',
+    'sample_type': 'sample_type',
+    'family_guid': 'individual__family__guid',
+    'individual_guid': 'individual__guid',
+}
+
+
 def _get_sample_data(samples):
     mismatch_affected_samples = samples.values('sample_id', 'dataset_type').annotate(
         projects=ArrayAgg('individual__family__project__name', distinct=True),
@@ -344,7 +354,7 @@ def _get_sample_data(samples):
     ).annotate(
         project_guids=ArrayAgg('individual__family__project__guid', distinct=True),
         family_guids=ArrayAgg('individual__family__guid', distinct=True),
-        samples=ArrayAgg(JSONObject(affected='individual__affected', sex='individual__sex', sample_id='sample_id', sample_type='sample_type', family_guid=F('individual__family__guid'), individual_guid=F('individual__guid'))),
+        samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS)),
     )
     samples_by_dataset_type = {}
     for data in sample_data:
