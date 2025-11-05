@@ -48,13 +48,18 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
-        for name, config_search in config['searches'].items():
+        variants_by_family = defaultdict(lambda: defaultdict(lambda :({}, [])))
+        for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
             results = get_search_queryset(
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
             ).values('key', 'xpos', 'variant_id', 'familyGuids', 'genotypes')
+            for variant in results:
+                for family_guid in variant.pop('familyGuids'):
+                    variants_by_family[family_guid][variant['key']][0].update(variant)
+                    variants_by_family[family_guid][variant['key']][1].append(search_name)
 
         tag_type = VariantTagType.objects.get(name=SEQR_TAG_TYPE)
 
