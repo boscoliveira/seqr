@@ -69,7 +69,7 @@ const REQUIRE_SCORE_FIELD = {
   labelHelp: 'Only return variants where at least one filtered predictor is present. By default, variants are returned if a predictor meets the filtered value or is missing entirely',
 }
 
-const FORMATTED_IN_SILICO_FUIELDS = [...ORDERED_PREDICTOR_FIELDS.filter(({ displayOnly }) => !displayOnly).map(
+const FORMATTED_IN_SILICO_FIELDS = [...ORDERED_PREDICTOR_FIELDS.filter(({ displayOnly }) => !displayOnly).map(
   ({ field, fieldTitle, thresholds, reverseThresholds, indicatorMap, group, min, max, requiresCitation }) => {
     const label = fieldTitle || snakecaseToTitlecase(field)
     const filterField = { name: field, label, group }
@@ -104,12 +104,12 @@ const FORMATTED_IN_SILICO_FUIELDS = [...ORDERED_PREDICTOR_FIELDS.filter(({ displ
 
 const IN_SILICO_FIELDS = [
   REQUIRE_SCORE_FIELD,
-  ...FORMATTED_IN_SILICO_FUIELDS.map(([enumField, decimalField]) => decimalField || enumField),
+  ...FORMATTED_IN_SILICO_FIELDS.map(([enumField, decimalField]) => decimalField || enumField),
 ]
 
 const ES_ENABLED_IN_SILICO_FIELDS = [
   REQUIRE_SCORE_FIELD,
-  ...FORMATTED_IN_SILICO_FUIELDS.map(([enumField, decimalField]) => enumField || decimalField),
+  ...FORMATTED_IN_SILICO_FIELDS.map(([enumField, decimalField]) => enumField || decimalField),
 ]
 
 const VARIANT_FIELD_NAME = 'rawVariantItems'
