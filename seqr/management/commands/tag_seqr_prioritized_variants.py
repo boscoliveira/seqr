@@ -32,6 +32,13 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
+        sample_data = {Sample.DATASET_TYPE_VARIANT_CALLS: {
+            'project_guids': [project.guid],
+            'family_guids': samples_by_family.keys(),
+            'sample_type_families': {sample_type: samples_by_family.keys()},
+            'samples': samples,
+        }}
+
         for name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
