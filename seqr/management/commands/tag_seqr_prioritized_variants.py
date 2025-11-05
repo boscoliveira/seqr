@@ -1,4 +1,5 @@
 from collections import defaultdict
+from datetime import datetime
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand
 from django.db.models import Q
@@ -62,9 +63,14 @@ class Command(BaseCommand):
                     family_variant_data[(family_guid, variant['variant_id'])].update(variant)
                     family_variant_data[(family_guid, variant['variant_id'])]['matched_searches'].append(search_name)
 
+        today = datetime.now().strftime('%Y-%m-%d')
         num_new, num_updated = bulk_create_tagged_variants(
-            family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=self._get_variant_metadata, user=None,
+            family_variant_data, tag_name=SEQR_TAG_TYPE,
+            get_metadata=lambda v: {name: today for name in v['matched_searches']}, user=None,
         )
+        logger.info(f'Tagged {num_new} new and {num_updated} variants in {project.name}')
+        # TODO family tag breakdown/ notifications
+
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):
