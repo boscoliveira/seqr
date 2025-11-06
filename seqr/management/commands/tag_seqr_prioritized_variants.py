@@ -61,6 +61,7 @@ class Command(BaseCommand):
 
         logger.info(f'Searching for prioritized variants in {len(samples_by_family)} families in project {project.name}')
         family_variant_data = defaultdict(lambda: {'matched_searches': []})
+        search_counts = {}
         for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
@@ -68,6 +69,7 @@ class Command(BaseCommand):
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
             ).values('key', 'xpos', 'ref', 'alt', 'variant_id', 'familyGuids', 'genotypes', gene_ids=VARIANT_GENE_IDS_EXPRESSION)
+            search_counts[search_name] = len(results)
             logger.info(f'Found {len(results)} variants matching criteria "{search_name}"')
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
@@ -84,7 +86,9 @@ class Command(BaseCommand):
         family_variants = defaultdict(list)
         for family_id, variant_id in family_variant_data.keys():
             family_variants[family_id].append(variant_id)
-        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} previously tagged variants in {len(family_variants)} families')
+        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} previously tagged variants in {len(family_variants)} families:')
+        for search_name, count in search_counts.items():
+            logger.info(f'  {search_name}: {count} variants')
         if not new_tag_keys:
             return
 
