@@ -7,7 +7,10 @@ from django.db.models.functions import JSONObject
 import json
 import os
 
-from clickhouse_search.search import get_search_queryset, clickhouse_genotypes_json, SAMPLE_DATA_FIELDS
+from clickhouse_backend.models import ArrayField, StringField
+from clickhouse_search.backend.functions import ArrayFilter, ArrayMap
+from clickhouse_search.search import get_search_queryset, get_transcripts_queryset, clickhouse_genotypes_json, \
+    SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Sample, LocusList, Individual
@@ -32,6 +35,7 @@ class Command(BaseCommand):
             config = json.load(file)
 
         project = Project.objects.get(guid=options['project'])
+        # TODO SVs
         sample_qs = get_search_samples([project]).filter(dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS)
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         assert len(sample_types) == 1
@@ -40,12 +44,6 @@ class Command(BaseCommand):
             family_guid: samples for family_guid, samples in sample_qs.values('individual__family__guid').annotate(
                 samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS))).values_list('individual__family__guid', 'samples')
             if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
-        }
-        sample_data = {
-            'project_guids': [project.guid],
-            'family_guids': samples_by_family.keys(),
-            'sample_type_families': {sample_type: samples_by_family.keys()},
-            'samples': [s for family_samples in samples_by_family.values() for s in family_samples],
         }
 
         exclude_genes = get_genes(config['exclude']['gene_ids'], genome_version=GENOME_VERSION_GRCh38)
@@ -65,10 +63,15 @@ class Command(BaseCommand):
         for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
+            sample_data = self._get_valid_family_sample_data(
+                project, sample_type, samples_by_family, config_search.get('family_filter'),
+            )
             results = get_search_queryset(
                 GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
                 exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
             ).values('key', 'xpos', 'ref', 'alt', 'variant_id', 'familyGuids', 'genotypes', gene_ids=VARIANT_GENE_IDS_EXPRESSION)
+            if config_search.get('annotations'):
+                results = self._filter_mane_transcript(results, config_search['annotations'])
             search_counts[search_name] = len(results)
             logger.info(f'Found {len(results)} variants matching criteria "{search_name}"')
             for variant in results:
@@ -102,6 +105,33 @@ class Command(BaseCommand):
                 f'{family_name_map[family_id]}: {len(variants)} new tags' for family_id, variants in family_variants.items()
             ])),
         )
+
+    @staticmethod
+    def _get_valid_family_sample_data(project, sample_type, samples_by_family, family_filter):
+        if family_filter:
+            min_affected = family_filter.get('min_affected', 1)
+            samples_by_family = {
+                family_guid: samples for family_guid, samples in samples_by_family.items()
+                if len([s for s in samples if s['affected'] == Individual.AFFECTED_STATUS_AFFECTED]) >= min_affected
+            }
+        return {
+            'project_guids': [project.guid],
+            'family_guids': samples_by_family.keys(),
+            'sample_type_families': {sample_type: samples_by_family.keys()},
+            'samples': [s for family_samples in samples_by_family.values() for s in family_samples],
+        }
+
+    @staticmethod
+    def _filter_mane_transcript(results, annotations):
+        mane_csqs_by_key = dict(get_transcripts_queryset(GENOME_VERSION_GRCh38, [v['key'] for v in results]).values_list(
+            'key', ArrayMap(
+                ArrayFilter('transcripts', conditions=[{'maneSelect': (None, 'isNotNull({field})')}]),
+                mapped_expression='x.consequenceTerms',
+                output_field=ArrayField(StringField()),
+            )
+        ))
+        allowed_csqs = set(annotations['vep_consequences'])
+        return [r for r in results if mane_csqs_by_key[r['key']] and allowed_csqs.intersection(mane_csqs_by_key[r['key']][0])]
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):

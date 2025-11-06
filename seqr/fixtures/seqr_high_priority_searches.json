@@ -8,6 +8,33 @@
     "gene_ids": ["ENSG00000143631", "ENSG00000165474", "ENSG00000180210", "ENSG00000198734", "ENSG00000010704", "ENSG00000132470"]
   },
   "searches": {
+    "Dominant": {
+      "family_filter": {"min_affected": 2},
+      "inheritance_mode": "de_novo",
+      "annotations": {
+        "vep_consequences": [
+          "splice_donor_variant", "splice_acceptor_variant", "stop_gained", "frameshift_variant",
+          "stop_lost", "start_lost", "inframe_insertion", "inframe_deletion", "protein_altering_variant",
+          "missense_variant", "splice_donor_5th_base_variant", "splice_region_variant", "splice_donor_region_variant",
+          "splice_polypyrimidine_tract_variant", "extended_intronic_splice_region_variant", "non_coding_transcript_exon_variant"
+        ]
+      },
+      "in_silico": {
+        "cadd": 25,
+        "revel": 0.6,
+        "splice_ai": 0.5
+      },
+      "freqs": {
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
+      },
+      "qualityFilter": {
+        "vcf_filter": "PASS",
+        "min_qg": 30,
+        "min_ab": 20
+      }
+    },
     "Clinvar Pathogenic": {
       "inheritance_mode": "any_affected",
       "pathogenicity": {
