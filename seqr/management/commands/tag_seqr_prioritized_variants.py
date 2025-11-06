@@ -32,8 +32,6 @@ class Command(BaseCommand):
             config = json.load(file)
 
         project = Project.objects.get(guid=options['project'])
-        logger.info(f'Starting prioritized variant tagging for project {project.name}')
-
         sample_qs = get_search_samples([project]).filter(dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS)
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         assert len(sample_types) == 1
@@ -60,6 +58,7 @@ class Command(BaseCommand):
             family_guid_map[guid] = db_id
             family_name_map[db_id] = family_id
 
+        logger.info(f'Searching for prioritized variants in {len(samples_by_family)} families in project {project.name}')
         family_variant_data = defaultdict(lambda: {'matched_searches': []})
         for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')

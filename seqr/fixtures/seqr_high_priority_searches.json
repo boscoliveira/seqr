@@ -8,6 +8,31 @@
     "gene_ids": ["ENSG00000143631", "ENSG00000165474", "ENSG00000180210", "ENSG00000198734", "ENSG00000010704", "ENSG00000132470"]
   },
   "searches": {
+    "Clinvar Pathogenic": {
+      "inheritance_mode": "any_affected",
+      "pathogenicity": {
+        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
+        "clinvarMinStars": 1
+      },
+      "freqs": {
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
+      }
+    },
+    "Clinvar Pathogenic - Recessive": {
+      "gene_list_moi": "R",
+      "inheritance_mode": "homozygous_recessive",
+      "pathogenicity": {
+        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
+        "clinvarMinStars": 1
+      },
+      "freqs": {
+        "callset": {"ac": 2000},
+        "gnomad_exomes": {"af": 0.03},
+        "gnomad_genomes": {"af": 0.03}
+      }
+    },
     "High Splice AI": {
       "gene_list_moi": "D",
       "inheritance_mode": "de_novo",
@@ -16,9 +41,9 @@
         "requireScore": true
       },
       "freqs": {
-        "callset": {"ac":  100},
-        "gnomad_exomes": {"ac":  100},
-        "gnomad_genomes": {"ac":  100}
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
       },
       "qualityFilter": {
         "vcf_filter": "PASS",
