@@ -81,7 +81,7 @@ class Command(BaseCommand):
                     variant_data['matched_searches'].append(search_name)
 
         today = datetime.now().strftime('%Y-%m-%d')
-        new_tag_keys, num_updated = bulk_create_tagged_variants(
+        new_tag_keys, num_updated, num_skipped = bulk_create_tagged_variants(
             family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=lambda v: {name: today for name in v['matched_searches']},
             user=None, remove_missing_metadata=False,
         )
@@ -89,7 +89,7 @@ class Command(BaseCommand):
         family_variants = defaultdict(list)
         for family_id, variant_id in family_variant_data.keys():
             family_variants[family_id].append(variant_id)
-        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} previously tagged variants in {len(family_variants)} families:')
+        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} previously tagged variants in {len(family_variants)} families, found {num_skipped} unchanged tags:')
         for search_name, count in search_counts.items():
             logger.info(f'  {search_name}: {count} variants')
         if not new_tag_keys:

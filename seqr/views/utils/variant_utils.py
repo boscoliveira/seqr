@@ -158,23 +158,25 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
 
     update_tags = []
     new_tag_keys = []
+    num_skipped = 0
     for key, variant in family_variant_data.items():
         updated_tag = _set_updated_tags(
-            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user, remove_missing_metadata,
+            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user,
+            new_tag_keys, remove_missing_metadata,
         )
         if updated_tag:
             update_tags.append(updated_tag)
-        else:
-            new_tag_keys.append(key)
+        elif key not in new_tag_keys:
+            num_skipped += 1
 
     VariantTag.bulk_update_models(user, update_tags, ['metadata'])
 
-    return new_tag_keys, len(update_tags)
+    return new_tag_keys, len(update_tags), num_skipped
 
 
 def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_var_ids: list[str],
                       saved_variant_map: dict[tuple[int, str], SavedVariant], existing_tags: dict[tuple[int, ...], VariantTag],
-                      tag_type: VariantTagType, user: User, remove_missing_metadata: bool):
+                      tag_type: VariantTagType, user: User, new_tag_keys: list[tuple[int, str]], remove_missing_metadata: bool):
     variant = saved_variant_map[key]
     existing_tag = existing_tags.get(tuple([variant.id]))
     updated_tag = None
@@ -185,12 +187,15 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
         removed.update({k: v for k, v in existing_metadata.items() if k not in metadata})
         if remove_missing_metadata and removed:
             metadata['removed'] = removed
-        existing_tag.metadata = json.dumps(metadata)
-        updated_tag = existing_tag
+            new_metadata = json.dumps(metadata)
+            if new_metadata != existing_tag.metadata:
+                existing_tag.metadata = new_metadata
+                updated_tag = existing_tag
     else:
         tag = create_model_from_json(
             VariantTag, {'variant_tag_type': tag_type, 'metadata': json.dumps(metadata)}, user)
         tag.saved_variants.add(variant)
+        new_tag_keys.append(key)
 
     variant_genes = set(variant.gene_ids or [])
     support_vars = []
