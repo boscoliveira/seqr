@@ -650,9 +650,13 @@ def get_clickhouse_genotypes(project_guid, family_guids, genome_version, dataset
         project_guid=project_guid, family_guid__in=family_guids, key__in=keys,
     )
     return {
-        key: json.loads(json.dumps(genotypes, cls=DjangoJSONEncoderWithSets)) for key, genotypes in
+        key: clickhouse_genotypes_json(genotypes) for key, genotypes in
         entries.annotate(genotypes=entries.genotype_expression(sample_data)).values_list('key', 'genotypes')
     }
+
+
+def clickhouse_genotypes_json(genotypes):
+    return json.loads(json.dumps(genotypes, cls=DjangoJSONEncoderWithSets))
 
 
 def get_annotations_queryset(genome_version, dataset_type, keys):

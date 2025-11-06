@@ -7,7 +7,7 @@ from django.db.models.functions import JSONObject
 import json
 import os
 
-from clickhouse_search.search import get_search_queryset, SAMPLE_DATA_FIELDS
+from clickhouse_search.search import get_search_queryset, clickhouse_genotypes_json, SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Sample, LocusList
@@ -72,7 +72,7 @@ class Command(BaseCommand):
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
-                    variant_data.update(variant)
+                    variant_data.update({**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])})
                     variant_data['matched_searches'].append(search_name)
 
         today = datetime.now().strftime('%Y-%m-%d')
@@ -82,9 +82,9 @@ class Command(BaseCommand):
         )
 
         family_variants = defaultdict(list)
-        for family_id, variant in family_variant_data.values():
-            family_variants[family_id].append(variant)
-        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} variants in {len(family_variants)} families')
+        for family_id, variant_id in family_variant_data.keys():
+            family_variants[family_id].append(variant_id)
+        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} previously tagged variants in {len(family_variants)} families')
         if not new_tag_keys:
             return
 
