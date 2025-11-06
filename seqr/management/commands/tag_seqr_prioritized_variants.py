@@ -10,11 +10,13 @@ import os
 from clickhouse_search.search import get_search_queryset, SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
-from seqr.models import Project, LocusList, Sample
+from seqr.models import Project, Family, Sample, LocusList
+from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only, get_search_samples
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
 from seqr.views.utils.variant_utils import bulk_create_tagged_variants, VARIANT_GENE_IDS_EXPRESSION
+from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL
 
 import logging
 logger = logging.getLogger(__name__)
@@ -30,6 +32,8 @@ class Command(BaseCommand):
             config = json.load(file)
 
         project = Project.objects.get(guid=options['project'])
+        logger.info(f'Starting prioritized variant tagging for project {project.name}')
+
         sample_qs = get_search_samples([project]).filter(dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS)
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         assert len(sample_types) == 1
@@ -65,13 +69,33 @@ class Command(BaseCommand):
                     family_variant_data[(family_guid, variant['variant_id'])]['matched_searches'].append(search_name)
 
         today = datetime.now().strftime('%Y-%m-%d')
-        num_new, num_updated = bulk_create_tagged_variants(
+        new_tag_keys, num_updated = bulk_create_tagged_variants(
             family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=lambda v: {name: today for name in v['matched_searches']},
             user=None, remove_missing_metadata=False,
         )
-        logger.info(f'Tagged {num_new} new and {num_updated} variants in {project.name}')
-        # TODO family tag breakdown/ notifications
 
+        family_variants = defaultdict(list)
+        for family_id, variant in family_variant_data.values():
+            family_variants[family_id].append(variant)
+
+        logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} variants in {len(family_variants)} families')
+        if not new_tag_keys:
+            return
+
+        family_name_map = {
+            db_id: family_id for db_id, family_id in
+            Family.objects.filter(id__in=family_variants.keys()).values_list('id', 'family_id')
+        }
+        send_project_notification(
+            project,
+            notification=f'{len(new_tag_keys)} new seqr prioritized variants',
+            subject='New prioritized variants tagged in seqr',
+            email_template='This is to notify you that {notification} have been tagged in seqr project {project_link}',
+            slack_channel=SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL,
+            slack_detail='\n'.join(sorted([
+                f'{family_name_map[family_id]}: {len(variants)} new tags' for family_id, variants in family_variants.items()
+            ])),
+        )
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):

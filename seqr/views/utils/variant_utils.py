@@ -157,7 +157,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     }
 
     update_tags = []
-    num_new = 0
+    new_tag_keys = []
     for key, variant in family_variant_data.items():
         updated_tag = _set_updated_tags(
             key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user, remove_missing_metadata,
@@ -165,11 +165,11 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
         if updated_tag:
             update_tags.append(updated_tag)
         else:
-            num_new += 1
+            new_tag_keys.append(key)
 
     VariantTag.bulk_update_models(user, update_tags, ['metadata'])
 
-    return num_new, len(update_tags)
+    return new_tag_keys, len(update_tags)
 
 
 def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_var_ids: list[str],
