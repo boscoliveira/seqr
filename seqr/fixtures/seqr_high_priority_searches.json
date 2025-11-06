@@ -8,6 +8,81 @@
     "gene_ids": ["ENSG00000143631", "ENSG00000165474", "ENSG00000180210", "ENSG00000198734", "ENSG00000010704", "ENSG00000132470"]
   },
   "searches": {
+    "Clinvar Pathogenic": {
+      "inheritance_mode": "any_affected",
+      "pathogenicity": {
+        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
+        "clinvarMinStars": 1
+      },
+      "freqs": {
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
+      }
+    },
+    "Clinvar Pathogenic - Recessive": {
+      "gene_list_moi": "R",
+      "inheritance_mode": "homozygous_recessive",
+      "pathogenicity": {
+        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
+        "clinvarMinStars": 1
+      },
+      "freqs": {
+        "callset": {"ac": 2000},
+        "gnomad_exomes": {"af": 0.03},
+        "gnomad_genomes": {"af": 0.03}
+      }
+    },
+    "De Novo": {
+      "family_filter": {"max_affected": 1, "confirmed_inheritance":  true},
+      "inheritance_mode": "de_novo",
+      "annotations": {
+        "vep_consequences": [
+          "splice_donor_variant", "splice_acceptor_variant", "stop_gained", "frameshift_variant",
+          "stop_lost", "start_lost", "inframe_insertion", "inframe_deletion", "protein_altering_variant",
+          "missense_variant", "splice_donor_5th_base_variant", "splice_region_variant", "splice_donor_region_variant",
+          "splice_polypyrimidine_tract_variant", "extended_intronic_splice_region_variant", "non_coding_transcript_exon_variant"
+        ]
+      },
+      "in_silico": {
+        "cadd": 25,
+        "revel": 0.6
+      },
+      "freqs": {
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
+      },
+      "qualityFilter": {
+        "vcf_filter": "PASS",
+        "min_qg": 30,
+        "min_ab": 20
+      }
+    },
+    "De Novo/ Dominant": {
+      "family_filter": {"max_affected": 1, "confirmed_inheritance":  false},
+      "gene_list_moi": "D",
+      "inheritance_mode": "de_novo",
+      "annotations": {
+        "vep_consequences": [
+          "splice_donor_variant", "splice_acceptor_variant", "stop_gained", "frameshift_variant"
+        ]
+      },
+      "in_silico": {
+        "cadd": 25,
+        "revel": 0.6
+      },
+      "freqs": {
+        "callset": {"ac": 100},
+        "gnomad_exomes": {"ac": 100},
+        "gnomad_genomes": {"ac": 100}
+      },
+      "qualityFilter": {
+        "vcf_filter": "PASS",
+        "min_qg": 30,
+        "min_ab": 20
+      }
+    },
     "Dominant": {
       "family_filter": {"min_affected": 2},
       "inheritance_mode": "de_novo",
@@ -33,31 +108,6 @@
         "vcf_filter": "PASS",
         "min_qg": 30,
         "min_ab": 20
-      }
-    },
-    "Clinvar Pathogenic": {
-      "inheritance_mode": "any_affected",
-      "pathogenicity": {
-        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
-        "clinvarMinStars": 1
-      },
-      "freqs": {
-        "callset": {"ac": 100},
-        "gnomad_exomes": {"ac": 100},
-        "gnomad_genomes": {"ac": 100}
-      }
-    },
-    "Clinvar Pathogenic - Recessive": {
-      "gene_list_moi": "R",
-      "inheritance_mode": "homozygous_recessive",
-      "pathogenicity": {
-        "clinvar": ["pathogenic", "likely_pathogenic", "conflicting_p_lp"],
-        "clinvarMinStars": 1
-      },
-      "freqs": {
-        "callset": {"ac": 2000},
-        "gnomad_exomes": {"af": 0.03},
-        "gnomad_genomes": {"af": 0.03}
       }
     },
     "High Splice AI": {

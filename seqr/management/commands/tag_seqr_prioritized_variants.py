@@ -42,7 +42,8 @@ class Command(BaseCommand):
         sample_type = sample_types[0]
         samples_by_family = {
             family_guid: samples for family_guid, samples in sample_qs.values('individual__family__guid').annotate(
-                samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS))).values_list('individual__family__guid', 'samples')
+                samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS, maternal_guid='individual__mother__guid', paternal_guid='individual__father__guid'))
+            ).values_list('individual__family__guid', 'samples')
             if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
         }
 
@@ -73,7 +74,7 @@ class Command(BaseCommand):
             if config_search.get('annotations'):
                 results = self._filter_mane_transcript(results, config_search['annotations'])
             search_counts[search_name] = len(results)
-            logger.info(f'Found {len(results)} variants matching criteria "{search_name}"')
+            logger.info(f'Found {len(results)} variants for criteria: {search_name}')
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
@@ -106,13 +107,12 @@ class Command(BaseCommand):
             ])),
         )
 
-    @staticmethod
-    def _get_valid_family_sample_data(project, sample_type, samples_by_family, family_filter):
+    @classmethod
+    def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter):
         if family_filter:
-            min_affected = family_filter.get('min_affected', 1)
             samples_by_family = {
                 family_guid: samples for family_guid, samples in samples_by_family.items()
-                if len([s for s in samples if s['affected'] == Individual.AFFECTED_STATUS_AFFECTED]) >= min_affected
+                if cls._family_passes_filter(samples, family_filter)
             }
         return {
             'project_guids': [project.guid],
@@ -120,6 +120,22 @@ class Command(BaseCommand):
             'sample_type_families': {sample_type: samples_by_family.keys()},
             'samples': [s for family_samples in samples_by_family.values() for s in family_samples],
         }
+
+    @staticmethod
+    def _family_passes_filter(samples, family_filter):
+        affected = [s for s in samples if s['affected'] == Individual.AFFECTED_STATUS_AFFECTED]
+        if family_filter.get('min_affected') and len(affected) < family_filter['min_affected']:
+            return False
+        if family_filter.get('max_affected') and len(affected) > family_filter['max_affected']:
+            return False
+        if 'confirmed_inheritance' in family_filter:
+            maternal_guid = affected[0]['maternal_guid']
+            paternal_guid = affected[0]['paternal_guid']
+            if not (maternal_guid and paternal_guid):
+                return False
+            loaded_guids = {s['individual_guid'] for s in samples}
+            return maternal_guid in loaded_guids and paternal_guid in loaded_guids
+        return True
 
     @staticmethod
     def _filter_mane_transcript(results, annotations):
