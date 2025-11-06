@@ -54,6 +54,12 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
+        family_guid_map = {}
+        family_name_map = {}
+        for db_id, guid, family_id in Family.objects.filter(project=project).values_list('id', 'guid', 'family_id'):
+            family_guid_map[guid] = db_id
+            family_name_map[db_id] = family_id
+
         family_variant_data = defaultdict(lambda: {'matched_searches': []})
         for search_name, config_search in config['searches'].items():
             exclude_locations = not config_search.get('gene_list_moi')
@@ -65,8 +71,9 @@ class Command(BaseCommand):
             logger.info(f'Found {len(results)} variants matching criteria "{search_name}"')
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
-                    family_variant_data[(family_guid, variant['variant_id'])].update(variant)
-                    family_variant_data[(family_guid, variant['variant_id'])]['matched_searches'].append(search_name)
+                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
+                    variant_data.update(variant)
+                    variant_data['matched_searches'].append(search_name)
 
         today = datetime.now().strftime('%Y-%m-%d')
         new_tag_keys, num_updated = bulk_create_tagged_variants(
@@ -77,15 +84,10 @@ class Command(BaseCommand):
         family_variants = defaultdict(list)
         for family_id, variant in family_variant_data.values():
             family_variants[family_id].append(variant)
-
         logger.info(f'Tagged {len(new_tag_keys)} new and {num_updated} variants in {len(family_variants)} families')
         if not new_tag_keys:
             return
 
-        family_name_map = {
-            db_id: family_id for db_id, family_id in
-            Family.objects.filter(id__in=family_variants.keys()).values_list('id', 'family_id')
-        }
         send_project_notification(
             project,
             notification=f'{len(new_tag_keys)} new seqr prioritized variants',
