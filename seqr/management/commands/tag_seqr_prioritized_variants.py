@@ -10,7 +10,7 @@ import os
 from clickhouse_search.search import get_search_queryset, clickhouse_genotypes_json, SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
-from seqr.models import Project, Family, Sample, LocusList
+from seqr.models import Project, Family, Sample, LocusList, Individual
 from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only, get_search_samples
@@ -36,10 +36,11 @@ class Command(BaseCommand):
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         assert len(sample_types) == 1
         sample_type = sample_types[0]
-        samples_by_family = dict(
-            sample_qs.values('individual__family__guid').annotate(
+        samples_by_family = {
+            family_guid: samples for family_guid, samples in sample_qs.values('individual__family__guid').annotate(
                 samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS))).values_list('individual__family__guid', 'samples')
-        )
+            if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
+        }
         sample_data = {
             'project_guids': [project.guid],
             'family_guids': samples_by_family.keys(),
