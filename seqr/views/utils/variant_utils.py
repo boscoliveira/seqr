@@ -277,12 +277,16 @@ def _get_clickhouse_variants(samples: Sample.objects, families_by_id: dict[int, 
     return variants
 
 
-VARIANT_GENE_IDS_EXPRESSION = ArrayDistinct(ArrayMap('sorted_transcript_consequences', mapped_expression='x.geneId'), output_field=ArrayField(StringField()))
+def gene_ids_annotated_queryset(qs):
+    return qs.annotate(gene_ids=ArrayDistinct(
+        ArrayMap(qs.transcript_field, mapped_expression='x.geneId'),
+        output_field=ArrayField(StringField())),
+    )
 
 
 def _get_gene_ids_by_key(genome_version, keys):
     qs = get_annotations_queryset(genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, keys)
-    return dict(qs.values_list('key', VARIANT_GENE_IDS_EXPRESSION))
+    return dict(gene_ids_annotated_queryset(qs).values_list('key', 'gene_ids'))
 
 
 def _get_clickhouse_variant_keys(variant_data: dict[tuple[int, str], dict], genome_version: str) -> dict[tuple[int, str], dict]:

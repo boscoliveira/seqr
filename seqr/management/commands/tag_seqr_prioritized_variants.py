@@ -13,12 +13,12 @@ from clickhouse_search.search import get_search_queryset, get_transcripts_querys
     SAMPLE_DATA_FIELDS
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
-from seqr.models import Project, Family, Sample, LocusList, Individual
+from seqr.models import Project, Family, Individual, Sample, LocusList
 from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.gene_utils import get_genes
 from seqr.utils.search.utils import clickhouse_only, get_search_samples
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
-from seqr.views.utils.variant_utils import bulk_create_tagged_variants, VARIANT_GENE_IDS_EXPRESSION
+from seqr.views.utils.variant_utils import bulk_create_tagged_variants, gene_ids_annotated_queryset
 from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL
 
 import logging
@@ -34,52 +34,25 @@ class Command(BaseCommand):
         with open(f'{os.path.dirname(__file__)}/../../fixtures/seqr_high_priority_searches.json', 'r') as file:
             config = json.load(file)
 
+        family_guid_map = {}
+        family_name_map = {}
         project = Project.objects.get(guid=options['project'])
-        # TODO SVs
-        sample_qs = get_search_samples([project]).filter(dataset_type=Sample.DATASET_TYPE_VARIANT_CALLS)
-        sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
-        assert len(sample_types) == 1
-        sample_type = sample_types[0]
-        samples_by_family = {
-            family_guid: samples for family_guid, samples in sample_qs.values('individual__family__guid').annotate(
-                samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS, maternal_guid='individual__mother__guid', paternal_guid='individual__father__guid'))
-            ).values_list('individual__family__guid', 'samples')
-            if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
-        }
+        for db_id, guid, family_id in Family.objects.filter(project=project).values_list('id', 'guid', 'family_id'):
+            family_guid_map[guid] = db_id
+            family_name_map[db_id] = family_id
 
         exclude_genes = get_genes(config['exclude']['gene_ids'], genome_version=GENOME_VERSION_GRCh38)
         gene_by_moi = defaultdict(dict)
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
-        family_guid_map = {}
-        family_name_map = {}
-        for db_id, guid, family_id in Family.objects.filter(project=project).values_list('id', 'guid', 'family_id'):
-            family_guid_map[guid] = db_id
-            family_name_map[db_id] = family_id
-
-        logger.info(f'Searching for prioritized variants in {len(samples_by_family)} families in project {project.name}')
         family_variant_data = defaultdict(lambda: {'matched_searches': []})
         search_counts = {}
-        for search_name, config_search in config['searches'].items():
-            exclude_locations = not config_search.get('gene_list_moi')
-            search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
-            sample_data = self._get_valid_family_sample_data(
-                project, sample_type, samples_by_family, config_search.get('family_filter'),
+        for dataset_type, searches in config['searches'].items():
+            self._run_dataset_type_searches(
+                dataset_type, searches, family_variant_data, search_counts, family_guid_map,
+                project, exclude_genes, gene_by_moi, exclude=config['exclude'],
             )
-            results = get_search_queryset(
-                GENOME_VERSION_GRCh38, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data, **config_search,
-                exclude=config['exclude'], exclude_locations=exclude_locations, genes=search_genes,
-            ).values('key', 'xpos', 'ref', 'alt', 'variant_id', 'familyGuids', 'genotypes', gene_ids=VARIANT_GENE_IDS_EXPRESSION)
-            if config_search.get('annotations'):
-                results = self._filter_mane_transcript(results, config_search['annotations'])
-            search_counts[search_name] = len(results)
-            logger.info(f'Found {len(results)} variants for criteria: {search_name}')
-            for variant in results:
-                for family_guid in variant.pop('familyGuids'):
-                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
-                    variant_data.update({**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])})
-                    variant_data['matched_searches'].append(search_name)
 
         today = datetime.now().strftime('%Y-%m-%d')
         new_tag_keys, num_updated, num_skipped = bulk_create_tagged_variants(
@@ -106,6 +79,49 @@ class Command(BaseCommand):
                 f'{family_name_map[family_id]}: {len(variants)} new tags' for family_id, variants in family_variants.items()
             ])),
         )
+
+    @classmethod
+    def _run_dataset_type_searches(cls, dataset_type, searches, family_variant_data, search_counts, family_guid_map, project, exclude_genes, gene_by_moi, exclude):
+        sample_qs = get_search_samples([project]).filter(dataset_type=dataset_type)
+        sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
+        assert len(sample_types) == 1
+        sample_type = sample_types[0]
+        is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
+        if is_sv:
+            dataset_type = f'{dataset_type}_{sample_type}'
+        samples_by_family = {
+            family_guid: samples for family_guid, samples in sample_qs.values('individual__family__guid').annotate(
+                samples=ArrayAgg(JSONObject(**SAMPLE_DATA_FIELDS, maternal_guid='individual__mother__guid', paternal_guid='individual__father__guid'))
+            ).values_list('individual__family__guid', 'samples')
+            if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
+        }
+
+        logger.info(f'Searching for prioritized {dataset_type} variants in {len(samples_by_family)} families in project {project.name}')
+        for search_name, config_search in searches.items():
+            if search_name == 'Clinvar Pathogenic':
+                continue  # TODO DEBUG ONLY
+            exclude_locations = not config_search.get('gene_list_moi')
+            search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
+            sample_data = cls._get_valid_family_sample_data(
+                project, sample_type, samples_by_family, config_search.get('family_filter'),
+            )
+            variant_fields = ['key', 'xpos', 'variant_id', 'familyGuids', 'genotypes', 'gene_ids']
+            if not is_sv:
+                variant_fields += ['ref', 'alt']
+            results = gene_ids_annotated_queryset(get_search_queryset(
+                GENOME_VERSION_GRCh38, dataset_type, sample_data, **config_search,
+                exclude=exclude, exclude_locations=exclude_locations, genes=search_genes,
+            )).values(*variant_fields)
+            if config_search.get('annotations', {}).get('vep_consequences'):
+                results = cls._filter_mane_transcript(results, config_search['annotations']['vep_consequences'])
+
+            logger.info(f'Found {len(results)} variants for criteria: {search_name}')
+            search_counts[search_name] = len(results)
+            for variant in results:
+                for family_guid in variant.pop('familyGuids'):
+                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
+                    variant_data.update({**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])})
+                    variant_data['matched_searches'].append(search_name)
 
     @classmethod
     def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter):
@@ -138,7 +154,7 @@ class Command(BaseCommand):
         return True
 
     @staticmethod
-    def _filter_mane_transcript(results, annotations):
+    def _filter_mane_transcript(results, allowed_consequences):
         mane_csqs_by_key = dict(get_transcripts_queryset(GENOME_VERSION_GRCh38, [v['key'] for v in results]).values_list(
             'key', ArrayMap(
                 ArrayFilter('transcripts', conditions=[{'maneSelect': (None, 'isNotNull({field})')}]),
@@ -146,8 +162,10 @@ class Command(BaseCommand):
                 output_field=ArrayField(StringField()),
             )
         ))
-        allowed_csqs = set(annotations['vep_consequences'])
-        return [r for r in results if mane_csqs_by_key[r['key']] and allowed_csqs.intersection(mane_csqs_by_key[r['key']][0])]
+        return [
+            r for r in results
+            if mane_csqs_by_key[r['key']] and set(allowed_consequences).intersection(mane_csqs_by_key[r['key']][0])
+        ]
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):
