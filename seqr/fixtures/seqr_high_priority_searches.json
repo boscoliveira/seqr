@@ -216,6 +216,51 @@
           "min_qg": 30,
           "min_ab": 20
         }
+      },
+      "Recessive": {
+        "gene_list_moi": "R",
+        "inheritance_mode": "homozygous_recessive",
+        "annotations": {
+          "vep_consequences": [
+            "splice_donor_variant",
+            "splice_acceptor_variant",
+            "stop_gained",
+            "frameshift_variant",
+            "stop_lost",
+            "start_lost",
+            "inframe_insertion",
+            "inframe_deletion",
+            "protein_altering_variant",
+            "missense_variant",
+            "splice_donor_5th_base_variant",
+            "splice_region_variant",
+            "splice_donor_region_variant",
+            "splice_polypyrimidine_tract_variant",
+            "extended_intronic_splice_region_variant",
+            "non_coding_transcript_exon_variant"
+          ]
+        },
+        "in_silico": {
+          "cadd": 25,
+          "revel": 0.6
+        },
+        "freqs": {
+          "callset": {
+            "ac": 1000
+          },
+          "gnomad_exomes": {
+            "af": 0.01,
+            "hh": 5
+          },
+          "gnomad_genomes": {
+            "af": 0.01,
+            "hh": 5
+          }
+        },
+        "qualityFilter": {
+          "min_qg": 30,
+          "min_ab": 20
+        }
       }
     },
     "SV": {
