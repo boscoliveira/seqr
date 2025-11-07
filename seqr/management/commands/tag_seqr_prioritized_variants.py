@@ -106,7 +106,9 @@ class Command(BaseCommand):
                 project, sample_type, samples_by_family, config_search.get('family_filter'),
             )
             variant_fields = ['key', 'xpos', 'variant_id', 'familyGuids', 'genotypes', 'gene_ids']
-            if not is_sv:
+            if is_sv:
+                variant_fields += ['pos', 'end']
+            else:
                 variant_fields += ['ref', 'alt']
             results = gene_ids_annotated_queryset(get_search_queryset(
                 GENOME_VERSION_GRCh38, dataset_type, sample_data, **config_search,

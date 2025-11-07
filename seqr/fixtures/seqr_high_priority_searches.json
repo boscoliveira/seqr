@@ -15,29 +15,6 @@
     ]
   },
   "searches": {
-    "SV": {
-      "SV - De Novo/ Dominant": {
-        "inheritance_mode": "de_novo",
-        "annotations": {
-          "sv_consequences": [
-            "LOF",
-            "INTRAGENIC_EXON_DUP"
-          ]
-        },
-        "freqs": {
-          "sv_callset": {
-            "ac": 100
-          },
-          "gnomad_svs": {
-            "ac": 0.001
-          }
-        },
-        "qualityFilter": {
-          "vcf_filter": "PASS",
-          "min_qg_sv": 90
-        }
-      }
-    },
     "SNV_INDEL": {
       "Clinvar Pathogenic": {
         "inheritance_mode": "any_affected",
@@ -236,6 +213,51 @@
           "vcf_filter": "PASS",
           "min_qg": 30,
           "min_ab": 20
+        }
+      }
+    },
+    "SV": {
+      "SV - De Novo/ Dominant": {
+        "gene_list_moi": "D",
+        "inheritance_mode": "de_novo",
+        "annotations": {
+          "structural_consequence": [
+            "LOF",
+            "INTRAGENIC_EXON_DUP"
+          ]
+        },
+        "freqs": {
+          "sv_callset": {
+            "ac": 100
+          },
+          "gnomad_svs": {
+            "ac": 0.001
+          }
+        },
+        "qualityFilter": {
+          "vcf_filter": "PASS",
+          "min_qg_sv": 90
+        }
+      },
+      "SV - Recessive": {
+        "gene_list_moi": "R",
+        "inheritance_mode": "homozygous_recessive",
+        "annotations": {
+          "structural_consequence": [
+            "LOF",
+            "INTRAGENIC_EXON_DUP"
+          ]
+        },
+        "freqs": {
+          "sv_callset": {
+            "ac": 500
+          },
+          "gnomad_svs": {
+            "ac": 0.01
+          }
+        },
+        "qualityFilter": {
+          "min_qg_sv": 90
         }
       }
     }
