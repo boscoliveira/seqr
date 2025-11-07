@@ -114,39 +114,34 @@ class Command(BaseCommand):
             }
             require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
             if config_search['inheritance_mode'] == COMPOUND_HET:
-                results = [cls._format_com_het_variant(variant) for variant in get_data_type_comp_het_results_queryset(
+                results = [variant for variant_pair in get_data_type_comp_het_results_queryset(
                     GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                )]
+                ) for variant in cls._format_com_het_variants(variant_pair)]
                 if require_mane_consequences:
-                    allowed_key_genes = cls._valid_mane_keys(
-                        [v['key'] for pair in results for v in pair], require_mane_consequences,
-                    )
+                    allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
                     results = [
-                        pair for pair in results
-                        if allowed_key_genes.get(pair[0]['key']) == pair[0][SELECTED_GENE_FIELD] and
-                           allowed_key_genes.get(pair[1]['key']) == pair[1][SELECTED_GENE_FIELD]
+                        variant for variant in results
+                        if allowed_key_genes.get(variant['key']) == variant[SELECTED_GENE_FIELD] and
+                           allowed_key_genes.get(next(iter(variant['support_vars'].values()))['key']) ==
+                           next(iter(variant['support_vars'].values()))[SELECTED_GENE_FIELD]
                     ]
             else:
-                variant_fields = ['key', 'xpos', 'variant_id', 'familyGuids', 'genotypes', 'gene_ids']
-                if is_sv:
-                    variant_fields += ['pos', 'end']
-                else:
-                    variant_fields += ['ref', 'alt']
+                variant_fields = ['pos', 'end'] if is_sv else ['ref', 'alt']
                 results = [
                     {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
                     for variant in gene_ids_annotated_queryset(get_search_queryset(
                         GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                    )).values(*variant_fields)
+                    )).values(*variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids', variantId='variant_id')
                 ]
                 if require_mane_consequences:
-                    allowed_key_genes = cls._valid_mane_keys([v['key'] for v in results], require_mane_consequences)
+                    allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
                     results = [r for r in results if r['key'] in allowed_key_genes]
 
             logger.info(f'Found {len(results)} variants for criteria: {search_name}')
             search_counts[search_name] = len(results)
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
-                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
+                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
                     variant_data.update(variant)
                     variant_data['matched_searches'].append(search_name)
 
@@ -181,16 +176,19 @@ class Command(BaseCommand):
         return True
 
     @staticmethod
-    def _format_com_het_variant(variant_tuple):
-        return [{
+    def _format_com_het_variants(variant_tuple):
+        v1, v2 = [{
             **variant,
             'genotypes': clickhouse_genotypes_json(variant['genotypes']),
             'gene_ids': list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']])),
         } for variant in variant_tuple[1:]]
+        v1['support_vars'] = {v2['variantId']: v2}
+        v2['support_vars'] = {v1['variantId']: v1}
+        return [v1, v2]
 
     @staticmethod
-    def _valid_mane_keys(keys, allowed_consequences):
-        mane_transcripts_by_key = get_transcripts_queryset(GENOME_VERSION_GRCh38, keys).values_list(
+    def _valid_mane_keys(results, allowed_consequences):
+        mane_transcripts_by_key = get_transcripts_queryset(GENOME_VERSION_GRCh38, [v['key'] for v in results]).values_list(
             'key', ArrayMap(
                 ArrayFilter('transcripts', conditions=[{'maneSelect': (None, 'isNotNull({field})')}]),
                 mapped_expression='tuple(x.consequenceTerms, x.geneId)',
