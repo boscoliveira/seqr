@@ -8,15 +8,16 @@ import json
 import os
 
 from clickhouse_backend.models import ArrayField, StringField
+from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import ArrayFilter, ArrayMap
 from clickhouse_search.search import get_search_queryset, get_transcripts_queryset, clickhouse_genotypes_json, \
-    SAMPLE_DATA_FIELDS
+    get_data_type_comp_het_results_queryset, SAMPLE_DATA_FIELDS, SELECTED_GENE_FIELD
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, Sample, LocusList
 from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.gene_utils import get_genes
-from seqr.utils.search.utils import clickhouse_only, get_search_samples
+from seqr.utils.search.utils import clickhouse_only, get_search_samples, COMPOUND_HET
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
 from seqr.views.utils.variant_utils import bulk_create_tagged_variants, gene_ids_annotated_queryset
 from settings import SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL
@@ -98,31 +99,55 @@ class Command(BaseCommand):
 
         logger.info(f'Searching for prioritized {dataset_type} variants in {len(samples_by_family)} families in project {project.name}')
         for search_name, config_search in searches.items():
-            if search_name == 'Clinvar Pathogenic':
+            if config_search['inheritance_mode'] != COMPOUND_HET:
                 continue  # TODO DEBUG ONLY
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
             sample_data = cls._get_valid_family_sample_data(
                 project, sample_type, samples_by_family, config_search.get('family_filter'),
             )
-            variant_fields = ['key', 'xpos', 'variant_id', 'familyGuids', 'genotypes', 'gene_ids']
-            if is_sv:
-                variant_fields += ['pos', 'end']
+            search_kwargs = {
+                **config_search,
+                'exclude': exclude,
+                'exclude_locations': exclude_locations,
+                'genes': search_genes,
+            }
+            require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
+            if config_search['inheritance_mode'] == COMPOUND_HET:
+                results = [cls._format_com_het_variant(variant) for variant in get_data_type_comp_het_results_queryset(
+                    GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
+                )]
+                if require_mane_consequences:
+                    allowed_key_genes = cls._valid_mane_keys(
+                        [v['key'] for pair in results for v in pair], require_mane_consequences,
+                    )
+                    results = [
+                        pair for pair in results
+                        if allowed_key_genes.get(pair[0]['key']) == pair[0][SELECTED_GENE_FIELD] and
+                           allowed_key_genes.get(pair[1]['key']) == pair[1][SELECTED_GENE_FIELD]
+                    ]
             else:
-                variant_fields += ['ref', 'alt']
-            results = gene_ids_annotated_queryset(get_search_queryset(
-                GENOME_VERSION_GRCh38, dataset_type, sample_data, **config_search,
-                exclude=exclude, exclude_locations=exclude_locations, genes=search_genes,
-            )).values(*variant_fields)
-            if config_search.get('annotations', {}).get('vep_consequences'):
-                results = cls._filter_mane_transcript(results, config_search['annotations']['vep_consequences'])
+                variant_fields = ['key', 'xpos', 'variant_id', 'familyGuids', 'genotypes', 'gene_ids']
+                if is_sv:
+                    variant_fields += ['pos', 'end']
+                else:
+                    variant_fields += ['ref', 'alt']
+                results = [
+                    {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
+                    for variant in gene_ids_annotated_queryset(get_search_queryset(
+                        GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
+                    )).values(*variant_fields)
+                ]
+                if require_mane_consequences:
+                    allowed_key_genes = cls._valid_mane_keys([v['key'] for v in results], require_mane_consequences)
+                    results = [r for r in results if r['key'] in allowed_key_genes]
 
             logger.info(f'Found {len(results)} variants for criteria: {search_name}')
             search_counts[search_name] = len(results)
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
-                    variant_data.update({**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])})
+                    variant_data.update(variant)
                     variant_data['matched_searches'].append(search_name)
 
     @classmethod
@@ -156,18 +181,26 @@ class Command(BaseCommand):
         return True
 
     @staticmethod
-    def _filter_mane_transcript(results, allowed_consequences):
-        mane_csqs_by_key = dict(get_transcripts_queryset(GENOME_VERSION_GRCh38, [v['key'] for v in results]).values_list(
+    def _format_com_het_variant(variant_tuple):
+        return [{
+            **variant,
+            'genotypes': clickhouse_genotypes_json(variant['genotypes']),
+            'gene_ids': list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']])),
+        } for variant in variant_tuple[1:]]
+
+    @staticmethod
+    def _valid_mane_keys(keys, allowed_consequences):
+        mane_transcripts_by_key = get_transcripts_queryset(GENOME_VERSION_GRCh38, keys).values_list(
             'key', ArrayMap(
                 ArrayFilter('transcripts', conditions=[{'maneSelect': (None, 'isNotNull({field})')}]),
-                mapped_expression='x.consequenceTerms',
-                output_field=ArrayField(StringField()),
+                mapped_expression='tuple(x.consequenceTerms, x.geneId)',
+                output_field=ArrayField(NamedTupleField([('consequenceTerms', ArrayField(StringField())), ('geneId', StringField())])),
             )
-        ))
-        return [
-            r for r in results
-            if mane_csqs_by_key[r['key']] and set(allowed_consequences).intersection(mane_csqs_by_key[r['key']][0])
-        ]
+        )
+        return {
+            key: mane_transcripts[0]['geneId'] for key, mane_transcripts in mane_transcripts_by_key
+            if mane_transcripts and set(allowed_consequences).intersection(mane_transcripts[0]['consequenceTerms'])
+        }
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):

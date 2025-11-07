@@ -50,7 +50,7 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
             comp_het_sample_data = sample_data
             if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(genome_version, **search):
                 comp_het_sample_data = _no_affected_male_families(sample_data, user)
-            result_q = _get_data_type_comp_het_results_queryset(genome_version, dataset_type, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), skip_individual_guid=is_multi_project, **search)
+            result_q = get_data_type_comp_het_results_queryset(genome_version, dataset_type, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), skip_individual_guid=is_multi_project, **search)
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
         if is_multi_project:
@@ -138,7 +138,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
     return results
 
 
-def _get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, **search_kwargs):
+def get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, **search_kwargs):
     entry_cls = ENTRY_CLASS_MAP[genome_version][dataset_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][dataset_type]
     entries = entry_cls.objects.search(
