@@ -27,7 +27,7 @@ from seqr.views.utils.pedigree_info_utils import get_validated_related_individua
 from seqr.views.utils.permissions_utils import data_manager_required, pm_or_data_manager_required, get_internal_projects
 from seqr.views.utils.terra_api_utils import anvil_enabled
 
-from seqr.models import Sample, Individual, Project, PhenotypePrioritization
+from seqr.models import Sample, RnaSample, Individual, Project, PhenotypePrioritization
 
 from settings import KIBANA_SERVER, KIBANA_ELASTICSEARCH_PASSWORD, KIBANA_ELASTICSEARCH_USER, \
     LOADING_DATASETS_DIR, LUIGI_UI_SERVICE_HOSTNAME, LUIGI_UI_SERVICE_PORT
@@ -56,20 +56,28 @@ def delete_index(request):
 
 RNA = 'RNA'
 TISSUE_FIELD = 'TissueOfOrigin'
+AIRTABLE_TISSUE_TYPE_MAP = {
+    'whole_blood': 'Blood',
+    'fibroblasts': 'Fibroblast',
+    'muscle':  'Muscle',
+    'airway_cultured_epithelium': 'Nasal Epithelium',
+    'brain': 'Brain',
+}
+TISSUE_TYPE_MAP = {
+    AIRTABLE_TISSUE_TYPE_MAP[name]: type
+    for type, name in RnaSample.TISSUE_TYPE_CHOICES if name in AIRTABLE_TISSUE_TYPE_MAP
+}
 
 @pm_or_data_manager_required
 def update_rna_seq(request):
     request_json = json.loads(request.body)
-
-    data_type = request_json['dataType']
-    file_path = request_json['file']
 
     airtable_samples = _get_dataset_type_samples_for_matched_pdos(
         ['RNA ready to load'], request.user, RNA, None, sample_fields=[TISSUE_FIELD], skip_invalid_pdos=True,
     )
     sample_metadata_mapping = {
         sample['sample_id']: {
-            'tissue': sample[TISSUE_FIELD][0],
+            'tissue': TISSUE_TYPE_MAP[sample[TISSUE_FIELD][0]],
             'project_guid': sample['pdos'][0]['project_guid'],
             'sample_id': sample.get('CollaboratorSampleID') or sample['sample_id'],
         }
@@ -79,22 +87,8 @@ def update_rna_seq(request):
     if misconfigured_samples:
         logger.warning(f'Skipping samples associated with multiple conflicting PDOs in Airtable: {", ".join(sorted(misconfigured_samples))}', request.user)
 
-    try:
-        sample_guids, file_name_prefix, info, warnings = load_rna_seq(
-            data_type, file_path, request.user, sample_metadata_mapping=sample_metadata_mapping,
-            ignore_extra_samples=request_json.get('ignoreExtraSamples'),
-        )
-    except FileNotFoundError:
-        return create_json_response({'error': 'File not found: {}'.format(file_path)}, status=400)
-    except ValueError as e:
-        return create_json_response({'error': str(e)}, status=400)
-
-    return create_json_response({
-        'info': info,
-        'warnings': warnings,
-        'fileName': file_name_prefix,
-        'sampleGuids': sample_guids,
-    })
+    response_json, status = load_rna_seq(request_json, request.user, sample_metadata_mapping=sample_metadata_mapping)
+    return create_json_response(response_json, status=status)
 
 
 def _get_sample_file_path(file_dir, sample_guid):
