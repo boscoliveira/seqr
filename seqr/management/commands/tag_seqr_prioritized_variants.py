@@ -70,6 +70,10 @@ class Command(BaseCommand):
         if not new_tag_keys:
             return
 
+        family_new_counts = defaultdict(int)
+        for family_id, variant_id in new_tag_keys:
+            family_new_counts[family_id] += 1
+
         send_project_notification(
             project,
             notification=f'{len(new_tag_keys)} new seqr prioritized variants',
@@ -77,7 +81,7 @@ class Command(BaseCommand):
             email_template='This is to notify you that {notification} have been tagged in seqr project {project_link}',
             slack_channel=SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL,
             slack_detail='\n'.join(sorted([
-                f'{family_name_map[family_id]}: {len(variants)} new tags' for family_id, variants in family_variants.items()
+                f'{family_name_map[family_id]}: {count} new tags' for family_id, count in family_new_counts.items()
             ])),
         )
 
