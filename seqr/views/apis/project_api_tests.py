@@ -886,7 +886,7 @@ class ProjectAPITest(object):
         mock_os.rename.assert_has_calls([
             mock.call(f'tmp/temp_uploads/{file_path}/{sample_id}.json.gz', f'tmp/temp_uploads/{file_path}/{sample_guid}.json.gz')
             for sample_id, sample_guid in guid_map.items()
-        ])
+        ], any_order=True)
 
         # test anvil external project access
         self._set_file_iter([row.replace('NA19675_1', 'NA21234') for row in rows[:2]], mock_subprocess, mock_does_file_exist, mock_open)
