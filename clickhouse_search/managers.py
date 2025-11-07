@@ -1168,7 +1168,7 @@ class EntriesManager(SearchQuerySet):
             mapped_expression='x.1', output_field=models.ArrayField(models.StringField()),
         )
 
-    def filter_locus(self, exclude_locations=False, intervals=None, genes=None, parsed_variant_ids=None, require_gene_filter=False, **kwargs):
+    def filter_locus(self, exclude_locations=False, intervals=None, genes=None, parsed_variant_ids=None, require_gene_filter=False, require_any_gene=False, **kwargs):
         entries = self
         if parsed_variant_ids:
             # although technically redundant, the interval query is applied to the entries table before join and reduces the join size,
@@ -1191,13 +1191,13 @@ class EntriesManager(SearchQuerySet):
                     should_filter_interval = True
                 intervals = [{'chrom': chrom, 'start': MIN_POS, 'end': MAX_POS} for chrom in chromosomes]
 
-        if not (genes or intervals):
+        if not (genes or intervals or require_any_gene):
             return entries
 
         locus_q = None
+        if hasattr(self.model, 'is_annotated_in_any_gene') and (require_any_gene or (genes and not intervals)):
+            entries = entries.filter(is_annotated_in_any_gene=Value(True))
         if genes:
-            if hasattr(self.model, 'is_annotated_in_any_gene') and not intervals:
-                entries = entries.filter(is_annotated_in_any_gene=Value(True))
             should_filter_interval |= (not hasattr(self.model, 'geneId_ids')) or exclude_locations or len(genes) < self.model.MAX_XPOS_FILTER_INTERVALS
             if should_filter_interval:
                 intervals = self._format_gene_intervals(genes) + (intervals or [])

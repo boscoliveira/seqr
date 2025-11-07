@@ -87,6 +87,7 @@
             "non_coding_transcript_exon_variant"
           ]
         },
+        "require_any_gene": true,
         "in_silico": {
           "cadd": 25,
           "revel": 0.6
@@ -169,6 +170,7 @@
             "non_coding_transcript_exon_variant"
           ]
         },
+        "require_any_gene": true,
         "in_silico": {
           "cadd": 25,
           "revel": 0.6,
