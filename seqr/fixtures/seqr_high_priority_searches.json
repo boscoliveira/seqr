@@ -38,6 +38,54 @@
           }
         }
       },
+      "Clinvar Pathogenic -  Compound Heterozygous": {
+        "gene_list_moi": "R",
+        "inheritance_mode": "compound_het",
+        "no_secondary_annotations": true,
+        "pathogenicity": {
+          "clinvar": [
+            "pathogenic",
+            "likely_pathogenic",
+            "conflicting_p_lp"
+          ],
+          "clinvarMinStars": 1
+        },
+        "annotations": {
+          "vep_consequences": [
+            "splice_donor_variant",
+            "splice_acceptor_variant",
+            "stop_gained",
+            "frameshift_variant",
+            "stop_lost",
+            "start_lost",
+            "inframe_insertion",
+            "inframe_deletion",
+            "protein_altering_variant",
+            "missense_variant",
+            "splice_donor_5th_base_variant",
+            "splice_region_variant",
+            "splice_donor_region_variant",
+            "splice_polypyrimidine_tract_variant",
+            "extended_intronic_splice_region_variant",
+            "non_coding_transcript_exon_variant"
+          ]
+        },
+        "freqs": {
+          "callset": {
+            "ac": 2000
+          },
+          "gnomad_exomes": {
+            "af": 0.03
+          },
+          "gnomad_genomes": {
+            "af": 0.03
+          }
+        },
+        "qualityFilter": {
+          "min_qg": 30,
+          "min_ab": 20
+        }
+      },
       "Clinvar Pathogenic - Recessive": {
         "gene_list_moi": "R",
         "inheritance_mode": "homozygous_recessive",
@@ -91,6 +139,50 @@
             "splice_polypyrimidine_tract_variant",
             "extended_intronic_splice_region_variant",
             "non_coding_transcript_exon_variant"
+          ]
+        },
+        "in_silico": {
+          "cadd": 25,
+          "revel": 0.6
+        },
+        "freqs": {
+          "callset": {
+            "ac": 1000
+          },
+          "gnomad_exomes": {
+            "af": 0.01,
+            "hh": 2
+          },
+          "gnomad_genomes": {
+            "af": 0.01,
+            "hh": 2
+          }
+        },
+        "qualityFilter": {
+          "min_qg": 30,
+          "min_ab": 20
+        }
+      },
+      "Compound Heterozygous - Confirmed": {
+        "family_filter": {
+          "max_affected": 1,
+          "confirmed_inheritance": true
+        },
+        "gene_list_moi": "R",
+        "inheritance_mode": "compound_het",
+        "annotations": {
+          "vep_consequences": [
+            "stop_lost",
+            "start_lost",
+            "inframe_insertion",
+            "inframe_deletion",
+            "protein_altering_variant",
+            "missense_variant",
+            "splice_donor_5th_base_variant",
+            "splice_region_variant",
+            "splice_donor_region_variant",
+            "splice_polypyrimidine_tract_variant",
+            "extended_intronic_splice_region_variant"
           ]
         },
         "in_silico": {
@@ -318,6 +410,28 @@
       }
     },
     "SV": {
+      "SV - Compound Heterozygous": {
+        "gene_list_moi": "R",
+        "inheritance_mode": "compound_het",
+        "annotations": {
+          "structural_consequence": [
+            "LOF",
+            "INTRAGENIC_EXON_DUP"
+          ]
+        },
+        "freqs": {
+          "sv_callset": {
+            "ac": 500
+          },
+          "gnomad_svs": {
+            "ac": 0.01
+          }
+        },
+        "qualityFilter": {
+          "min_qg_sv": 90,
+          "vcf_filter": "PASS"
+        }
+      },
       "SV - De Novo/ Dominant": {
         "gene_list_moi": "D",
         "inheritance_mode": "de_novo",

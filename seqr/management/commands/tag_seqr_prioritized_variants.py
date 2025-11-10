@@ -119,14 +119,22 @@ class Command(BaseCommand):
                 metadata_key = 'matched_comp_het_searches'
                 results = [variant for variant_pair in get_data_type_comp_het_results_queryset(
                     GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                ) for variant in cls._format_com_het_variants(variant_pair)]
-                if require_mane_consequences:
+                ) for variant in cls._format_com_het_variants(variant_pair, is_sv)]
+
+                secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
+                if require_mane_consequences or secondary_consequences:
                     allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
+                    if secondary_consequences:
+                        allowed_secondary_key_genes = cls._valid_mane_keys(results, secondary_consequences)
+                    else:
+                        allowed_secondary_key_genes = None if config_search.get('no_secondary_annotations') else allowed_key_genes
                     results = [
                         variant for variant in results
-                        if allowed_key_genes.get(variant['key']) == variant[SELECTED_GENE_FIELD] and
-                           allowed_key_genes.get(next(iter(variant['support_vars'].values()))['key']) ==
-                           next(iter(variant['support_vars'].values()))[SELECTED_GENE_FIELD]
+                        if allowed_key_genes.get(variant['key']) == variant[SELECTED_GENE_FIELD] and (
+                            allowed_secondary_key_genes is None or
+                            allowed_secondary_key_genes.get(next(iter(variant['support_vars'].values()))['key']) ==
+                            next(iter(variant['support_vars'].values()))[SELECTED_GENE_FIELD]
+                        )
                     ]
             else:
                 metadata_key = 'matched_searches'
@@ -177,12 +185,11 @@ class Command(BaseCommand):
         if family_filter.get('max_affected') and len(affected) > family_filter['max_affected']:
             return False
         if 'confirmed_inheritance' in family_filter:
-            maternal_guid = affected[0]['maternal_guid']
-            paternal_guid = affected[0]['paternal_guid']
-            if not (maternal_guid and paternal_guid):
+            proband = next((s for s in affected if s['maternal_guid'] and s['paternal_guid']), None)
+            if not proband:
                 return False
             loaded_guids = {s['individual_guid'] for s in samples}
-            return maternal_guid in loaded_guids and paternal_guid in loaded_guids
+            return proband['maternal_guid'] in loaded_guids and proband['paternal_guid'] in loaded_guids
         return True
 
     @staticmethod
@@ -192,11 +199,12 @@ class Command(BaseCommand):
         return wrapped
 
     @staticmethod
-    def _format_com_het_variants(variant_tuple):
+    def _format_com_het_variants(variant_tuple, is_sv):
+        consequence_field = 'sortedGeneConsequences' if is_sv else 'sortedTranscriptConsequences'
         v1, v2 = [{
             **variant,
             'genotypes': clickhouse_genotypes_json(variant['genotypes']),
-            'gene_ids': list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']])),
+            'gene_ids': list(dict.fromkeys([csq['geneId'] for csq in variant[consequence_field]])),
         } for variant in variant_tuple[1:]]
         v1['support_vars'] = {v2['variantId']: v2}
         v2['support_vars'] = {v1['variantId']: v1}

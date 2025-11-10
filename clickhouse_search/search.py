@@ -138,16 +138,18 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
     return results
 
 
-def get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, **search_kwargs):
+def get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, no_secondary_annotations=False, **search_kwargs):
     entry_cls = ENTRY_CLASS_MAP[genome_version][dataset_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][dataset_type]
     entries = entry_cls.objects.search(
         sample_data, **search_kwargs, inheritance_mode=COMPOUND_HET, annotations=annotations, annotate_carriers=True,
     )
 
+    if not no_secondary_annotations:
+        annotations_secondary = annotations_secondary or annotations
     primary_q = annotations_cls.objects.subquery_join(entries).search(annotations=annotations, **search_kwargs)
     secondary_q = annotations_cls.objects.subquery_join(entries).search(
-        annotations=annotations_secondary or annotations, **search_kwargs,
+        annotations=annotations_secondary, **search_kwargs,
     )
 
     return _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, len(set(sample_data['family_guids'])), exclude_key_pairs)
