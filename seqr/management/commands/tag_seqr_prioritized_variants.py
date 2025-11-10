@@ -2,7 +2,7 @@ from collections import defaultdict
 from datetime import datetime
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand
-from django.db.models import Q
+from django.db.models import Q, F
 from django.db.models.functions import JSONObject
 import json
 import os
@@ -103,8 +103,6 @@ class Command(BaseCommand):
 
         logger.info(f'Searching for prioritized {dataset_type} variants in {len(samples_by_family)} families in project {project.name}')
         for search_name, config_search in searches.items():
-            if config_search['inheritance_mode'] != COMPOUND_HET:
-                continue  # TODO DEBUG ONLY
             exclude_locations = not config_search.get('gene_list_moi')
             search_genes = exclude_genes if exclude_locations else gene_by_moi[config_search['gene_list_moi']]
             sample_data = cls._get_valid_family_sample_data(
@@ -137,7 +135,7 @@ class Command(BaseCommand):
                     {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
                     for variant in gene_ids_annotated_queryset(get_search_queryset(
                         GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                    )).values(*variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids', variantId='variant_id')
+                    )).values(*variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids', variantId=F('variant_id'))
                 ]
                 if require_mane_consequences:
                     allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
@@ -148,6 +146,8 @@ class Command(BaseCommand):
             for variant in results:
                 for family_guid in variant.pop('familyGuids'):
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
+                    if variant_data.get('support_vars') and variant.get('support_vars'):
+                        variant['support_vars'].update(variant_data['support_vars'])
                     variant_data.update(variant)
                     variant_data[metadata_key].add(search_name)
 
