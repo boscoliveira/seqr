@@ -47,7 +47,7 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
-        family_variant_data = defaultdict(lambda: {'matched_searches': []})
+        family_variant_data = defaultdict(lambda: {'matched_searches': set(), 'matched_comp_het_searches': set()})
         search_counts = {}
         for dataset_type, searches in config['searches'].items():
             self._run_dataset_type_searches(
@@ -57,8 +57,8 @@ class Command(BaseCommand):
 
         today = datetime.now().strftime('%Y-%m-%d')
         new_tag_keys, num_updated, num_skipped = bulk_create_tagged_variants(
-            family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=lambda v: {name: today for name in v['matched_searches']},
-            user=None, remove_missing_metadata=False,
+            family_variant_data, tag_name=SEQR_TAG_TYPE, get_metadata=self._get_metadata(today, 'matched_searches'),
+            get_comp_het_metadata=self._get_metadata(today, 'matched_comp_het_searches'), user=None, remove_missing_metadata=False,
         )
 
         family_variants = defaultdict(list)
@@ -118,6 +118,7 @@ class Command(BaseCommand):
             }
             require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
             if config_search['inheritance_mode'] == COMPOUND_HET:
+                metadata_key = 'matched_comp_het_searches'
                 results = [variant for variant_pair in get_data_type_comp_het_results_queryset(
                     GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
                 ) for variant in cls._format_com_het_variants(variant_pair)]
@@ -130,6 +131,7 @@ class Command(BaseCommand):
                            next(iter(variant['support_vars'].values()))[SELECTED_GENE_FIELD]
                     ]
             else:
+                metadata_key = 'matched_searches'
                 variant_fields = ['pos', 'end'] if is_sv else ['ref', 'alt']
                 results = [
                     {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
@@ -147,7 +149,7 @@ class Command(BaseCommand):
                 for family_guid in variant.pop('familyGuids'):
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
                     variant_data.update(variant)
-                    variant_data['matched_searches'].append(search_name)
+                    variant_data[metadata_key].add(search_name)
 
     @classmethod
     def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter):
@@ -178,6 +180,12 @@ class Command(BaseCommand):
             loaded_guids = {s['individual_guid'] for s in samples}
             return maternal_guid in loaded_guids and paternal_guid in loaded_guids
         return True
+
+    @staticmethod
+    def _get_metadata(today, metadata_key):
+        def wrapped(v):
+            return {name: today for name in v[metadata_key]} if v[metadata_key] else None
+        return wrapped
 
     @staticmethod
     def _format_com_het_variants(variant_tuple):

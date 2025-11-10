@@ -119,7 +119,7 @@ def _transcript_sort(gene_id, saved_variant_json):
     return (not is_main_gene, min(t.get('transcriptRank', 100) for t in gene_transcripts) if gene_transcripts else 100)
 
 
-def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, load_new_variant_data=False, load_new_variant_keys=False, remove_missing_metadata=True):
+def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, user, project=None, get_comp_het_metadata=None, load_new_variant_data=False, load_new_variant_keys=False, remove_missing_metadata=True):
     all_family_ids = {family_id for family_id, _ in family_variant_data.keys()}
     all_variant_ids = {variant_id for _, variant_id in family_variant_data.keys()}
 
@@ -157,16 +157,18 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     }
 
     update_tags = []
-    new_tag_keys = []
+    new_tag_keys = set()
     num_skipped = 0
     for key, variant in family_variant_data.items():
+        metadata = get_metadata(variant)
+        comp_het_metadata = get_comp_het_metadata(variant) if get_comp_het_metadata else None
         updated_tag = _set_updated_tags(
-            key, get_metadata(variant), variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user,
+            key, metadata, comp_het_metadata, variant.get('support_vars', []), saved_variant_map, existing_tags, tag_type, user,
             new_tag_keys, remove_missing_metadata,
         )
         if updated_tag:
             update_tags.append(updated_tag)
-        elif key not in new_tag_keys:
+        elif key not in new_tag_keys and metadata is not None:
             num_skipped += 1
 
     VariantTag.bulk_update_models(user, update_tags, ['metadata'])
@@ -174,13 +176,13 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     return new_tag_keys, len(update_tags), num_skipped
 
 
-def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_var_ids: list[str],
+def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], comp_het_metadata: dict[str, dict], support_var_ids: list[str],
                       saved_variant_map: dict[tuple[int, str], SavedVariant], existing_tags: dict[tuple[int, ...], VariantTag],
-                      tag_type: VariantTagType, user: User, new_tag_keys: list[tuple[int, str]], remove_missing_metadata: bool):
+                      tag_type: VariantTagType, user: User, new_tag_keys: set[tuple[int, str]], remove_missing_metadata: bool):
     variant = saved_variant_map[key]
     existing_tag = existing_tags.get(tuple([variant.id]))
     updated_tag = None
-    if existing_tag:
+    if metadata is not None and existing_tag:
         existing_metadata = json.loads(existing_tag.metadata or '{}')
         metadata = {k: existing_metadata.get(k, v) for k, v in metadata.items()}
         removed = {k: v for k, v in existing_metadata.get('removed', {}).items() if k not in metadata}
@@ -191,11 +193,11 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
             if new_metadata != existing_tag.metadata:
                 existing_tag.metadata = new_metadata
                 updated_tag = existing_tag
-    else:
+    elif metadata is not None:
         tag = create_model_from_json(
             VariantTag, {'variant_tag_type': tag_type, 'metadata': json.dumps(metadata)}, user)
         tag.saved_variants.add(variant)
-        new_tag_keys.append(key)
+        new_tag_keys.add(key)
 
     variant_genes = set(variant.gene_ids or [])
     support_vars = []
@@ -203,13 +205,17 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], support_v
         support_v = saved_variant_map[(key[0], support_id)]
         if variant_genes.intersection(set(support_v.gene_ids)):
             support_vars.append(support_v)
-    if support_vars:
-        variants = [variant] + support_vars
+    for support_var in support_vars:
+        variants = [variant, support_var]
         variant_id_key = tuple(sorted([v.id for v in variants]))
         if variant_id_key not in existing_tags:
-            tag = create_model_from_json(VariantTag, {'variant_tag_type': tag_type}, user)
+            tag = create_model_from_json(VariantTag, {
+                'variant_tag_type': tag_type,
+                'metadata': json.dumps(comp_het_metadata) if comp_het_metadata else None,
+            }, user)
             tag.saved_variants.set(variants)
             existing_tags[variant_id_key] = True
+            new_tag_keys.add(key)
 
     return updated_tag
 
