@@ -131,11 +131,15 @@ class Command(BaseCommand):
             else:
                 metadata_key = 'matched_searches'
                 variant_fields = ['pos', 'end'] if is_sv else ['ref', 'alt']
+                variant_values = {'endChrom': F('end_chrom')} if dataset_type == 'SV_WGS' else {}
                 results = [
                     {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
                     for variant in gene_ids_annotated_queryset(get_search_queryset(
                         GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                    )).values(*variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids', variantId=F('variant_id'))
+                    )).values(
+                        *variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids',
+                        variantId=F('variant_id'), **variant_values,
+                    )
                 ]
                 if require_mane_consequences:
                     allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
