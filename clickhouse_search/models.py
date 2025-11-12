@@ -3,7 +3,7 @@ from django.db.migrations import state
 from django.db.models import options, ForeignKey, OneToOneField, Func, CASCADE, PROTECT
 
 from clickhouse_search.backend.engines import CollapsingMergeTree, EmbeddedRocksDB, Join
-from clickhouse_search.backend.fields import Enum8Field, NestedField, UInt32FieldDeltaCodecField, UInt64FieldDeltaCodecField, NamedTupleField
+from clickhouse_search.backend.fields import Enum8Field, NestedField, UInt32FieldDeltaCodecField, UInt64FieldDeltaCodecField, NamedTupleField, MaterializedUInt8Field
 from clickhouse_search.backend.functions import ArrayDistinct, ArrayFlatten, ArrayMin, ArrayMax
 from clickhouse_search.managers import EntriesManager, AnnotationsQuerySet
 from reference_data.models import GENOME_VERSION_GRCh38, GENOME_VERSION_GRCh37
@@ -522,15 +522,42 @@ class BaseClinvarAllVariants(BaseClinvar):
 
 class ClinvarAllVariantsGRCh37SnvIndel(BaseClinvarAllVariants):
     class Meta(BaseClinvarAllVariants.Meta):
-        db_table = 'GRCh37/SNV_INDEL/clinvar_all_variants'
+        db_table = 'GRCh37/SNV_INDEL/reference_data/clinvar/all_variants'
 
 class ClinvarAllVariantsSnvIndel(BaseClinvarAllVariants):
     class Meta(BaseClinvarAllVariants.Meta):
-        db_table = 'GRCh38/SNV_INDEL/clinvar_all_variants'
+        db_table = 'GRCh38/SNV_INDEL/reference_data/clinvar/all_variants'
 
 class ClinvarAllVariantsMito(BaseClinvarAllVariants):
     class Meta(BaseClinvarAllVariants.Meta):
-        db_table = 'GRCh38/MITO/clinvar_all_variants'
+        db_table = 'GRCh38/MITO/reference_data/clinvar/all_variants'
+
+class ClinvarSeqrVariantsGRCh37SnvIndel(BaseClinvar):
+    key = OneToOneField('AnnotationsGRCh37SnvIndel', db_column='key', primary_key=True, on_delete=CASCADE)
+    class Meta(BaseClinvar.Meta):
+        db_table = 'GRCh37/SNV_INDEL/reference_data/clinvar/seqr_variants'
+        engine = models.MergeTree(
+            primary_key='key',
+            order_by='key'
+        )
+
+class ClinvarSeqrVariantsSnvIndel(BaseClinvar):
+    key = OneToOneField('AnnotationsSnvIndel', db_column='key', primary_key=True, on_delete=CASCADE)
+    class Meta(BaseClinvar.Meta):
+        db_table = 'GRCh38/SNV_INDEL/reference_data/clinvar/seqr_variants'
+        engine = models.MergeTree(
+            primary_key='key',
+            order_by='key'
+        )
+
+class ClinvarSeqrVariantsMito(BaseClinvar):
+    key = OneToOneField('AnnotationsMito', db_column='key', primary_key=True, on_delete=CASCADE)
+    class Meta(BaseClinvar.Meta):
+        db_table = 'GRCh38/MITO/reference_data/clinvar/seqr_variants'
+        engine = models.MergeTree(
+            primary_key='key',
+            order_by='key'
+        )
 
 class BaseClinvarJoin(BaseClinvar):
 
@@ -542,17 +569,17 @@ class BaseClinvarJoin(BaseClinvar):
 class ClinvarGRCh37SnvIndel(BaseClinvarJoin):
     key = ForeignKey('EntriesGRCh37SnvIndel', db_column='key', related_name='clinvar_join', primary_key=True, on_delete=PROTECT)
     class Meta(BaseClinvarJoin.Meta):
-        db_table = 'GRCh37/SNV_INDEL/clinvar'
+        db_table = 'GRCh37/SNV_INDEL/reference_data/clinvar'
 
 class ClinvarSnvIndel(BaseClinvarJoin):
     key = ForeignKey('EntriesSnvIndel', db_column='key', related_name='clinvar_join', primary_key=True, on_delete=PROTECT)
     class Meta(BaseClinvarJoin.Meta):
-        db_table = 'GRCh38/SNV_INDEL/clinvar'
+        db_table = 'GRCh38/SNV_INDEL/reference_data/clinvar'
 
 class ClinvarMito(BaseClinvarJoin):
     key = ForeignKey('EntriesMito', db_column='key', related_name='clinvar_join', primary_key=True, on_delete=PROTECT)
     class Meta(BaseClinvarJoin.Meta):
-        db_table = 'GRCh38/MITO/clinvar'
+        db_table = 'GRCh38/MITO/reference_data/clinvar'
 
 
 class BaseEntries(FixtureLoadableClickhouseModel):
@@ -615,9 +642,37 @@ class EntriesSnvIndel(BaseEntriesSnvIndel):
 
     # primary_key is not enforced by clickhouse, but setting it here prevents django adding an id column
     key = ForeignKey('AnnotationsSnvIndel', db_column='key', primary_key=True, on_delete=CASCADE)
+    partition_id = MaterializedUInt8Field(
+        expression="farmHash64(family_guid) %% n_partitions", # extra paren to escape within Django.
+    )
+    n_partitions = MaterializedUInt8Field(
+        expression="dictGetOrDefault('GRCh38/SNV_INDEL/project_partitions_dict', 'n_partitions', project_guid, 1)",
+    )
 
     class Meta:
         db_table = 'GRCh38/SNV_INDEL/entries'
+        engine = CollapsingMergeTree(
+            'sign',
+            order_by=('project_guid', 'family_guid', 'sample_type', 'is_gnomad_gt_5_percent', 'is_annotated_in_any_gene', 'key'),
+            partition_by='project_guid, partition_id',
+            deduplicate_merge_projection_mode='rebuild',
+            index_granularity=8192,
+        )
+
+    def _save_table(
+        self,
+        *args, **kwargs,
+    ):
+        # Exclude derived fields from fixture insert.
+        # Note that just deleting the attributes is insufficient due
+        # to fields mismatch on db refresh.
+        self._meta.local_concrete_fields = [
+            f for f in self._meta.local_concrete_fields
+            if f.name not in ['partition_id', 'n_partitions']
+        ]
+        return super()._save_table(
+            *args, **kwargs,
+        )
 
 class EntriesMito(BaseEntries):
     CALL_FIELDS = [
@@ -893,6 +948,17 @@ class GtStatsSv(models.ClickhouseModel):
 
     class Meta(BaseGtStats.Meta):
         db_table = 'GRCh38/SV/gt_stats'
+
+class ProjectPartitionsSnvIndel(FixtureLoadableClickhouseModel):
+    # primary_key is not enforced by clickhouse, but setting it here prevents django adding an id column
+    project_guid = models.StringField(primary_key=True)
+    n_partitions = models.UInt8Field()
+    class Meta:
+        db_table = 'GRCh38/SNV_INDEL/project_partitions'
+        engine = models.MergeTree(
+            primary_key='project_guid',
+            order_by='project_guid',
+        )
 
 
 ENTRY_CLASS_MAP = {
