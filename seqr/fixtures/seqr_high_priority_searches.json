@@ -295,6 +295,7 @@
         "family_filter": {
           "min_affected": 2
         },
+        "gene_list_moi": "D",
         "inheritance_mode": "de_novo",
         "annotations": {
           "vep_consequences": [
