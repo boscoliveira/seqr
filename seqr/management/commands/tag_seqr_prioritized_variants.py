@@ -47,7 +47,7 @@ class Command(BaseCommand):
         for gene_list in config['gene_lists']:
             self._get_gene_list_genes(gene_list['name'], gene_list['confidences'], gene_by_moi, exclude_genes.keys())
 
-        family_variant_data = defaultdict(lambda: {'matched_searches': set(), 'matched_comp_het_searches': set()})
+        family_variant_data = defaultdict(lambda: {'matched_searches': set(), 'matched_comp_het_searches': set(), 'support_vars': set()})
         search_counts = {}
         for dataset_type, searches in config['searches'].items():
             self._run_dataset_type_searches(
@@ -110,60 +110,13 @@ class Command(BaseCommand):
             sample_data = cls._get_valid_family_sample_data(
                 project, sample_type, samples_by_family, config_search.get('family_filter'),
             )
-            search_kwargs = {
-                **config_search,
-                'exclude': exclude,
-                'exclude_locations': exclude_locations,
-                'genes': search_genes,
-            }
-            require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
-            if config_search['inheritance_mode'] == COMPOUND_HET:
-                metadata_key = 'matched_comp_het_searches'
-                results = [variant for variant_pair in get_data_type_comp_het_results_queryset(
-                    GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                ) for variant in cls._format_com_het_variants(variant_pair)]
-
-                secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
-                if require_mane_consequences or secondary_consequences:
-                    allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
-                    if secondary_consequences:
-                        allowed_secondary_key_genes = cls._valid_mane_keys(results, secondary_consequences)
-                    else:
-                        allowed_secondary_key_genes = None if config_search.get('no_secondary_annotations') else allowed_key_genes
-                    results = [
-                        variant for variant in results
-                        if allowed_key_genes.get(variant['key']) == variant[SELECTED_GENE_FIELD] and (
-                            allowed_secondary_key_genes is None or
-                            allowed_secondary_key_genes.get(next(iter(variant['support_vars'].values()))['key']) ==
-                            next(iter(variant['support_vars'].values()))[SELECTED_GENE_FIELD]
-                        )
-                    ]
-            else:
-                metadata_key = 'matched_searches'
-                variant_fields = ['pos', 'end'] if is_sv else ['ref', 'alt']
-                variant_values = {'endChrom': F('end_chrom')} if dataset_type == 'SV_WGS' else {}
-                results = [
-                    {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
-                    for variant in gene_ids_annotated_queryset(get_search_queryset(
-                        GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                    )).values(
-                        *variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids',
-                        variantId=F('variant_id'), **variant_values,
-                    )
-                ]
-                if require_mane_consequences:
-                    allowed_key_genes = cls._valid_mane_keys(results, require_mane_consequences)
-                    results = [r for r in results if r['key'] in allowed_key_genes]
-
-            logger.info(f'Found {len(results)} variants for criteria: {search_name}')
-            search_counts[search_name] = len(results)
-            for variant in results:
-                for family_guid in variant.pop('familyGuids'):
-                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
-                    if variant_data.get('support_vars') and variant.get('support_vars'):
-                        variant['support_vars'].update(variant_data['support_vars'])
-                    variant_data.update(variant)
-                    variant_data[metadata_key].add(search_name)
+            run_search_func = cls._run_comp_het_search if config_search['inheritance_mode'] == COMPOUND_HET else cls._run_search
+            num_results = run_search_func(
+                search_name, config_search, family_variant_data, family_guid_map, dataset_type, sample_data,
+                exclude=exclude, exclude_locations=exclude_locations, genes=search_genes, **config_search,
+            )
+            logger.info(f'Found {num_results} variants for criteria: {search_name}')
+            search_counts[search_name] = num_results
 
     @classmethod
     def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter):
@@ -200,22 +153,72 @@ class Command(BaseCommand):
             return {name: today for name in v[metadata_key]} if v[metadata_key] else None
         return wrapped
 
-    @staticmethod
-    def _format_com_het_variants(variant_tuple):
-        v1, v2 = [
-            {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])} for variant in variant_tuple[1:]
+    @classmethod
+    def _run_search(cls, search_name, config_search, family_variant_data, family_guid_map, dataset_type, sample_data, **kwargs):
+        variant_fields = ['pos', 'end'] if dataset_type.startswith('SV') else ['ref', 'alt']
+        variant_values = {'endChrom': F('end_chrom')} if dataset_type == 'SV_WGS' else {}
+        results = [
+            {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
+            for variant in gene_ids_annotated_queryset(get_search_queryset(
+                GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs,
+            )).values(
+                *variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids',
+                variantId=F('variant_id'), **variant_values,
+            )
         ]
-        v1['support_vars'] = {v2['variantId']: v2}
-        v2['support_vars'] = {v1['variantId']: v1}
-        com_het = [v1, v2]
-        for variant in com_het:
-            if 'transcripts' not in variant:
-                variant['gene_ids'] = list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']]))
-        return com_het
+        require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
+        if require_mane_consequences:
+            allowed_key_genes = cls._valid_mane_keys([v['key'] for v in results], require_mane_consequences)
+            results = [r for r in results if r['key'] in allowed_key_genes]
+
+        for variant in results:
+            for family_guid in variant.pop('familyGuids'):
+                variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
+                variant_data.update(variant)
+                variant_data['matched_searches'].add(search_name)
+
+        return len(results)
+
+    @classmethod
+    def _run_comp_het_search(cls, search_name, config_search, family_variant_data, family_guid_map, dataset_type, sample_data, **kwargs):
+        results = [v[1:] for v in get_data_type_comp_het_results_queryset(
+            GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs,
+        )]
+
+        primary_consequences = config_search.get('annotations', {}).get('vep_consequences')
+        secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
+        if primary_consequences or secondary_consequences:
+            keys = [v['key'] for pair in results for v in pair]
+            allowed_key_genes = cls._valid_mane_keys(keys, primary_consequences)
+            if secondary_consequences:
+                allowed_secondary_key_genes = cls._valid_mane_keys(keys, secondary_consequences)
+            else:
+                allowed_secondary_key_genes = None if config_search.get(
+                    'no_secondary_annotations') else allowed_key_genes
+            results = [
+                pair for pair in results
+                if allowed_key_genes.get(pair[0]['key']) == pair[0][SELECTED_GENE_FIELD] and (
+                    allowed_secondary_key_genes is None or
+                    allowed_secondary_key_genes.get(pair[1]['key']) ==pair[1][SELECTED_GENE_FIELD]
+                )
+            ]
+
+        for pair in results:
+            for family_guid in pair[0]['familyGuids']:
+                for variant, support_id in [(pair[0], pair[1]['variantId']), (pair[1], pair[0]['variantId'])]:
+                    variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
+                    variant_data.update(variant)
+                    variant_data['genotypes'] = clickhouse_genotypes_json(variant['genotypes'])
+                    if 'transcripts' not in variant_data:
+                        variant_data['gene_ids'] = list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']]))
+                    variant_data['support_vars'].add(support_id)
+                    variant_data['matched_comp_het_searches'].add(search_name)
+
+        return len(results)
 
     @staticmethod
-    def _valid_mane_keys(results, allowed_consequences):
-        mane_transcripts_by_key = get_transcripts_queryset(GENOME_VERSION_GRCh38, [v['key'] for v in results]).values_list(
+    def _valid_mane_keys(keys, allowed_consequences):
+        mane_transcripts_by_key = get_transcripts_queryset(GENOME_VERSION_GRCh38, keys).values_list(
             'key', ArrayMap(
                 ArrayFilter('transcripts', conditions=[{'maneSelect': (None, 'isNotNull({field})')}]),
                 mapped_expression='tuple(x.consequenceTerms, x.geneId)',
