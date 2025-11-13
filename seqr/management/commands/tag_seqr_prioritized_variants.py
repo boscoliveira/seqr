@@ -87,11 +87,13 @@ class Command(BaseCommand):
 
     @classmethod
     def _run_dataset_type_searches(cls, dataset_type, searches, family_variant_data, search_counts, family_guid_map, project, exclude_genes, gene_by_moi, exclude):
+        is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
         sample_qs = get_search_samples([project]).filter(dataset_type=dataset_type)
+        if is_sv:
+            sample_qs = sample_qs.exclude(individual__sv_flags__contains=['outlier_num._calls'])
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         assert len(sample_types) == 1
         sample_type = sample_types[0]
-        is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
         if is_sv:
             dataset_type = f'{dataset_type}_{sample_type}'
         samples_by_family = {
@@ -119,7 +121,7 @@ class Command(BaseCommand):
                 metadata_key = 'matched_comp_het_searches'
                 results = [variant for variant_pair in get_data_type_comp_het_results_queryset(
                     GENOME_VERSION_GRCh38, dataset_type, sample_data, **search_kwargs,
-                ) for variant in cls._format_com_het_variants(variant_pair, is_sv)]
+                ) for variant in cls._format_com_het_variants(variant_pair)]
 
                 secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
                 if require_mane_consequences or secondary_consequences:
@@ -199,16 +201,17 @@ class Command(BaseCommand):
         return wrapped
 
     @staticmethod
-    def _format_com_het_variants(variant_tuple, is_sv):
-        consequence_field = 'sortedGeneConsequences' if is_sv else 'sortedTranscriptConsequences'
-        v1, v2 = [{
-            **variant,
-            'genotypes': clickhouse_genotypes_json(variant['genotypes']),
-            'gene_ids': list(dict.fromkeys([csq['geneId'] for csq in variant[consequence_field]])),
-        } for variant in variant_tuple[1:]]
+    def _format_com_het_variants(variant_tuple):
+        v1, v2 = [
+            {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])} for variant in variant_tuple[1:]
+        ]
         v1['support_vars'] = {v2['variantId']: v2}
         v2['support_vars'] = {v1['variantId']: v1}
-        return [v1, v2]
+        com_het = [v1, v2]
+        for variant in com_het:
+            if 'transcripts' not in variant:
+                variant['gene_ids'] = list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']]))
+        return com_het
 
     @staticmethod
     def _valid_mane_keys(results, allowed_consequences):

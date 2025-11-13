@@ -411,28 +411,6 @@
       }
     },
     "SV": {
-      "SV - Compound Heterozygous": {
-        "gene_list_moi": "R",
-        "inheritance_mode": "compound_het",
-        "annotations": {
-          "structural_consequence": [
-            "LOF",
-            "INTRAGENIC_EXON_DUP"
-          ]
-        },
-        "freqs": {
-          "sv_callset": {
-            "ac": 500
-          },
-          "gnomad_svs": {
-            "ac": 0.01
-          }
-        },
-        "qualityFilter": {
-          "min_qg_sv": 90,
-          "vcf_filter": "PASS"
-        }
-      },
       "SV - De Novo/ Dominant": {
         "gene_list_moi": "D",
         "inheritance_mode": "de_novo",
