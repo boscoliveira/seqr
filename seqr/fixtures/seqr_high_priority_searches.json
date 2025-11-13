@@ -411,7 +411,35 @@
       }
     },
     "SV": {
+      "SV - Compound Heterozygous": {
+         "family_filter": {
+          "confirmed_inheritance": true
+        },
+        "gene_list_moi": "R",
+        "inheritance_mode": "compound_het",
+        "annotations": {
+          "structural_consequence": [
+            "LOF",
+            "INTRAGENIC_EXON_DUP"
+          ]
+        },
+        "freqs": {
+          "sv_callset": {
+            "ac": 500
+          },
+          "gnomad_svs": {
+            "ac": 0.01
+          }
+        },
+        "qualityFilter": {
+          "min_gq_sv": 90,
+          "vcf_filter": "PASS"
+        }
+      },
       "SV - De Novo/ Dominant": {
+        "family_filter": {
+          "confirmed_inheritance": true
+        },
         "gene_list_moi": "D",
         "inheritance_mode": "de_novo",
         "annotations": {
@@ -430,7 +458,7 @@
         },
         "qualityFilter": {
           "vcf_filter": "PASS",
-          "min_qg_sv": 90
+          "min_gq_sv": 90
         }
       },
       "SV - Recessive": {
@@ -451,7 +479,7 @@
           }
         },
         "qualityFilter": {
-          "min_qg_sv": 90
+          "min_gq_sv": 90
         }
       }
     }
