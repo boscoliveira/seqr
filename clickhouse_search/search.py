@@ -383,7 +383,7 @@ def _no_affected_male_families(sample_data, user):
 def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
     if not (genes or intervals):
         return False
-    return bool('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
+    return all('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
 
 
 OMIM_SORT = 'in_omim'
