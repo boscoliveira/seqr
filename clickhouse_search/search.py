@@ -120,7 +120,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
             'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families]
         }
         sv_entries = ENTRY_CLASS_MAP[genome_version][sv_dataset_type].objects.search(
-            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True,
+            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True, skip_individual_guid=skip_individual_guid,
         )
         sv_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][sv_dataset_type]
         sv_q = sv_annotations_cls.objects.subquery_join(sv_entries).search(**search_kwargs, annotations=annotations)
