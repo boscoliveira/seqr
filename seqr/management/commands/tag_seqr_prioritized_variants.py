@@ -1,7 +1,7 @@
 from collections import defaultdict
 from datetime import datetime
 from django.contrib.postgres.aggregates import ArrayAgg
-from django.core.management.base import BaseCommand
+from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q, F
 from django.db.models.functions import JSONObject
 import json
@@ -99,7 +99,8 @@ class Command(BaseCommand):
         if is_sv:
             sample_qs = sample_qs.exclude(individual__sv_flags__contains=['outlier_num._calls'])
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
-        assert len(sample_types) == 1
+        if len(sample_types) > 1:
+            raise CommandError('Variant prioritization not supported for projects with multiple sample types')
         sample_type = sample_types[0]
         if is_sv:
             dataset_type = f'{dataset_type}_{sample_type}'
