@@ -483,5 +483,57 @@
         }
       }
     }
+  },
+  "multi_data_type_searches": {
+    "Compound Heterozygous - One SV": {
+      "annotations": {
+        "structural_consequence": [
+          "LOF",
+          "INTRAGENIC_EXON_DUP"
+        ],
+        "vep_consequences": [
+          "stop_lost",
+          "start_lost",
+          "inframe_insertion",
+          "inframe_deletion",
+          "protein_altering_variant",
+          "missense_variant",
+          "splice_donor_5th_base_variant",
+          "splice_region_variant",
+          "splice_donor_region_variant",
+          "splice_polypyrimidine_tract_variant",
+          "extended_intronic_splice_region_variant"
+        ]
+      },
+      "in_silico": {
+        "cadd": 25,
+        "revel": 0.6
+      },
+      "freqs": {
+        "callset": {
+          "ac": 1000
+        },
+        "sv_callset": {
+          "ac": 500
+        },
+        "gnomad_exomes": {
+          "af": 0.01,
+          "hh": 2
+        },
+        "gnomad_genomes": {
+          "af": 0.01,
+          "hh": 2
+        },
+        "gnomad_svs": {
+          "ac": 0.01
+        }
+      },
+      "qualityFilter": {
+        "min_gq_sv": 90,
+        "min_gq": 30,
+        "min_ab": 20,
+        "vcf_filter": "PASS"
+      }
+    }
   }
 }

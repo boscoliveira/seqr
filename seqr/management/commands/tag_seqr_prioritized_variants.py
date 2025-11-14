@@ -8,10 +8,11 @@ import json
 import os
 
 from clickhouse_backend.models import ArrayField, StringField
+
 from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import ArrayFilter, ArrayMap
 from clickhouse_search.search import get_search_queryset, get_transcripts_queryset, clickhouse_genotypes_json, \
-    get_data_type_comp_het_results_queryset, SAMPLE_DATA_FIELDS, SELECTED_GENE_FIELD
+    get_data_type_comp_het_results_queryset, get_multi_data_type_comp_het_results_queryset, SAMPLE_DATA_FIELDS, SELECTED_GENE_FIELD
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, Sample, LocusList
@@ -49,11 +50,17 @@ class Command(BaseCommand):
 
         family_variant_data = defaultdict(lambda: {'matched_searches': set(), 'matched_comp_het_searches': set(), 'support_vars': set()})
         search_counts = {}
+        samples_by_dataset_type = {}
         for dataset_type, searches in config['searches'].items():
             self._run_dataset_type_searches(
-                dataset_type, searches, family_variant_data, search_counts, family_guid_map,
+                dataset_type, searches, family_variant_data, search_counts, samples_by_dataset_type, family_guid_map,
                 project, exclude_genes, gene_by_moi, exclude=config['exclude'],
             )
+
+        self._run_multi_data_type_comp_het_search(
+            config['multi_data_type_searches'], family_variant_data, search_counts, samples_by_dataset_type,
+            family_guid_map, project, exclude=config['exclude'], genes=gene_by_moi['R'],
+        )
 
         today = datetime.now().strftime('%Y-%m-%d')
         new_tag_keys, num_updated, num_skipped = bulk_create_tagged_variants(
@@ -86,7 +93,7 @@ class Command(BaseCommand):
         )
 
     @classmethod
-    def _run_dataset_type_searches(cls, dataset_type, searches, family_variant_data, search_counts, family_guid_map, project, exclude_genes, gene_by_moi, exclude):
+    def _run_dataset_type_searches(cls, dataset_type, searches, family_variant_data, search_counts, samples_by_dataset_type, family_guid_map, project, exclude_genes, gene_by_moi, exclude):
         is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
         sample_qs = get_search_samples([project]).filter(dataset_type=dataset_type)
         if is_sv:
@@ -102,6 +109,7 @@ class Command(BaseCommand):
             ).values_list('individual__family__guid', 'samples')
             if any(s['affected'] == Individual.AFFECTED_STATUS_AFFECTED for s in samples)
         }
+        samples_by_dataset_type[dataset_type] = samples_by_family
 
         logger.info(f'Searching for prioritized {dataset_type} variants in {len(samples_by_family)} families in project {project.name}')
         for search_name, config_search in searches.items():
@@ -119,7 +127,7 @@ class Command(BaseCommand):
             search_counts[search_name] = num_results
 
     @classmethod
-    def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter):
+    def _get_valid_family_sample_data(cls, project, sample_type, samples_by_family, family_filter=None):
         if family_filter:
             samples_by_family = {
                 family_guid: samples for family_guid, samples in samples_by_family.items()
@@ -181,9 +189,37 @@ class Command(BaseCommand):
 
     @classmethod
     def _run_comp_het_search(cls, search_name, config_search, family_variant_data, family_guid_map, dataset_type, sample_data, **kwargs):
-        results = [v[1:] for v in get_data_type_comp_het_results_queryset(
+        queryset = get_data_type_comp_het_results_queryset(
             GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs,
-        )]
+        )
+        return cls._execute_comp_het_search(
+            queryset, search_name, config_search, family_variant_data, family_guid_map, config_search.get('no_secondary_annotations'),
+        )
+
+    @classmethod
+    def _run_multi_data_type_comp_het_search(cls, searches, family_variant_data, search_counts, samples_by_dataset_type, family_guid_map, project, **kwargs):
+        sv_dataset_type = next(dt for dt in samples_by_dataset_type.keys() if dt.startswith('SV'))
+        sample_type = sv_dataset_type.split('_')[-1]
+        families = set(samples_by_dataset_type[sv_dataset_type].keys()).intersection(samples_by_dataset_type[Sample.DATASET_TYPE_VARIANT_CALLS].keys())
+        sv_sample_data = cls._get_valid_family_sample_data(project, sample_type, {
+            guid: samples for guid, samples in samples_by_dataset_type[sv_dataset_type].items() if guid in families
+        })
+        snv_indel_sample_data = cls._get_valid_family_sample_data(project, sample_type, {
+            guid: samples for guid, samples in samples_by_dataset_type[Sample.DATASET_TYPE_VARIANT_CALLS].items() if guid in families
+        })
+        logger.info(f'Searching for prioritized multi data type variants in {len(families)} families in project {project.name}')
+        for search_name, config_search in searches.items():
+            queryset = get_multi_data_type_comp_het_results_queryset(
+                GENOME_VERSION_GRCh38, sv_dataset_type, sv_sample_data, snv_indel_sample_data, num_families=len(families),
+                **config_search, **kwargs,
+            )
+            num_results = cls._execute_comp_het_search(queryset, search_name, config_search, family_variant_data, family_guid_map)
+            logger.info(f'Found {num_results} variants for criteria: {search_name}')
+            search_counts[search_name] = num_results
+
+    @classmethod
+    def _execute_comp_het_search(cls, queryset, search_name, config_search, family_variant_data, family_guid_map, no_secondary_annotations=True):
+        results = [v[1:] for v in queryset]
 
         primary_consequences = config_search.get('annotations', {}).get('vep_consequences')
         secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
@@ -193,8 +229,7 @@ class Command(BaseCommand):
             if secondary_consequences:
                 allowed_secondary_key_genes = cls._valid_mane_keys(keys, secondary_consequences)
             else:
-                allowed_secondary_key_genes = None if config_search.get(
-                    'no_secondary_annotations') else allowed_key_genes
+                allowed_secondary_key_genes = None if no_secondary_annotations else allowed_key_genes
             results = [
                 pair for pair in results
                 if allowed_key_genes.get(pair[0]['key']) == pair[0][SELECTED_GENE_FIELD] and (
