@@ -17,6 +17,7 @@
   "searches": {
     "SNV_INDEL": {
       "Clinvar Pathogenic": {
+        "gene_list_moi": "D",
         "inheritance_mode": "any_affected",
         "pathogenicity": {
           "clinvar": [
