@@ -153,7 +153,8 @@ class Command(BaseCommand):
             if not proband:
                 return False
             loaded_unaffected_guids = {s['individual_guid'] for s in samples if s['affected'] == Individual.AFFECTED_STATUS_UNAFFECTED}
-            return proband['maternal_guid'] in loaded_unaffected_guids and proband['paternal_guid'] in loaded_unaffected_guids
+            is_confirmed = proband['maternal_guid'] in loaded_unaffected_guids and proband['paternal_guid'] in loaded_unaffected_guids
+            return (not is_confirmed) if family_filter['confirmed_inheritance'] == False else is_confirmed
         return True
 
     @staticmethod
