@@ -143,8 +143,8 @@ class Command(BaseCommand):
             proband = next((s for s in affected if s['maternal_guid'] and s['paternal_guid']), None)
             if not proband:
                 return False
-            loaded_guids = {s['individual_guid'] for s in samples}
-            return proband['maternal_guid'] in loaded_guids and proband['paternal_guid'] in loaded_guids
+            loaded_unaffected_guids = {s['individual_guid'] for s in samples if s['affected'] == Individual.AFFECTED_STATUS_UNAFFECTED}
+            return proband['maternal_guid'] in loaded_unaffected_guids and proband['paternal_guid'] in loaded_unaffected_guids
         return True
 
     @staticmethod
