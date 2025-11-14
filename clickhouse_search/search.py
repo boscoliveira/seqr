@@ -133,9 +133,9 @@ def _get_multi_data_type_comp_het_results(genome_version, sample_data_by_dataset
     return results
 
 
-def get_multi_data_type_comp_het_results_queryset(genome_version, sv_dataset_type, sv_sample_data, snv_indel_sample_data, num_families, skip_individual_guid=False, exclude_key_pairs=None, **kwargs):
+def get_multi_data_type_comp_het_results_queryset(genome_version, sv_dataset_type, sv_sample_data, snv_indel_sample_data, num_families, exclude_key_pairs=None, **kwargs):
     entries = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS].objects.search(
-        snv_indel_sample_data, skip_individual_guid=skip_individual_guid, **kwargs,
+        snv_indel_sample_data, **kwargs,
         inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True, annotate_hom_alts=True)
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
     snv_indel_q = annotations_cls.objects.subquery_join(entries).search(**kwargs)
@@ -412,7 +412,7 @@ def _no_affected_male_families(sample_data, user):
 def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
     if not (genes or intervals):
         return False
-    return bool('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
+    return all('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
 
 
 OMIM_SORT = 'in_omim'
