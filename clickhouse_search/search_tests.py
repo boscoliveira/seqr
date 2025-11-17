@@ -1564,7 +1564,7 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         variant3 = {**VARIANT3, 'selectedMainTranscriptId': 'ENST00000497611'}
         del variant3['familyGuids']
         del variant3['genotypes']
-        expected_response['searchedVariants'].append(variant3)
+        expected_response['searchedVariants'].insert(0, variant3)
         expected_response['genesById']['ENSG00000177000'] = mock.ANY
         self.assertDictEqual(response.json(), expected_response)
 

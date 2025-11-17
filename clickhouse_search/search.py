@@ -76,8 +76,10 @@ def get_search_queryset(genome_version, dataset_type, sample_data, **search_kwar
     return annotations_cls.objects.subquery_join(entries).search(**search_kwargs)
 
 
-def _get_search_results(*args, skip_entry_fields=False, **search_kwargs):
+def _get_search_results(*args, skip_entry_fields=False, order_by=None, **search_kwargs):
     results = get_search_queryset(*args, skip_entry_fields=skip_entry_fields, **search_kwargs)
+    if order_by:
+        results = results.order_by(order_by)
     return _evaluate_results(results.result_values(skip_entry_fields=skip_entry_fields))
 
 
@@ -552,7 +554,7 @@ def _get_sort_key(sort, gene_metadata):
 def clickhouse_variant_gene_lookup(user, gene, genome_version, search):
     logger.info(f'Looking up variants in gene {gene["geneId"]}', user)
     results = _get_search_results(
-        genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data=None, genes={gene['geneId']: gene}, skip_entry_fields=True, **search,
+        genome_version, Sample.DATASET_TYPE_VARIANT_CALLS, sample_data=None, genes={gene['geneId']: gene}, skip_entry_fields=True, order_by='xpos', **search,
     )
     return format_clickhouse_results(results, genome_version)
 
