@@ -53,3 +53,9 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
         ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  SNV_INDEL_MATCHES.items()] + [
             (f'  {criteria}: {count} variants', None) for criteria, count in  SV_MATCHES.items()
         ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  MULTI_TYPE_MATCHES.items()])
+
+        # Test models
+
+        # Test notifications
+
+        # Test no new variants to tag
