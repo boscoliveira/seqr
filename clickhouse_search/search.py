@@ -71,9 +71,11 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     return format_clickhouse_results(cache_results['all_results'][(page-1)*num_results:page*num_results], genome_version)
 
 
-def _get_search_results(entry_cls, annotations_cls, sample_data, skip_entry_fields=False, **search_kwargs):
+def _get_search_results(entry_cls, annotations_cls, sample_data, skip_entry_fields=False, order_by=None, **search_kwargs):
     entries = entry_cls.objects.search(sample_data, skip_entry_fields=skip_entry_fields, **search_kwargs)
     results = annotations_cls.objects.subquery_join(entries).search(**search_kwargs)
+    if order_by:
+        results = results.order_by(order_by)
     return _evaluate_results(results.result_values(skip_entry_fields=skip_entry_fields))
 
 
@@ -525,7 +527,7 @@ def clickhouse_variant_gene_lookup(user, gene, genome_version, search):
     entry_cls = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
     results = _get_search_results(
-        entry_cls, annotations_cls, sample_data=None, genes={gene['geneId']: gene}, skip_entry_fields=True, **search,
+        entry_cls, annotations_cls, sample_data=None, genes={gene['geneId']: gene}, skip_entry_fields=True, order_by='xpos', **search,
     )
     return format_clickhouse_results(results, genome_version)
 
