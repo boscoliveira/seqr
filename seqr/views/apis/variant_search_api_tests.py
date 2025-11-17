@@ -120,7 +120,6 @@ EXPECTED_SEARCH_RESPONSE = {
     'locusListsByGuid': {LOCUS_LIST_GUID: {'intervals': mock.ANY}},
     'rnaSeqData': {
         'I000001_na19675': {'outliers': {'ENSG00000268903': mock.ANY}, 'spliceOutliers': {'ENSG00000268903': mock.ANY}},
-        'I000003_na19679': {'outliers': {}, 'spliceOutliers': {'ENSG00000268903': mock.ANY}},
     },
     'phenotypeGeneScores': {
         'I000001_na19675': {'ENSG00000268903': {'exomiser': EXPECTED_EXOMISER_DATA}},
@@ -1034,6 +1033,7 @@ class VariantSearchAPITest(object):
         expected_body['variantTagsByGuid']['VT1726961_2103343353_r0005_tes'] = EXPECTED_TAG
         for k in ['VT1708633_2103343353_r0390_100', 'VT1726961_2103343353_r0390_100']:
             del expected_body['variantTagsByGuid'][k]
+        expected_body['rnaSeqData']['I000019_na21987'] = {'outliers': {}, 'spliceOutliers': {'ENSG00000268903': mock.ANY}}
 
         self.assertDictEqual(response.json(), expected_body)
         mock_variant_lookup.assert_called_with(
