@@ -598,7 +598,7 @@ class Command(BaseCommand):
             )
         ]
         require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
-        if require_mane_consequences:
+        if results and require_mane_consequences:
             allowed_key_genes = cls._valid_mane_keys([v['key'] for v in results], require_mane_consequences)
             results = [r for r in results if r['key'] in allowed_key_genes]
 
@@ -646,7 +646,7 @@ class Command(BaseCommand):
 
         primary_consequences = config_search.get('annotations', {}).get('vep_consequences')
         secondary_consequences = config_search.get('annotations_secondary', {}).get('vep_consequences')
-        if primary_consequences or secondary_consequences:
+        if results and (primary_consequences or secondary_consequences):
             keys = [v['key'] for pair in results for v in pair]
             allowed_key_genes = cls._valid_mane_keys(keys, primary_consequences)
             if secondary_consequences:
@@ -655,9 +655,9 @@ class Command(BaseCommand):
                 allowed_secondary_key_genes = None if no_secondary_annotations else allowed_key_genes
             results = [
                 pair for pair in results
-                if allowed_key_genes.get(pair[0]['key']) == pair[0][SELECTED_GENE_FIELD] and (
+                if pair[0][SELECTED_GENE_FIELD] in allowed_key_genes.get(pair[0]['key'], []) and (
                     allowed_secondary_key_genes is None or
-                    allowed_secondary_key_genes.get(pair[1]['key']) ==pair[1][SELECTED_GENE_FIELD]
+                    pair[1][SELECTED_GENE_FIELD] in allowed_secondary_key_genes.get(pair[1]['key'], [])
                 )
             ]
 
@@ -683,10 +683,11 @@ class Command(BaseCommand):
                 output_field=ArrayField(NamedTupleField([('consequenceTerms', ArrayField(StringField())), ('geneId', StringField())])),
             )
         )
-        return {
-            key: mane_transcripts[0]['geneId'] for key, mane_transcripts in mane_transcripts_by_key
-            if mane_transcripts and set(allowed_consequences).intersection(mane_transcripts[0]['consequenceTerms'])
+        mane_transcript_genes = {
+            key: {t['geneId'] for t in mane_transcripts if set(allowed_consequences).intersection(t['consequenceTerms'])}
+            for key, mane_transcripts in mane_transcripts_by_key
         }
+        return {key: genes for key, genes in mane_transcript_genes.items() if genes}
 
     @staticmethod
     def _get_gene_list_genes(name, confidences, gene_by_moi, exclude_gene_ids):

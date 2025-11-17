@@ -215,7 +215,7 @@ def _set_updated_tags(key: tuple[int, str], metadata: dict[str, dict], comp_het_
             }, user)
             tag.saved_variants.set(variants)
             existing_tags[variant_id_key] = True
-            new_tag_keys.add(variant_id_key)
+            new_tag_keys.add((key[0], variant_id_key))
 
     return updated_tag
 
