@@ -1191,12 +1191,13 @@ class EntriesManager(SearchQuerySet):
                     should_filter_interval = True
                 intervals = [{'chrom': chrom, 'start': MIN_POS, 'end': MAX_POS} for chrom in chromosomes]
 
-        if not (genes or intervals or require_any_gene):
+        if hasattr(self.model, 'is_annotated_in_any_gene') and (require_any_gene or (genes and not intervals)):
+            entries = entries.filter(is_annotated_in_any_gene=Value(True))
+
+        if not (genes or intervals):
             return entries
 
         locus_q = None
-        if hasattr(self.model, 'is_annotated_in_any_gene') and (require_any_gene or (genes and not intervals)):
-            entries = entries.filter(is_annotated_in_any_gene=Value(True))
         if genes:
             should_filter_interval |= (not hasattr(self.model, 'geneId_ids')) or exclude_locations or len(genes) < self.model.MAX_XPOS_FILTER_INTERVALS
             if should_filter_interval:
