@@ -49,7 +49,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
                 'dbEntity': 'VariantTag', 'entityId': f'VT{db_id}_seqr_prioritized', 'updateFields': ['metadata', 'variant_tag_type'], 'updateType': 'create',
             }}) for db_id in range(1726986, 1726988)
         ] + [
-            ('Tagged 1 new and 0 previously tagged variants in 1 families, found 0 unchanged tags:', None),
+            ('Tagged 2 new and 0 previously tagged variants in 1 families, found 0 unchanged tags:', None),
         ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  SNV_INDEL_MATCHES.items()] + [
             (f'  {criteria}: {count} variants', None) for criteria, count in  SV_MATCHES.items()
         ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  MULTI_TYPE_MATCHES.items()])
