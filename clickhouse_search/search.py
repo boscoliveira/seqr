@@ -120,7 +120,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
             'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families]
         }
         sv_entries = ENTRY_CLASS_MAP[genome_version][sv_dataset_type].objects.search(
-            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True,
+            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True, skip_individual_guid=skip_individual_guid,
         )
         sv_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][sv_dataset_type]
         sv_q = sv_annotations_cls.objects.subquery_join(sv_entries).search(**search_kwargs, annotations=annotations)
@@ -383,7 +383,7 @@ def _no_affected_male_families(sample_data, user):
 def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
     if not (genes or intervals):
         return False
-    return bool('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
+    return all('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
 
 
 OMIM_SORT = 'in_omim'
