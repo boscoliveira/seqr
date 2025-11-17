@@ -4,8 +4,6 @@ from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q, F
 from django.db.models.functions import JSONObject
-import json
-import os
 
 from clickhouse_backend.models import ArrayField, StringField
 
