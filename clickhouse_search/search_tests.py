@@ -28,14 +28,11 @@ from seqr.views.apis.variant_search_api import gene_variant_lookup
 
 from settings import DATABASES
 
-class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, TransactionTestCase):
-    databases = '__all__'
-    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
+
+class ClickhouseSearchTestCase(AnvilAuthenticationTestMixin, TransactionTestCase):
 
     def setUp(self):
-        super().set_up()
         super().set_up_test()
-        self.mock_redis.get.return_value = None
 
     def _fixture_setup(self): # pylint: disable=arguments-differ
         # TransactionTestCase does not call setupTestData in the same way as TestCase
@@ -55,6 +52,16 @@ class ClickhouseSearchTests(SearchTestHelper, AnvilAuthenticationTestMixin, Tran
                 cursor.execute(f'SYSTEM RELOAD DICTIONARY "{table_base}/gt_stats_dict"')
         Project.objects.update(genome_version='38')
         AnvilAuthenticationTestMixin.set_up_users()
+
+
+class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
+    databases = '__all__'
+    fixtures = ['users', '1kg_project', 'variant_searches', 'reference_data', 'clickhouse_transcripts']
+
+    def setUp(self):
+        super().set_up()
+        super().setUp()
+        self.mock_redis.get.return_value = None
 
     def _assert_expected_search(self, expected_results, gene_counts=None, inheritance_mode=None, inheritance_filter=None, quality_filter=None, cached_variant_fields=None, sort='xpos', results_model=None, **search_kwargs):
         results_model = results_model or self.results_model
