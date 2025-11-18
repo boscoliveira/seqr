@@ -716,6 +716,6 @@ class Command(BaseCommand):
 
         dominant_gene_ids = [g['gene_id'] for g in moi_gene_ids if g['is_dominant']]
         recessive_gene_ids = [g['gene_id'] for g in moi_gene_ids if g['is_recessive']]
-        genes_by_id = get_genes(dominant_gene_ids + dominant_gene_ids, genome_version=GENOME_VERSION_GRCh38, additional_model_fields=['id'])
+        genes_by_id = get_genes(dominant_gene_ids + recessive_gene_ids, genome_version=GENOME_VERSION_GRCh38, additional_model_fields=['id'])
         gene_by_moi['D'].update({gene_id: gene for gene_id, gene in genes_by_id.items() if gene_id in set(dominant_gene_ids)})
         gene_by_moi['R'].update({gene_id: gene for gene_id, gene in genes_by_id.items() if gene_id in set(recessive_gene_ids)})
