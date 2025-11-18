@@ -43,13 +43,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
 
         call_command('tag_seqr_prioritized_variants', PROJECT_GUID)
 
-        self.assert_json_logs(user=None, expected=[
-            ('Searching for prioritized SNV_INDEL variants in 3 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
-        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in SNV_INDEL_MATCHES.items()] + [
-            ('Searching for prioritized SV_WES variants in 1 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
-        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in SV_MATCHES.items()] + [
-            ('Searching for prioritized multi data type variants in 1 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
-        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in MULTI_TYPE_MATCHES.items()] + [
+        self._assert_expected_logs([
             ('create 5 SavedVariants', {
                 'dbUpdate': {'dbEntity': 'SavedVariant', 'entityIds': mock.ANY, 'updateType': 'bulk_create'},
             }),
@@ -59,9 +53,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
             }}) for db_id in range(1726986, 1726991)
         ] + [
             ('Tagged 5 new and 0 previously tagged variants in 1 families, found 0 unchanged tags:', None),
-        ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  SNV_INDEL_MATCHES.items()] + [
-            (f'  {criteria}: {count} variants', None) for criteria, count in  SV_MATCHES.items()
-        ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  MULTI_TYPE_MATCHES.items()])
+        ])
 
         new_saved_variants = SavedVariant.objects.filter(key__in=[2, 3, 4, 18, 19]).order_by('key').values(
             'key', 'variant_id', 'family_id', 'dataset_type', 'xpos', 'xpos_end', 'ref', 'alt', 'gene_ids', 'genotypes', 'saved_variant_json',
@@ -114,3 +106,25 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
         )
 
         # Test no new variants to tag
+        self.reset_logs()
+        mock_email.reset_mock()
+        mock_slack.reset_mock()
+        call_command('tag_seqr_prioritized_variants', PROJECT_GUID)
+        self._assert_expected_logs([
+            ('Tagged 0 new and 0 previously tagged variants in 1 families, found 5 unchanged tags:', None),
+        ])
+        mock_email.assert_not_called()
+        mock_slack.assert_not_called()
+
+    def _assert_expected_logs(self, model_creation_logs):
+        self.assert_json_logs(user=None, expected=[
+            ('Searching for prioritized SNV_INDEL variants in 3 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
+        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in SNV_INDEL_MATCHES.items()] + [
+            ('Searching for prioritized SV_WES variants in 1 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
+        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in SV_MATCHES.items()] + [
+            ('Searching for prioritized multi data type variants in 1 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
+        ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in MULTI_TYPE_MATCHES.items()] +
+        model_creation_logs + [(f'  {criteria}: {count} variants', None) for criteria, count in  SNV_INDEL_MATCHES.items()] + [
+            (f'  {criteria}: {count} variants', None) for criteria, count in  SV_MATCHES.items()
+        ] + [(f'  {criteria}: {count} variants', None) for criteria, count in  MULTI_TYPE_MATCHES.items()])
+
