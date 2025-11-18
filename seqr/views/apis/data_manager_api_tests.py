@@ -1162,11 +1162,11 @@ class DataManagerAPITest(AirtableTest):
                 f'has been loaded in seqr project {project_link}\n\nAll the best,\nThe seqr team'
             )
             calls.append(
-                mock.call(email_body=expected_email_body,
+                mock.call(
+                    email_body=expected_email_body,
                     subject=f'New {notif_dict["data_type"]} data available in seqr',
                     to=['test_user_manager@test.com'],
                     process_message=_set_bulk_notification_stream,
-
                 )
             )
         mock_send_email.assert_has_calls(calls)

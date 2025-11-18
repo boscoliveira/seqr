@@ -122,7 +122,6 @@ class PaLocusListAPITest(AuthenticationTestCase, BaseLocusListAPITest):
 
         # and has expected logs
         self.assertEqual(len(responses.calls), 7)
-        self.maxDiff = None
         self.assert_json_logs(None, [
             ('Starting import of all gene lists from Panel App [https://test-panelapp.url.au/api]', None),
             ('Importing panel id 260', None),
