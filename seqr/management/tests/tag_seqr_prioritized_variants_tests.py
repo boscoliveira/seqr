@@ -1,3 +1,4 @@
+from datetime import datetime
 from django.core.management import call_command
 import mock
 
@@ -34,7 +35,10 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
 
     @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
     @mock.patch('seqr.utils.communication_utils._post_to_slack')
-    def test_command(self, mock_slack, mock_email):
+    @mock.patch('seqr.management.commands.tag_seqr_prioritized_variants.datetime')
+    def test_command(self, mock_datetime, mock_slack, mock_email):
+        mock_datetime.now.return_value = datetime(2025, 11, 15)
+
         call_command('tag_seqr_prioritized_variants', PROJECT_GUID)
         self.assert_json_logs(user=None, expected=[
             ('Searching for prioritized SNV_INDEL variants in 3 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
@@ -76,6 +80,18 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
             'xpos_end': 17038735703, 'ref': None, 'alt': None, 'gene_ids': ['ENSG00000275023', 'ENSG00000277258', 'ENSG00000277972'],
             'genotypes': GCNV_VARIANT4['genotypes'], 'saved_variant_json': {},
         }])
+
+        tags = VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized').order_by('id')
+        self.assertListEqual(list(tags.values_list('metadata', flat=True)), [
+            '{"Clinvar Pathogenic - Recessive": "2025-11-15", "Recessive": "2025-11-15"}',
+            '{"Compound Heterozygous - One SV": "2025-11-15"}',
+            '{"Compound Heterozygous": "2025-11-15"}',
+            '{"SV - Recessive": "2025-11-15"}',
+            '{"SV - Compound Heterozygous": "2025-11-15"}',
+        ])
+        self.assertListEqual([list(tag.saved_variants.values_list('key', flat=True)) for tag in tags], [
+            [2], [2, 19], [3, 4], [18], [18, 19],
+        ])
 
         # Test notifications
 
