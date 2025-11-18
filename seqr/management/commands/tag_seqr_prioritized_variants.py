@@ -588,13 +588,19 @@ class Command(BaseCommand):
     def _run_search(cls, search_name, config_search, family_variant_data, family_guid_map, dataset_type, sample_data, **kwargs):
         variant_fields = ['pos', 'end'] if dataset_type.startswith('SV') else ['ref', 'alt']
         variant_values = {'endChrom': F('end_chrom')} if dataset_type == 'SV_WGS' else {}
+
+        results_qs = get_search_queryset(GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs)
+        genotype_overrides_expressions = results_qs.genotype_override_values(results_qs)
+        if genotype_overrides_expressions:
+            variant_values.update({k: genotype_overrides_expressions[k] for k in ['genotypes', 'transcripts']})
+        else:
+            results_qs = gene_ids_annotated_queryset(results_qs)
+            variant_fields += ['genotypes', 'gene_ids']
+
         results = [
             {**variant, 'genotypes': clickhouse_genotypes_json(variant['genotypes'])}
-            for variant in gene_ids_annotated_queryset(get_search_queryset(
-                GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs,
-            )).values(
-                *variant_fields, 'key', 'xpos', 'familyGuids', 'genotypes', 'gene_ids',
-                variantId=F('variant_id'), **variant_values,
+            for variant in results_qs.values(
+                *variant_fields, 'key', 'xpos', 'variant_id', 'familyGuids', **variant_values,
             )
         ]
         require_mane_consequences = config_search.get('annotations', {}).get('vep_consequences')
@@ -604,7 +610,7 @@ class Command(BaseCommand):
 
         for variant in results:
             for family_guid in variant.pop('familyGuids'):
-                variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
+                variant_data = family_variant_data[(family_guid_map[family_guid], variant['variant_id'])]
                 variant_data.update(variant)
                 variant_data['matched_searches'].add(search_name)
 
