@@ -159,7 +159,7 @@ def bulk_create_tagged_variants(family_variant_data, tag_name, get_metadata, use
     update_tags = []
     new_tag_keys = set()
     num_skipped = 0
-    for key, variant in family_variant_data.items():
+    for key, variant in sorted(family_variant_data.items()):
         metadata = get_metadata(variant)
         comp_het_metadata = get_comp_het_metadata(variant) if get_comp_het_metadata else None
         updated_tag = _set_updated_tags(

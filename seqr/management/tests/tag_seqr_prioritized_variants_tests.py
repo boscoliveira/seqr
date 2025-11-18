@@ -1,5 +1,6 @@
 from datetime import datetime
 from django.core.management import call_command
+import json
 import mock
 
 from clickhouse_search.search_tests import ClickhouseSearchTestCase
@@ -33,6 +34,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
     databases = '__all__'
     fixtures = ['users', '1kg_project', 'reference_data', 'panelapp', 'clickhouse_transcripts']
 
+    @mock.patch('seqr.utils.communication_utils.BASE_URL', 'https://test-seqr.org/')
     @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
     @mock.patch('seqr.utils.communication_utils._post_to_slack')
     @mock.patch('seqr.management.commands.tag_seqr_prioritized_variants.datetime')
@@ -40,6 +42,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
         mock_datetime.now.return_value = datetime(2025, 11, 15)
 
         call_command('tag_seqr_prioritized_variants', PROJECT_GUID)
+
         self.assert_json_logs(user=None, expected=[
             ('Searching for prioritized SNV_INDEL variants in 3 families in project 1kg project n\u00e5me with uni\u00e7\u00f8de', None),
         ] + [(f'Found {count} variants for criteria: {criteria}', None) for criteria, count in SNV_INDEL_MATCHES.items()] + [
@@ -81,18 +84,33 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
             'genotypes': GCNV_VARIANT4['genotypes'], 'saved_variant_json': {},
         }])
 
-        tags = VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized').order_by('id')
-        self.assertListEqual(list(tags.values_list('metadata', flat=True)), [
-            '{"Clinvar Pathogenic - Recessive": "2025-11-15", "Recessive": "2025-11-15"}',
-            '{"Compound Heterozygous - One SV": "2025-11-15"}',
-            '{"Compound Heterozygous": "2025-11-15"}',
-            '{"SV - Recessive": "2025-11-15"}',
-            '{"SV - Compound Heterozygous": "2025-11-15"}',
-        ])
-        self.assertListEqual([list(tag.saved_variants.values_list('key', flat=True)) for tag in tags], [
-            [2], [2, 19], [3, 4], [18], [18, 19],
-        ])
+        tag_data = {
+            tuple(tag.saved_variants.values_list('key', flat=True)): json.loads(tag.metadata)
+            for tag in VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized')
+        }
+        self.assertDictEqual(tag_data, {
+            (2,): {"Clinvar Pathogenic - Recessive": "2025-11-15", "Recessive": "2025-11-15"},
+            (2, 19): {"Compound Heterozygous - One SV": "2025-11-15"},
+            (3, 4): {"Compound Heterozygous": "2025-11-15"},
+            (18,): {"SV - Recessive": "2025-11-15"},
+            (18, 19): {"SV - Compound Heterozygous": "2025-11-15"},
+        })
 
         # Test notifications
+        self.assertEqual(
+            str(self.manager_user.notifications.first()),
+            '1kg project nåme with uniçøde Loaded 5 new seqr prioritized variants 0 minutes ago',
+        )
+
+        mock_email.assert_called_with(
+            subject='New prioritized variants tagged in seqr',
+            to=['test_user_manager@test.com'],
+            body='Dear seqr user,\n\nThis is to notify you that 5 new seqr prioritized variants have been tagged in seqr project 1kg project nåme with uniçøde\n\nAll the best,\nThe seqr team',
+        )
+
+        mock_slack.assert_called_with(
+            'seqr-data-loading',
+            '5 new seqr prioritized variants are loaded in <https://test-seqr.org/project/R0001_1kg/project_page|1kg project nåme with uniçøde>\n```2: 5 new tags```',
+        )
 
         # Test no new variants to tag
