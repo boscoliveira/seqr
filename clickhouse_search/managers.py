@@ -921,8 +921,7 @@ class EntriesManager(SearchQuerySet):
                 gt_filter_map = ', '.join([f"{gt}, {samples_by_gt.get(gt, [])}" for gt in [-1, 0, 1, 2]])
                 gt_filter = (gt_filter_map, 'has(map({value})[ifNull({field}, -1)], x.sampleId)')
             else:
-                genotype_sample_map = ', '.join(
-                    [f"'{genotype or 'any'}', {samples}" for genotype, samples in samples_by_genotype.items()])
+                genotype_sample_map = ', '.join([f"'{genotype or 'any'}', {samples}" for genotype, samples in samples_by_genotype.items()])
                 gt_genotypes = defaultdict(list)
                 for genotype in samples_by_genotype.keys():
                     for gt in genotype_lookup[genotype]:
