@@ -947,9 +947,9 @@ class EntriesManager(SearchQuerySet):
             inheritance_mode_filters = self.INHERITANCE_FILTERS.get(inheritance_mode, {})
             affected_gts = genotype_lookup.get(inheritance_mode_filters.get(AFFECTED), [])
             unaffected_gts = genotype_lookup.get(inheritance_mode_filters.get(UNAFFECTED), [])
-            affected_gt_map = ['A', affected_gts, 'N', unaffected_gts, 'U', [-1, 0, 1, 2]]
+            affected_gt_map = f"map('A', {affected_gts}, 'N', {unaffected_gts}, 'U', [-1, 0, 1, 2])"
             affected_lookup = get_affected_template.format(field='x.sampleId')
-            gt_filter = (affected_gt_map, f'has(map({{value}})[{affected_lookup}], ifNull({{field}}, -1))')
+            gt_filter = (affected_gt_map, f'has({{value}}[{affected_lookup}], ifNull({{field}}, -1))')
 
         return affected_condition, unaffected_condition, gt_filter
 
