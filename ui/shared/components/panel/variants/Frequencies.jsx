@@ -251,12 +251,7 @@ const POPULATIONS = [
   { ...SV_CALLSET_POP, field: 'sv_seqr', fieldTitle: 'seqr' },
   CALLSET_POP,
   SEQR_POP,
-  {
-    field: 'exac',
-    fieldTitle: 'ExAC',
-    urls: { [GENOME_VERSION_37]: 'gnomad.broadinstitute.org' },
-    queryParams: { [GENOME_VERSION_37]: 'dataset=exac' },
-  },
+  { field: 'seqr_affected', fieldTitle: 'seqr Affected', acDisplay: 'AC' },
   {
     field: 'gnomad_exomes',
     fieldTitle: 'gnomAD exomes',
