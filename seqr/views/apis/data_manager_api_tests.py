@@ -1991,13 +1991,13 @@ Loading pipeline should be triggered with:
 
         updated_seqr_pops_by_key = dict(AnnotationsSnvIndel.objects.all().join_seqr_pop().values_list('key', 'seqrPop'))
         self.assertDictEqual(updated_seqr_pops_by_key, {
-            1: (2, 2, 1, 1),
-            2: (1, 1, 0, 0),
-            3: (0, 0, 0, 0),
-            4: (0, 0, 0, 0),
-            5: (1, 1, 0, 0),
-            6: (0, 0, 0, 0),
-            22: (0, 3, 0, 1),
+            1: (2, 2, 1, 1, 4, 2),
+            2: (1, 1, 0, 0, 2, 0),
+            3: (0, 0, 0, 0, 0, 0),
+            4: (0, 0, 0, 0, 0, 0),
+            5: (1, 1, 0, 0, 2, 0),
+            6: (0, 0, 0, 0, 0, 0),
+            22: (0, 3, 0, 1, 0, 0),
         })
 
         project_samples = Sample.objects.filter(individual__family__project__guid=PROJECT_GUID, is_active=True)
