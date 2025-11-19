@@ -76,16 +76,16 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
             'genotypes': GCNV_VARIANT4['genotypes'], 'saved_variant_json': {},
         }])
 
-        tag_data = {
-            tuple(tag.saved_variants.values_list('key', flat=True)): json.loads(tag.metadata)
-            for tag in VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized')
-        }
-        self.assertDictEqual(tag_data, {
+        expected_tags = {
             (2,): {"Clinvar Pathogenic - Recessive": "2025-11-15", "Recessive": "2025-11-15"},
             (2, 19): {"Compound Heterozygous - One SV": "2025-11-15"},
             (3, 4): {"Compound Heterozygous": "2025-11-15"},
             (18,): {"SV - Recessive": "2025-11-15"},
             (18, 19): {"SV - Compound Heterozygous": "2025-11-15"},
+        }
+        self.assertDictEqual(expected_tags, {
+            tuple(tag.saved_variants.values_list('key', flat=True)): json.loads(tag.metadata)
+            for tag in VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized')
         })
 
         # Test notifications
@@ -106,6 +106,7 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
         )
 
         # Test no new variants to tag
+        mock_datetime.now.return_value = datetime(2025, 12, 1)
         self.reset_logs()
         mock_email.reset_mock()
         mock_slack.reset_mock()
@@ -115,6 +116,10 @@ class CheckNewSamplesTest(ClickhouseSearchTestCase):
         ])
         mock_email.assert_not_called()
         mock_slack.assert_not_called()
+        self.assertDictEqual(expected_tags, {
+            tuple(tag.saved_variants.values_list('key', flat=True)): json.loads(tag.metadata)
+            for tag in VariantTag.objects.filter(variant_tag_type__name='seqr Prioritized')
+        })
 
     def _assert_expected_logs(self, model_creation_logs):
         self.assert_json_logs(user=None, expected=[
