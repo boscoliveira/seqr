@@ -240,9 +240,14 @@ def _result_as_tuple(results, field_prefix):
 def _add_individual_guids(results, dataset_type, samples):
     if dataset_type.startswith(Sample.DATASET_TYPE_SV_CALLS):
         dataset_type = Sample.DATASET_TYPE_SV_CALLS
+    families = set()
+    for result in results:
+        for r in (result if isinstance(result, list) else [result]):
+            families.update(r.get('familyGenotypes', {}).keys())
     sample_map = {
-        (family_guid, sample_id): individual_guid for family_guid, individual_guid, sample_id
-        in samples.filter(dataset_type=dataset_type).values_list('individual__family__guid', 'individual__guid', 'sample_id')
+        (family_guid, sample_id): individual_guid for family_guid, individual_guid, sample_id in samples.filter(
+            dataset_type=dataset_type, individual__family__guid__in=families,
+        ).values_list('individual__family__guid', 'individual__guid', 'sample_id')
     }
     for result in results:
         if isinstance(result, list):
