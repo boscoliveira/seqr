@@ -414,7 +414,7 @@ def _add_missing_multi_type_samples(samples, samples_by_dataset_type):
         if data['sample_type_families'].get('multi') and 'samples' not in data:
             individual_samples = samples.filter(
                 dataset_type=dataset_type, individual__family__guid__in=data['sample_type_families']['multi'],
-            ).values('individual_id', family_guid='individual__family__guid').annotate(
+            ).values('individual_id', family_guid=F('individual__family__guid')).annotate(
                 samples=ArrayAgg(JSONObject(sample_id='sample_id', sample_type='sample_type'))
             ).filter(samples__len=1)
             for agg in individual_samples:
@@ -664,9 +664,8 @@ def _add_liftover_genotypes(variant, data_type, variant_id):
     if not keys:
         return
     lifted_entries = lifted_entry_cls.objects.filter_locus(parsed_variant_ids=[lifted_id]).filter(key=keys[0])
-    lifted_entry_data = lifted_entries.values('key').annotate(
-        familyGenotypes=GroupArrayArray(lifted_entry_cls.objects.genotype_expression())
-    )
+    gt_field, gt_expr = lifted_entry_cls.objects.genotype_expression()
+    lifted_entry_data = lifted_entries.values('key').annotate(**{gt_field: GroupArrayArray(gt_expr)})
     if lifted_entry_data:
         variant['familyGenotypes'].update(lifted_entry_data[0]['familyGenotypes'])
         variant['liftedFamilyGuids'] = sorted(lifted_entry_data[0]['familyGenotypes'].keys())
