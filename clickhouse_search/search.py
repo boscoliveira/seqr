@@ -335,6 +335,8 @@ def _get_sample_data(samples):
             ', '.join([f'{agg["sample_id"]} ({"/ ".join(agg["projects"])})' for agg in mismatch_affected_samples]),
         )
 
+    # TODO conditional on skip_individual_guid
+
     sample_data = samples.values(
         'dataset_type', 'sample_type',
     ).annotate(

@@ -937,7 +937,7 @@ class EntriesManager(SearchQuerySet):
 
     def _multi_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
         get_affected_template = "dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, {field}), 'U')"
-        any_unaffected = any(sample['affected'] == UNAFFECTED for sample in sample_data['samples'])
+        any_unaffected = any(sample['affected'] == UNAFFECTED for sample in sample_data['samples'])  # TODO
         unaffected_condition = (None, get_affected_template + " = 'N'") if any_unaffected else None
         affected_condition = (None, get_affected_template + " = 'A'")
 
@@ -983,7 +983,7 @@ class EntriesManager(SearchQuerySet):
 
         return inheritance_q, quality_q, gt_filter, carriers_expression
 
-    def _get_family_missing_type_samples(self, multi_sample_type_families, sample_data):
+    def _get_family_missing_type_samples(self, multi_sample_type_families, sample_data):  # TODO
         family_missing_type_samples = defaultdict(lambda: defaultdict(list))
         for sample in sample_data['samples']:
             if sample['family_guid'] in multi_sample_type_families:
