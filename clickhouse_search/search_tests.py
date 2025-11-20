@@ -784,6 +784,8 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         del liftover_variant['liftedFamilyGuids']
         variants = variant_lookup(self.user, '1-439-AC-A', '37')
         self._assert_expected_variants(variants, [liftover_variant])
+        mock_liftover.assert_called_with('hg19', 'hg38')
+        mock_convert_coordinate.assert_called_with('chr1', 439)
 
         hom_only_lookup_variant = {
             **liftover_variant,
