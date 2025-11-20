@@ -834,7 +834,7 @@ class EntriesManager(SearchQuerySet):
             'clinvar_join__conflicting_pathogenicities__not_empty': True,
         }
 
-    def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, skip_individual_guid=False, **kwargs):
+    def _search_call_data(self, entries, sample_data, inheritance_mode=None, inheritance_filter=None, qualityFilter=None, pathogenicity=None, annotate_carriers=False, annotate_hom_alts=False, **kwargs):
        project_guids = sample_data['project_guids']
        project_filter = Q(project_guid__in=project_guids) if len(project_guids) > 1 else Q(project_guid=project_guids[0])
        entries = entries.filter(project_filter)
@@ -885,7 +885,7 @@ class EntriesManager(SearchQuerySet):
        if quality_q is not None:
            entries = entries.filter(quality_q)
 
-       return self._annotate_calls(entries, sample_data, annotate_hom_alts, skip_individual_guid)
+       return self._annotate_calls(entries, sample_data, annotate_hom_alts)
 
     def _single_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
         samples_by_genotype = defaultdict(list)
@@ -1046,7 +1046,7 @@ class EntriesManager(SearchQuerySet):
             )
         return entries
 
-    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_individual_guid=False, skip_entry_fields=False, **kwargs):
+    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_entry_fields=False, **kwargs):
         if annotate_hom_alts:
             entries = entries.annotate(has_hom_alt=Q(calls__array_exists={'gt': (2,)}))
 
@@ -1070,10 +1070,10 @@ class EntriesManager(SearchQuerySet):
             if skip_entry_fields:
                 entries = entries.distinct('key')
             else:
-                genotype_sample_data = None if skip_individual_guid else sample_data
+                gt_field, gt_expression = self.genotype_expression(sample_data)
                 entries = entries.annotate(
                     familyGuids=ArraySort(ArrayDistinct(GroupArray('family_guid'))),
-                    **{'genotypes' if genotype_sample_data else 'familyGenotypes': GroupArrayArray(self.genotype_expression(genotype_sample_data))},
+                    **{gt_field: GroupArrayArray(gt_expression)},
                     **{col: GroupArrayArray(col) for col in genotype_override_annotations}
                 )
             if 'carriers' in entries.query.annotations:
@@ -1101,10 +1101,11 @@ class EntriesManager(SearchQuerySet):
                 fields.append('carriers')
             if annotate_hom_alts:
                 fields.append('has_hom_alt')
+            gt_field, gt_expression = self.genotype_expression(sample_data)
             entries = entries.values(
                 *fields,
                 familyGuids=Array('family_guid'),
-                genotypes=self.genotype_expression(sample_data),
+                **{gt_field: gt_expression},
             )
 
         if genotype_override_annotations:
@@ -1117,7 +1118,8 @@ class EntriesManager(SearchQuerySet):
 
     def genotype_expression(self, sample_data=None):
         family_samples = defaultdict(list)
-        for s in (sample_data or {}).get('samples', []):
+        samples = (sample_data or {}).get('samples', [])
+        for s in samples:
             family_samples[s['family_guid']].append(f"'{s['sample_id']}', '{s['individual_guid']}'")
         sample_map = [
             f"'{family_guid}', map({', '.join(samples)})" for family_guid, samples in family_samples.items()
@@ -1125,11 +1127,11 @@ class EntriesManager(SearchQuerySet):
         genotype_expressions = list(self.genotype_fields.keys())
         output_base_fields = list(self.genotype_fields.values())
         output_field_kwargs = {'group_by_key': 'familyGuid'}
-        if sample_data:
+        if samples:
             genotype_expressions.insert(0, f"map({', '.join(sample_map)})[family_guid][x.sampleId]")
             output_base_fields.insert(0, ('individualGuid', models.StringField()))
             output_field_kwargs = {'group_by_key': 'individualGuid', 'flatten_groups': True}
-        return ArrayFilter(
+        return 'genotypes' if samples else 'familyGenotypes', ArrayFilter(
             ArrayMap(
                 'calls',
                 mapped_expression=f"tuple({', '.join(genotype_expressions)})",

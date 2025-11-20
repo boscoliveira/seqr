@@ -46,15 +46,15 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
 
         dataset_results = []
         if inheritance_mode != COMPOUND_HET:
-            dataset_results += _get_search_results(entry_cls, annotations_cls, sample_data, skip_individual_guid=is_multi_project, exclude_keys=exclude_keys.get(dataset_type), **search)
+            dataset_results += _get_search_results(entry_cls, annotations_cls, sample_data, exclude_keys=exclude_keys.get(dataset_type), **search)
         if has_comp_het:
             comp_het_sample_data = sample_data
             if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(genome_version, **search):
                 comp_het_sample_data = _no_affected_male_families(sample_data, user)
-            result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), skip_individual_guid=is_multi_project, **search)
+            result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), **search)
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
-        if is_multi_project:
+        if 'samples' not in sample_data:
             _add_individual_guids(dataset_results, dataset_type, samples)
         results += dataset_results
 
@@ -97,7 +97,6 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, samples, samp
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
     snv_indel_sample_data = sample_data_by_dataset_type[Sample.DATASET_TYPE_VARIANT_CALLS]
     snv_indel_families = set(snv_indel_sample_data['family_guids'])
-    skip_individual_guid = len(snv_indel_sample_data['project_guids']) > 1
 
     results = []
     for sample_type in [Sample.SAMPLE_TYPE_WES, Sample.SAMPLE_TYPE_WGS]:
@@ -113,23 +112,23 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, samples, samp
             **snv_indel_sample_data,
             'family_guids': list(families),
             'samples': [s for s in snv_indel_sample_data['samples'] if s['family_guid'] in families] if 'samples' in snv_indel_sample_data else None,
-        }, skip_individual_guid=skip_individual_guid, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True, annotate_hom_alts=True)
+        }, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True, annotate_hom_alts=True)
         snv_indel_q = annotations_cls.objects.subquery_join(entries).search(**search_kwargs, annotations=annotations)
 
         sv_sample_data = {
             **sv_sample_data,
             'family_guids': list(families),
-            'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families] if 'samples' in snv_indel_sample_data else None,
+            'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families] if 'samples' in sv_sample_data else None,
         }
         sv_entries = ENTRY_CLASS_MAP[genome_version][sv_dataset_type].objects.search(
-            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True, skip_individual_guid=skip_individual_guid,
+            sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True,
         )
         sv_annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][sv_dataset_type]
         sv_q = sv_annotations_cls.objects.subquery_join(sv_entries).search(**search_kwargs, annotations=annotations)
 
         result_q = _get_comp_het_results_queryset(annotations_cls, snv_indel_q, sv_q, len(families), exclude_key_pairs.get(f'{Sample.DATASET_TYPE_VARIANT_CALLS},{sv_dataset_type}'))
         dataset_results = _evaluate_results(result_q, is_comp_het=True)
-        if skip_individual_guid:
+        if not sv_sample_data['samples']:
             _add_individual_guids(dataset_results, Sample.DATASET_TYPE_SV_CALLS, samples)
         results += dataset_results
 
@@ -229,6 +228,8 @@ def _result_as_tuple(results, field_prefix):
 
 
 def _add_individual_guids(results, dataset_type, samples):
+    if dataset_type.startswith(Sample.DATASET_TYPE_SV_CALLS):
+        dataset_type = Sample.DATASET_TYPE_SV_CALLS
     sample_map = {
         (family_guid, sample_id): individual_guid for family_guid, individual_guid, sample_id
         in samples.filter(dataset_type=dataset_type).values_list('individual__family__guid', 'individual__guid', 'sample_id')
