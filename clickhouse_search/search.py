@@ -691,9 +691,10 @@ def get_clickhouse_genotypes(project_guid, family_guids, genome_version, dataset
     entries = ENTRY_CLASS_MAP[genome_version][dataset_type].objects.filter(
         project_guid=project_guid, family_guid__in=family_guids, key__in=keys,
     )
+    gt_field, gt_expr = entries.genotype_expression(sample_data)
     return {
         key: json.loads(json.dumps(genotypes, cls=DjangoJSONEncoderWithSets)) for key, genotypes in
-        entries.annotate(genotypes=entries.genotype_expression(sample_data)).values_list('key', 'genotypes')
+        entries.annotate(**{gt_field: gt_expr}).values_list('key', 'genotypes')
     }
 
 
