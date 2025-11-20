@@ -29,11 +29,15 @@ SELECTED_TRANSCRIPT_FIELD = 'selectedTranscript'
 
 
 def get_clickhouse_variants(samples, search, user, previous_search_results, genome_version,page=1, num_results=100, sort=None, **kwargs):
-    sample_data_by_dataset_type = _get_sample_data(samples, skip_multi_project_individual_guid=True)
-    results = []
-    family_guid = None
     inheritance_mode = search.get('inheritance_mode')
     has_comp_het = inheritance_mode in {RECESSIVE, COMPOUND_HET}
+    sample_data_by_dataset_type = _get_sample_data(
+        samples,
+        skip_multi_project_individual_guid=True,
+        has_x_chrom_comp_het=has_comp_het and _is_x_chrom_only(genome_version, **search),
+    )
+    results = []
+    family_guid = None
     exclude_keys = search.pop('exclude_keys', None) or {}
     exclude_key_pairs = search.pop('exclude_key_pairs', None) or {}
     for dataset_type, sample_data in sample_data_by_dataset_type.items():
@@ -42,15 +46,18 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
         entry_cls = ENTRY_CLASS_MAP[genome_version][dataset_type]
         annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][dataset_type]
         family_guid = sample_data['family_guids'][0]
-        is_multi_project = len(sample_data['project_guids']) > 1
 
         dataset_results = []
         if inheritance_mode != COMPOUND_HET:
             dataset_results += _get_search_results(entry_cls, annotations_cls, sample_data, exclude_keys=exclude_keys.get(dataset_type), **search)
         if has_comp_het:
             comp_het_sample_data = sample_data
-            if is_multi_project and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS and _is_x_chrom_only(genome_version, **search):
-                comp_het_sample_data = _no_affected_male_families(sample_data, user)
+            if 'affected_male_family_guids' in sample_data and dataset_type == Sample.DATASET_TYPE_VARIANT_CALLS:
+                logger.info(f'Loading X-chromosome compound het data for {len(sample_data["no_affected_male_family_guids"])} families', user)
+                comp_het_sample_data = {
+                    **sample_data,
+                    'family_guids': set(sample_data['family_guids'])  - set(sample_data['affected_male_family_guids']),
+                }
             result_q = _get_data_type_comp_het_results_queryset(entry_cls, annotations_cls, comp_het_sample_data, exclude_key_pairs=exclude_key_pairs.get(dataset_type), **search)
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
@@ -327,7 +334,7 @@ def _is_matched_minimal_transcript(transcript, minimal_transcript):
      and transcript.get('spliceregion', {}).get('extended_intronic_splice_region_variant') == minimal_transcript.get('extendedIntronicSpliceRegionVariant'))
 
 
-def _get_sample_data(samples, skip_multi_project_individual_guid=False):
+def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_chrom_comp_het=False):
     mismatch_affected_samples = samples.values('sample_id', 'dataset_type').annotate(
         projects=ArrayAgg('individual__family__project__name', distinct=True),
         affected=ArrayAgg('individual__affected', distinct=True),
@@ -350,6 +357,10 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False):
         annotations['num_unaffected'] = Count(
             'individual_id', distinct=True, filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED),
         )
+        if has_x_chrom_comp_het:
+            annotations['affected_male_family_guids'] = ArrayAgg('individual__family__guid', distinct=True, filter=Q(
+                individual__affected=Individual.AFFECTED_STATUS_AFFECTED, individual__sex=Individual.SEX_MALE,
+            ))
     else:
         annotations['samples'] = ArrayAgg(JSONObject(
             affected='individual__affected', sex='individual__sex', sample_id='sample_id', sample_type='sample_type', family_guid=F('individual__family__guid'), individual_guid=F('individual__guid'),
@@ -401,19 +412,6 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False):
                 data['family_missing_type_samples'][agg['family_guid']][missing_type].append(sample['sample_id'])
 
     return samples_by_dataset_type
-
-
-def _no_affected_male_families(sample_data, user):
-    valid_families = {
-        s['family_guid'] for s in sample_data['samples']  # TODO
-        if s['affected'] == Individual.AFFECTED_STATUS_AFFECTED and s['sex'] != Individual.SEX_MALE
-    }
-    logger.info(f'Loading X-chromosome compound het data for {len(valid_families)} families', user)
-    return {
-        **sample_data,
-        'family_guids': list(valid_families),
-        'samples': [s for s in sample_data['samples'] if s['family_guid'] in valid_families],
-    }
 
 
 def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
