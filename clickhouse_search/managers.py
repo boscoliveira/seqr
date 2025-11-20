@@ -839,16 +839,12 @@ class EntriesManager(SearchQuerySet):
        project_filter = Q(project_guid__in=project_guids) if len(project_guids) > 1 else Q(project_guid=project_guids[0])
        entries = entries.filter(project_filter)
 
-       multi_sample_type_families = sample_data['sample_type_families'].get('multi', [])
        family_q = None
        multi_sample_type_family_q = None
-       if multi_sample_type_families:
-           family_q = Q(family_guid__in=multi_sample_type_families)
-           multi_sample_type_family_q = family_q
        for sample_type, families in sample_data['sample_type_families'].items():
-           if sample_type == 'multi':
-               continue
            sample_family_q = Q(family_guid__in=families)
+           if sample_type == 'multi':
+               multi_sample_type_family_q = sample_family_q
            if not self.single_sample_type:
                sample_family_q &= Q(sample_type=sample_type)
            if family_q:
@@ -879,10 +875,9 @@ class EntriesManager(SearchQuerySet):
             if carriers_expression is not None:
                 entries = entries.annotate(carriers=carriers_expression)
 
-       if multi_sample_type_families:
-           family_missing_type_samples = self._get_family_missing_type_samples(multi_sample_type_families, sample_data)
+       if multi_sample_type_family_q is not None:
            entries, inheritance_q, quality_q = self._get_multi_sample_type_family_call_qs(
-               entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, family_missing_type_samples,
+               entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, sample_data['family_missing_type_samples'],
            )
 
        if inheritance_q is not None:
@@ -982,18 +977,6 @@ class EntriesManager(SearchQuerySet):
         carriers_expression = self._carriers_expression(unaffected_condition) if annotate_carriers and unaffected_condition else None
 
         return inheritance_q, quality_q, gt_filter, carriers_expression
-
-    def _get_family_missing_type_samples(self, multi_sample_type_families, sample_data):  # TODO
-        family_missing_type_samples = defaultdict(lambda: defaultdict(list))
-        for sample in sample_data['samples']:
-            if sample['family_guid'] in multi_sample_type_families:
-                sample_type = sample['sample_type']
-                missing_type = Sample.SAMPLE_TYPE_WES if sample_type == Sample.SAMPLE_TYPE_WGS else Sample.SAMPLE_TYPE_WGS
-                if not any(s for s in sample_data['samples'] if
-                           s['individual_guid'] == sample['individual_guid'] and s['sample_type'] == missing_type):
-                    family_missing_type_samples[sample['family_guid']][missing_type].append(sample['sample_id'])
-
-        return family_missing_type_samples
 
     def _quality_q(self, quality_filter, allow_no_call, affected_condition, clinvar_override_q):
         quality_filter_conditions = {}

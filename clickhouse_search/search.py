@@ -361,6 +361,13 @@ def _get_sample_data(samples):
                 sample_type: family_guids - other_type_family_guids,
                 'multi': family_guids.intersection(other_type_family_guids),
             }
+            if sample_type_families['multi']:
+                data['family_missing_type_samples'] = defaultdict(lambda: defaultdict(list))
+                # TODO remove dependence on samples list
+                for sample in data['samples']:
+                    if sample['family_guid'] in other_type_family_guids:
+                        if not any(s for s in other_type_data['samples'] if s['individual_guid'] == sample['individual_guid']):
+                            data['family_missing_type_samples'][sample['family_guid']][other_sample_type].append(sample['sample_id'])
             data['sample_type_families'] = {k: v for k, v in sample_type_families.items() if v}
             for key in ['project_guids', 'family_guids', 'samples']:
                 data[key] += other_type_data[key]
