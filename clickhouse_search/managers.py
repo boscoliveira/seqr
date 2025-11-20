@@ -885,7 +885,7 @@ class EntriesManager(SearchQuerySet):
        if quality_q is not None:
            entries = entries.filter(quality_q)
 
-       return self._annotate_calls(entries, sample_data, annotate_hom_alts, skip_individual_guid, multi_sample_type_families)
+       return self._annotate_calls(entries, sample_data, annotate_hom_alts, skip_individual_guid)
 
     def _single_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
         samples_by_genotype = defaultdict(list)
@@ -932,8 +932,7 @@ class EntriesManager(SearchQuerySet):
 
     def _multi_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
         get_affected_template = "dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, {field}), 'U')"
-        any_unaffected = any(sample['affected'] == UNAFFECTED for sample in sample_data['samples'])  # TODO
-        unaffected_condition = (None, get_affected_template + " = 'N'") if any_unaffected else None
+        unaffected_condition = (None, get_affected_template + " = 'N'") if sample_data['num_unaffected'] > 0 else None
         affected_condition = (None, get_affected_template + " = 'A'")
 
         gt_filter = None
@@ -1047,7 +1046,7 @@ class EntriesManager(SearchQuerySet):
             )
         return entries
 
-    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_individual_guid=False, multi_sample_type_families=None, skip_entry_fields=False, **kwargs):
+    def _annotate_calls(self, entries, sample_data=None, annotate_hom_alts=False, skip_individual_guid=False, skip_entry_fields=False, **kwargs):
         if annotate_hom_alts:
             entries = entries.annotate(has_hom_alt=Q(calls__array_exists={'gt': (2,)}))
 
@@ -1065,6 +1064,7 @@ class EntriesManager(SearchQuerySet):
             fields.append('seqrPop')
         if self._has_clinvar():
              fields += ['clinvar', 'clinvar_key']
+        multi_sample_type_families = (sample_data or {}).get('sample_type_families', {}).get('multi', [])
         if multi_sample_type_families or sample_data is None or len(set(sample_data['family_guids'])) > 1:
             entries = entries.values(*fields)
             if skip_entry_fields:

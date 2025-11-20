@@ -3,7 +3,7 @@ from collections import defaultdict
 from django.contrib.postgres.aggregates import ArrayAgg
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import connections
-from django.db.models import F, Min, Q
+from django.db.models import Count, F, Min, Q
 from django.db.models.functions import JSONObject
 import json
 
@@ -29,7 +29,7 @@ SELECTED_TRANSCRIPT_FIELD = 'selectedTranscript'
 
 
 def get_clickhouse_variants(samples, search, user, previous_search_results, genome_version,page=1, num_results=100, sort=None, **kwargs):
-    sample_data_by_dataset_type = _get_sample_data(samples)
+    sample_data_by_dataset_type = _get_sample_data(samples, skip_multi_project_individual_guid=True)
     results = []
     family_guid = None
     inheritance_mode = search.get('inheritance_mode')
@@ -323,7 +323,7 @@ def _is_matched_minimal_transcript(transcript, minimal_transcript):
      and transcript.get('spliceregion', {}).get('extended_intronic_splice_region_variant') == minimal_transcript.get('extendedIntronicSpliceRegionVariant'))
 
 
-def _get_sample_data(samples):
+def _get_sample_data(samples, skip_multi_project_individual_guid=False):
     mismatch_affected_samples = samples.values('sample_id', 'dataset_type').annotate(
         projects=ArrayAgg('individual__family__project__name', distinct=True),
         affected=ArrayAgg('individual__affected', distinct=True),
@@ -335,15 +335,23 @@ def _get_sample_data(samples):
             ', '.join([f'{agg["sample_id"]} ({"/ ".join(agg["projects"])})' for agg in mismatch_affected_samples]),
         )
 
-    # TODO conditional on skip_individual_guid
-
-    sample_data = samples.values(
-        'dataset_type', 'sample_type',
-    ).annotate(
-        project_guids=ArrayAgg('individual__family__project__guid', distinct=True),
-        family_guids=ArrayAgg('individual__family__guid', distinct=True),
-        samples=ArrayAgg(JSONObject(affected='individual__affected', sex='individual__sex', sample_id='sample_id', sample_type='sample_type', family_guid=F('individual__family__guid'), individual_guid=F('individual__guid'))),
+    skip_individual_guid = (
+        skip_multi_project_individual_guid and samples.values('individual__family__project_id').distinct().count() > 1
     )
+    annotations = {
+        'project_guids': ArrayAgg('individual__family__project__guid', distinct=True),
+        'family_guids': ArrayAgg('individual__family__guid', distinct=True),
+    }
+    if skip_individual_guid:
+        annotations['num_unaffected'] = Count(
+            'individual_id', distinct=True, filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED),
+        )
+    else:
+        annotations['samples'] = ArrayAgg(JSONObject(
+            affected='individual__affected', sex='individual__sex', sample_id='sample_id', sample_type='sample_type', family_guid=F('individual__family__guid'), individual_guid=F('individual__guid'),
+        ))
+
+    sample_data = samples.values('dataset_type', 'sample_type').annotate(**annotations)
     samples_by_dataset_type = {}
     for data in sample_data:
         dataset_type = data.pop('dataset_type')
@@ -363,18 +371,31 @@ def _get_sample_data(samples):
             }
             if sample_type_families['multi']:
                 data['family_missing_type_samples'] = defaultdict(lambda: defaultdict(list))
-                # TODO remove dependence on samples list
-                for sample in data['samples']:
+                for sample in data.get('samples', []):
                     if sample['family_guid'] in other_type_family_guids:
                         if not any(s for s in other_type_data['samples'] if s['individual_guid'] == sample['individual_guid']):
                             data['family_missing_type_samples'][sample['family_guid']][other_sample_type].append(sample['sample_id'])
             data['sample_type_families'] = {k: v for k, v in sample_type_families.items() if v}
             for key in ['project_guids', 'family_guids', 'samples']:
-                data[key] += other_type_data[key]
+                if key in data:
+                    data[key] += other_type_data[key]
         else:
             data['sample_type_families'] = {sample_type: set(data['family_guids'])}
 
         samples_by_dataset_type[dataset_type] = data
+
+    for dataset_type, data in samples_by_dataset_type.items():
+        if data['sample_type_families'].get('multi') and 'samples' not in data:
+            individual_samples = samples.filter(
+                dataset_type=dataset_type, individual__family__guid__in=data['sample_type_families']['multi'],
+            ).values('individual_id', family_guid='individual__family__guid').annotate(
+                samples=ArrayAgg(JSONObject(sample_id='sample_id', sample_type='sample_type'))
+            ).filter(samples__len=1)
+            for agg in individual_samples:
+                sample = agg['samples'][0]
+                missing_type = Sample.SAMPLE_TYPE_WES if sample['sample_type'] == Sample.SAMPLE_TYPE_WGS else Sample.SAMPLE_TYPE_WGS
+                data['family_missing_type_samples'][agg['family_guid']][missing_type].append(sample['sample_id'])
+
     return samples_by_dataset_type
 
 
