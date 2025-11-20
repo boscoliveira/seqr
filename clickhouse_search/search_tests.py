@@ -752,17 +752,6 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         variants = variant_lookup(self.user, '1-10439-AC-A', '38')
         self._assert_expected_variants(variants, [VARIANT_LOOKUP_VARIANT])
 
-        hom_only_lookup_variant = {
-            **VARIANT_LOOKUP_VARIANT,
-            'familyGenotypes': {
-                family_guid: [gt for gt in gts if family_guid != 'F000002_2' or gt['sampleType'] == 'WGS']
-                for family_guid, gts in VARIANT_LOOKUP_VARIANT['familyGenotypes'].items() if family_guid != 'F000014_14'
-            },
-        }
-        del hom_only_lookup_variant['liftedFamilyGuids']
-        variants = variant_lookup(self.user, '1-10439-AC-A', '38', hom_only=True)
-        self._assert_expected_variants(variants, [hom_only_lookup_variant])
-
         with self.assertRaises(ObjectDoesNotExist) as cm:
             variant_lookup(self.user, '1-91511686-TCA-G', '38')
         self.assertEqual(str(cm.exception), 'Variant not present in seqr')
@@ -784,6 +773,29 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         self._assert_expected_variants(variants, [grch37_lookup_variant])
         mock_liftover.assert_called_with('hg38', 'hg19')
         mock_convert_coordinate.assert_called_with('chr7', 143260172)
+
+        liftover_variant = {
+            **VARIANT_LOOKUP_VARIANT,
+            'familyGenotypes': {
+                family_guid: gts
+                for family_guid, gts in VARIANT_LOOKUP_VARIANT['familyGenotypes'].items() if family_guid != 'F000014_14'
+            },
+        }
+        del liftover_variant['liftedFamilyGuids']
+        variants = variant_lookup(self.user, '1-439-AC-A', '37')
+        self._assert_expected_variants(variants, [liftover_variant])
+
+        hom_only_lookup_variant = {
+            **liftover_variant,
+            'familyGenotypes': {
+                **liftover_variant['familyGenotypes'],
+                'F000002_2': [gt for gt in liftover_variant['familyGenotypes']['F000002_2'] if gt['sampleType'] == 'WGS'],
+            },
+        }
+        variants = variant_lookup(self.user, '1-10439-AC-A', '38', hom_only=True)
+        self._assert_expected_variants(variants, [hom_only_lookup_variant])
+        variants = variant_lookup(self.user, '1-439-AC-A', '37', hom_only=True)
+        self._assert_expected_variants(variants, [hom_only_lookup_variant])
 
         variants = variant_lookup(self.user, 'M-4429-G-A', '38')
         self._assert_expected_variants(variants, [{
