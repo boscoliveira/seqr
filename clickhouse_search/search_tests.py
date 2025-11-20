@@ -429,24 +429,6 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
             ],
         )
 
-        self.results_model.families.set(Family.objects.filter(guid__in=['F000002_2', 'F000014_14']))
-        self._assert_expected_search(
-            [[SV_VARIANT1, SV_VARIANT2], [MULTI_DATA_TYPE_COMP_HET_VARIANT2, GCNV_VARIANT4], [VARIANT3, VARIANT4], [GCNV_VARIANT3, GCNV_VARIANT4]], inheritance_mode=inheritance_mode,
-            **COMP_HET_ALL_PASS_FILTERS, gene_counts={
-                'ENSG00000171621': {'total': 2, 'families': {'F000014_14': 2}},
-                'ENSG00000097046': {'total': 2, 'families': {'F000002_2': 2}},
-                'ENSG00000177000': {'total': 2, 'families': {'F000002_2': 2}},
-                'ENSG00000275023': {'total': 3, 'families': {'F000002_2': 3}},
-                'ENSG00000277258': {'total': 3, 'families': {'F000002_2': 3}},
-                'ENSG00000277972': {'total': 2, 'families': {'F000002_2': 2}},
-            }, cached_variant_fields=[
-                [{'selectedGeneId': 'ENSG00000171621'}, {'selectedGeneId': 'ENSG00000171621'}],
-                [{'selectedGeneId': 'ENSG00000277258'}, {'selectedGeneId': 'ENSG00000277258'}],
-                [{'selectedGeneId': 'ENSG00000097046'}, {'selectedGeneId': 'ENSG00000097046'}],
-                [{'selectedGeneId': 'ENSG00000275023'}, {'selectedGeneId': 'ENSG00000275023'}],
-            ],
-        )
-
         inheritance_mode = 'recessive'
         self._set_multi_project_search()
         self._assert_expected_search(

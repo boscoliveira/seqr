@@ -932,7 +932,9 @@ class EntriesManager(SearchQuerySet):
 
     def _multi_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
         get_affected_template = "dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, {field}), 'U')"
-        unaffected_condition = (None, get_affected_template + " = 'N'") if sample_data['num_unaffected'] > 0 else None
+        any_unaffected = any(sample['affected'] == UNAFFECTED for sample in sample_data['samples']) \
+            if sample_data.get('samples') else sample_data['num_unaffected'] > 0
+        unaffected_condition = (None, get_affected_template + " = 'N'") if any_unaffected else None
         affected_condition = (None, get_affected_template + " = 'A'")
 
         gt_filter = None
@@ -956,7 +958,7 @@ class EntriesManager(SearchQuerySet):
             if inheritance_mode == X_LINKED_RECESSIVE and -1 not in genotype_lookup[REF_REF]:
                 genotype_lookup = {**genotype_lookup, REF_REF: [-1] + genotype_lookup[REF_REF]}
 
-        is_single_family = sample_data['num_families'] == 1
+        is_single_family = sample_data['num_families'] == 1 and sample_data.get('samples')
         get_conditions = self._single_family_affected_filters if is_single_family else self._multi_family_affected_filters
         affected_condition, unaffected_condition, gt_filter = get_conditions(
             sample_data, inheritance_mode, inheritance_filter, genotype_lookup,
@@ -1118,7 +1120,7 @@ class EntriesManager(SearchQuerySet):
 
     def genotype_expression(self, sample_data=None):
         family_samples = defaultdict(list)
-        samples = (sample_data or {}).get('samples', [])
+        samples = (sample_data or {}).get('samples') or []
         for s in samples:
             family_samples[s['family_guid']].append(f"'{s['sample_id']}', '{s['individual_guid']}'")
         sample_map = [
