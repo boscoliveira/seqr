@@ -532,7 +532,7 @@ def clickhouse_variant_gene_lookup(user, gene, genome_version, search):
     return format_clickhouse_results(results, genome_version)
 
 
-def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None):
+def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None, affected_only=False, hom_only=False):  # TODO
     entry_cls = ENTRY_CLASS_MAP[genome_version][data_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][data_type]
 
@@ -558,14 +558,16 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
         variant = format_clickhouse_results([variant], genome_version)[0]
     return variant
 
-def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version):
+def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version, affected_only, hom_only):
     is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
     data_type = f'{dataset_type}_{sample_type}' if is_sv else dataset_type
     logger.info(f'Looking up variant {variant_id} with data type {data_type}', user)
 
-    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type)
+    variant = _clickhouse_variant_lookup(
+        variant_id, genome_version, data_type, affected_only=affected_only, hom_only=hom_only,
+    )
     if variant:
-        _add_liftover_genotypes(variant, data_type, variant_id)
+        _add_liftover_genotypes(variant, data_type, variant_id, affected_only, hom_only)
     else:
         lifted_genome_version = next(gv for gv in ENTRY_CLASS_MAP.keys() if gv != genome_version)
         if ENTRY_CLASS_MAP[lifted_genome_version].get(data_type):
@@ -573,7 +575,9 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
             liftover_results = run_liftover(lifted_genome_version, variant_id[0], variant_id[1])
             if liftover_results:
                 lifted_id = (liftover_results[0], liftover_results[1], *variant_id[2:])
-                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type)
+                variant = _clickhouse_variant_lookup(
+                    lifted_id, lifted_genome_version, data_type, affected_only=affected_only, hom_only=hom_only,
+                )
 
     if not variant:
         raise ObjectDoesNotExist('Variant not present in seqr')
@@ -598,7 +602,7 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
     return variants
 
 
-def _add_liftover_genotypes(variant, data_type, variant_id):
+def _add_liftover_genotypes(variant, data_type, variant_id, affected_only, hom_only):  # TODO
     lifted_entry_cls = ENTRY_CLASS_MAP.get(variant.get('liftedOverGenomeVersion'), {}).get(data_type)
     if not lifted_entry_cls:
         return
