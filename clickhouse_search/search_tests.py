@@ -812,20 +812,19 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
         self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
 
-        #  TODO!
-        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS', affected_only=True)
-        self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
-
-        # reciprocal overlap does not meet the threshold for smaller events
-        variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES')
-        self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT])
-
         affected_only_lookup_variant = {
             **GCNV_LOOKUP_VARIANT,
             'familyGenotypes': {
                 family_guid: gts for family_guid, gts in GCNV_LOOKUP_VARIANT['familyGenotypes'].items() if family_guid != 'F000002_2_x'
             },
         }
+        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS', affected_only=True)
+        self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, affected_only_lookup_variant])
+
+        # reciprocal overlap does not meet the threshold for smaller events
+        variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES')
+        self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT])
+
         variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES', affected_only=True)
         self._assert_expected_variants(variants, [affected_only_lookup_variant])
 

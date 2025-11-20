@@ -601,6 +601,7 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
 
         padding = int((variant['end'] - variant['pos']) * 0.2)
         entries = other_entry_class.objects.search_padded_interval(variant['chrom'], variant['pos'], padding)
+        entries = _filter_lookup_entries(entries, affected_only, hom_only)
         results = other_annotations_cls.objects.subquery_join(entries).search(
             padded_interval_end=(variant['end'], padding),
             annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
