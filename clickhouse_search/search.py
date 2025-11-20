@@ -561,7 +561,7 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
 
 def _filter_lookup_entries(entries, affected_only, hom_only):
     if affected_only:
-        entries = entries # TODO
+        entries = entries.filter(entries.any_affected_q())
     if hom_only:
         entries = entries.filter(calls__array_exists={'gt': (2,)})
     return entries
