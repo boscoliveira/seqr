@@ -55,13 +55,13 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
         if is_multi_project:
-            _add_individual_guids(dataset_results, sample_data)
+            _add_individual_guids(dataset_results, dataset_type, samples)
         results += dataset_results
 
     if has_comp_het and Sample.DATASET_TYPE_VARIANT_CALLS in sample_data_by_dataset_type and any(
         dataset_type.startswith(Sample.DATASET_TYPE_SV_CALLS) for dataset_type in sample_data_by_dataset_type
     ):
-        results += _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, exclude_key_pairs, **search)
+        results += _get_multi_data_type_comp_het_results_queryset(genome_version, samples, sample_data_by_dataset_type, user, exclude_key_pairs, **search)
 
     cache_results = get_clickhouse_cache_results(results, sort, family_guid)
     previous_search_results.update(cache_results)
@@ -86,7 +86,7 @@ def _evaluate_results(result_q, is_comp_het=False):
         raise InvalidSearchException('This search returned too many results')
     return results
 
-def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_by_dataset_type, user, exclude_key_pairs, annotations=None, annotations_secondary=None, inheritance_mode=None, **search_kwargs):
+def _get_multi_data_type_comp_het_results_queryset(genome_version, samples, sample_data_by_dataset_type, user, exclude_key_pairs, annotations=None, annotations_secondary=None, inheritance_mode=None, **search_kwargs):
     if annotations_secondary:
         annotations = {
             **annotations,
@@ -130,7 +130,7 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
         result_q = _get_comp_het_results_queryset(annotations_cls, snv_indel_q, sv_q, len(families), exclude_key_pairs.get(f'{Sample.DATASET_TYPE_VARIANT_CALLS},{sv_dataset_type}'))
         dataset_results = _evaluate_results(result_q, is_comp_het=True)
         if skip_individual_guid:
-            _add_individual_guids(dataset_results, sv_sample_data)
+            _add_individual_guids(dataset_results, Sample.DATASET_TYPE_SV_CALLS, samples)
         results += dataset_results
 
     return results
@@ -228,8 +228,11 @@ def _result_as_tuple(results, field_prefix):
     return Tuple(*fields.keys(), output_field=NamedTupleField(list(fields.values())))
 
 
-def _add_individual_guids(results, sample_data):
-    sample_map = {(s['family_guid'], s['sample_id']): s['individual_guid'] for s in sample_data['samples']}  # TODO
+def _add_individual_guids(results, dataset_type, samples):
+    sample_map = {
+        (family_guid, sample_id): individual_guid for family_guid, individual_guid, sample_id
+        in samples.filter(dataset_type=dataset_type).values_list('individual__family__guid', 'individual__guid', 'sample_id')
+    }
     for result in results:
         if isinstance(result, list):
             for variant in result:
