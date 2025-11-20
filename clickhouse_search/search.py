@@ -351,7 +351,7 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_ch
     )
     annotations = {
         'project_guids': ArrayAgg('individual__family__project__guid', distinct=True),
-        'family_guids': ArrayAgg('individual__family__guid', distinct=True),
+        'family_guids': ArrayAgg('individual__family__guid', distinct=True),  # TODO check length
     }
     if skip_individual_guid:
         annotations['num_unaffected'] = Count(
@@ -399,6 +399,12 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_ch
 
         samples_by_dataset_type[dataset_type] = data
 
+    _add_missing_multi_type_samples(samples, samples_by_dataset_type)
+
+    return samples_by_dataset_type
+
+
+def _add_missing_multi_type_samples(samples, samples_by_dataset_type):
     for dataset_type, data in samples_by_dataset_type.items():
         if data['sample_type_families'].get('multi') and 'samples' not in data:
             individual_samples = samples.filter(
@@ -411,7 +417,6 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_ch
                 missing_type = Sample.SAMPLE_TYPE_WES if sample['sample_type'] == Sample.SAMPLE_TYPE_WGS else Sample.SAMPLE_TYPE_WGS
                 data['family_missing_type_samples'][agg['family_guid']][missing_type].append(sample['sample_id'])
 
-    return samples_by_dataset_type
 
 
 def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
