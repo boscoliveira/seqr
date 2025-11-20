@@ -956,7 +956,7 @@ class EntriesManager(SearchQuerySet):
             if inheritance_mode == X_LINKED_RECESSIVE and -1 not in genotype_lookup[REF_REF]:
                 genotype_lookup = {**genotype_lookup, REF_REF: [-1] + genotype_lookup[REF_REF]}
 
-        is_single_family = len(sample_data['family_guids']) == 1
+        is_single_family = sample_data['num_families'] == 1
         get_conditions = self._single_family_affected_filters if is_single_family else self._multi_family_affected_filters
         affected_condition, unaffected_condition, gt_filter = get_conditions(
             sample_data, inheritance_mode, inheritance_filter, genotype_lookup,
@@ -1065,7 +1065,7 @@ class EntriesManager(SearchQuerySet):
         if self._has_clinvar():
              fields += ['clinvar', 'clinvar_key']
         multi_sample_type_families = (sample_data or {}).get('sample_type_families', {}).get('multi', [])
-        if multi_sample_type_families or sample_data is None or len(set(sample_data['family_guids'])) > 1:
+        if multi_sample_type_families or sample_data is None or sample_data['num_families'] > 1:
             entries = entries.values(*fields)
             if skip_entry_fields:
                 entries = entries.distinct('key')
