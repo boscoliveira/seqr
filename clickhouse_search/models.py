@@ -859,7 +859,7 @@ class BaseProjectGtStats(models.ClickhouseModel):
     class Meta:
         abstract = True
         engine = models.SummingMergeTree(
-            order_by=('project_guid', 'key'),
+            order_by=('project_guid', 'key', 'affected'),
             partition_by='project_guid',
             index_granularity=8192,
         )
@@ -870,7 +870,7 @@ class BaseProjectGtStatsMitoSnvIndel(BaseProjectGtStats):
     class Meta:
         abstract = True
         engine = models.SummingMergeTree(
-            order_by=('project_guid', 'key', 'sample_type'),
+            order_by=('project_guid', 'key', 'sample_type', 'affected'),
             partition_by='project_guid',
             index_granularity=8192,
         )
