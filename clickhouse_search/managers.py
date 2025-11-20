@@ -953,7 +953,7 @@ class EntriesManager(SearchQuerySet):
         return self._affected_condition(), unaffected_condition, gt_filter
 
     def _affected_condition(self):
-        return tuple(None, self.GET_AFFECTED_TEMPLATE + " = 'A'")
+        return tuple([None, self.GET_AFFECTED_TEMPLATE + " = 'A'"])
 
     def _get_inheritance_quality_qs(self, sample_data, inheritance_mode, quality_filter, clinvar_override_q, annotate_carriers, inheritance_filter):
         allow_no_call = inheritance_filter.get('allowNoCall')
