@@ -112,14 +112,14 @@ def _get_multi_data_type_comp_het_results_queryset(genome_version, sample_data_b
         entries = entry_cls.objects.search({
             **snv_indel_sample_data,
             'family_guids': list(families),
-            'samples': [s for s in snv_indel_sample_data['samples'] if s['family_guid'] in families]
+            'samples': [s for s in snv_indel_sample_data['samples'] if s['family_guid'] in families] if 'samples' in snv_indel_sample_data else None,
         }, skip_individual_guid=skip_individual_guid, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True, annotate_hom_alts=True)
         snv_indel_q = annotations_cls.objects.subquery_join(entries).search(**search_kwargs, annotations=annotations)
 
         sv_sample_data = {
             **sv_sample_data,
             'family_guids': list(families),
-            'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families]
+            'samples': [s for s in sv_sample_data['samples'] if s['family_guid'] in families] if 'samples' in snv_indel_sample_data else None,
         }
         sv_entries = ENTRY_CLASS_MAP[genome_version][sv_dataset_type].objects.search(
             sv_sample_data, **search_kwargs, annotations=annotations, inheritance_mode=COMPOUND_HET, annotate_carriers=True, skip_individual_guid=skip_individual_guid,
@@ -229,7 +229,7 @@ def _result_as_tuple(results, field_prefix):
 
 
 def _add_individual_guids(results, sample_data):
-    sample_map = {(s['family_guid'], s['sample_id']): s['individual_guid'] for s in sample_data['samples']}
+    sample_map = {(s['family_guid'], s['sample_id']): s['individual_guid'] for s in sample_data['samples']}  # TODO
     for result in results:
         if isinstance(result, list):
             for variant in result:
@@ -401,7 +401,7 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False):
 
 def _no_affected_male_families(sample_data, user):
     valid_families = {
-        s['family_guid'] for s in sample_data['samples']
+        s['family_guid'] for s in sample_data['samples']  # TODO
         if s['affected'] == Individual.AFFECTED_STATUS_AFFECTED and s['sex'] != Individual.SEX_MALE
     }
     logger.info(f'Loading X-chromosome compound het data for {len(valid_families)} families', user)
