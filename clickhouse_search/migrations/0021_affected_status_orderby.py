@@ -13,7 +13,6 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
         old_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats'
         tmp_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats_new_order_by'
         with connections['clickhouse_write'].cursor() as cursor:
-            print(old_tbl)
             cursor.execute(
                 '''
                 SELECT create_table_query
@@ -21,10 +20,6 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
                 WHERE database = currentDatabase() AND name = %(table_name)s;
                 ''',
                 {'table_name': old_tbl},
-            )
-            row = cursor.fetchone()[0]
-            cursor.execute(
-                f"SELECT create_table_query FROM system.tables WHERE table = '{old_tbl}' AND database = '{DATABASES['default']['NAME']}'"
             )
             ddl = cursor.fetchone()[0]
             if "ORDER BY (project_guid, key, sample_type)" in ddl:
