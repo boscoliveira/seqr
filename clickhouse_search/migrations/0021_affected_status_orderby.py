@@ -29,7 +29,7 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
                 old_order_by = "ORDER BY (project_guid, key)"
                 new_order_by = "ORDER BY (project_guid, key, affected)"
             ddl = ddl.replace(old_order_by, new_order_by)
-            ddl = ddl.replace(f"CREATE TABLE {DATABASES['default']['NAME']}.`{old_tbl}`", f"CREATE TABLE {DATABASES['default']['NAME']}.`{tmp_tbl}`")
+            ddl = ddl.replace(old_tbl, tmp_tbl)
             cursor.execute(ddl)
             cursor.execute(
                 f"INSERT INTO `{tmp_tbl}` SELECT * FROM `{old_tbl}`"
