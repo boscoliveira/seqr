@@ -10,8 +10,8 @@ from settings import DATABASES
 
 def add_affected_status_orderby(reference_genome: str, dataset_type: str):
     def inner(apps, schema_editor):
-        old_tbl = f"{reference_genome}/{dataset_type}/project_gt_stats"
-        tmp_tbl = f"{reference_genome}/{dataset_type}/project_gt_stats_new_order_by"
+        old_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats'
+        tmp_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats_new_order_by'
         with connections['clickhouse_write'].cursor() as cursor:
             cursor.execute(
                 '''
@@ -32,10 +32,7 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
             elif "ORDER BY (project_guid, key)" in ddl:
                 old_order_by = "ORDER BY (project_guid, key)"
                 new_order_by = "ORDER BY (project_guid, key, affected)"
-            ddl = ddl.replace(
-                old_order_by,
-                new_order_by,
-            )
+            ddl = ddl.replace(old_order_by, new_order_by)
             ddl = ddl.replace(f"CREATE TABLE {DATABASES['default']['NAME']}.`{old_tbl}`", f"CREATE TABLE {DATABASES['default']['NAME']}.`{tmp_tbl}`")
             cursor.execute(ddl)
             cursor.execute(
