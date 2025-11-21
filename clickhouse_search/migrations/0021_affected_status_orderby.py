@@ -10,11 +10,18 @@ from settings import DATABASES
 
 def add_affected_status_orderby(reference_genome: str, dataset_type: str):
     def inner(apps, schema_editor):
-        reference = f"{reference_genome}/{dataset_type}"
-        old_tbl = f"{reference}/project_gt_stats"
-        tmp_tbl = f"{reference}/project_gt_stats_new_order_by"
+        old_tbl = f"{reference_genome}/{dataset_type}/project_gt_stats"
+        tmp_tbl = f"{reference_genome}/{dataset_type}/project_gt_stats_new_order_by"
         with connections['clickhouse_write'].cursor() as cursor:
-            # 1. Get the current DDL
+            cursor.execute(
+                '''
+                SELECT create_table_query
+                FROM system.tables
+                WHERE database = currentDatabase() AND name = %(table_name)s;
+                ''',
+                {'table_name': old_tbl},
+            )
+            row = cursor.fetchone()[0]
             cursor.execute(
                 f"SELECT create_table_query FROM system.tables WHERE table = '{old_tbl}' AND database = '{DATABASES['default']['NAME']}'"
             )
