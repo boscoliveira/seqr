@@ -13,6 +13,7 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
         old_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats'
         tmp_tbl = f'{reference_genome}/{dataset_type}/project_gt_stats_new_order_by'
         with connections['clickhouse_write'].cursor() as cursor:
+            print(old_tbl)
             cursor.execute(
                 '''
                 SELECT create_table_query
@@ -57,27 +58,23 @@ class Migration(migrations.Migration):
                 reference_genome="GRCh37",
                 dataset_type="SNV_INDEL",
             ), 
-            reverse_code=migrations.RunPython.noop
         ),
         migrations.RunPython(
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="SNV_INDEL",
             ), 
-            reverse_code=migrations.RunPython.noop
         ),
         migrations.RunPython(
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="MITO",
             ), 
-            reverse_code=migrations.RunPython.noop
         ),
         migrations.RunPython(
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="SV",
             ), 
-            reverse_code=migrations.RunPython.noop
         ),
     ]
