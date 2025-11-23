@@ -58,12 +58,12 @@ class Migration(migrations.Migration):
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="MITO",
-            ), 
+            ),
         ),
         migrations.RunPython(
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="SV",
-            ), 
+            ),
         ),
     ]
