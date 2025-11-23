@@ -26,7 +26,7 @@ def add_affected_status_orderby(reference_genome: str, dataset_type: str):
             ddl = ddl.replace(old_tbl, tmp_tbl)
             cursor.execute(ddl)
             cursor.execute(
-                f"INSERT INTO `{tmp_tbl}` SELECT * FROM `{old_tbl}`" # pylint: disable=W0717
+                f"INSERT INTO `{tmp_tbl}` SELECT * FROM `{old_tbl}`" # pylint: disable=B608
             )
             cursor.execute(
                 f"EXCHANGE TABLES `{tmp_tbl}` AND `{old_tbl}`"
@@ -52,7 +52,7 @@ class Migration(migrations.Migration):
             add_affected_status_orderby(
                 reference_genome="GRCh38",
                 dataset_type="SNV_INDEL",
-            ), 
+            ),
         ),
         migrations.RunPython(
             add_affected_status_orderby(
