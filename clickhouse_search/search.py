@@ -415,10 +415,14 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_ch
             }
             if sample_type_families['multi']:
                 data['family_missing_type_samples'] = defaultdict(lambda: defaultdict(list))
-                for sample in data.get('samples', []):
-                    if sample['family_guid'] in other_type_family_guids:
-                        if not any(s for s in other_type_data['samples'] if s['individual_guid'] == sample['individual_guid']):
-                            data['family_missing_type_samples'][sample['family_guid']][other_sample_type].append(sample['sample_id'])
+                individual_samples = {s['individual_guid']: s for s in data.get('samples', [])}
+                other_type_individual_samples = {s['individual_guid']: s for s in other_type_data.get('samples', [])}
+                for individual_guid in set(individual_samples.keys()) - set(other_type_individual_samples.keys()):
+                    sample = individual_samples[individual_guid]
+                    data['family_missing_type_samples'][sample['family_guid']][other_sample_type].append(sample['sample_id'])
+                for individual_guid in set(other_type_individual_samples.keys()) -  set(individual_samples.keys()):
+                    sample = other_type_individual_samples[individual_guid]
+                    data['family_missing_type_samples'][sample['family_guid']][sample_type].append(sample['sample_id'])
             data['sample_type_families'] = {k: v for k, v in sample_type_families.items() if v}
             for key in ['project_guids', 'samples']:
                 if key in data:
