@@ -45,7 +45,6 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
         logger.info(f'Loading {dataset_type} data for {sample_data["num_families"]} families', user)
 
         family_guid = next(iter(next(iter(sample_data['sample_type_families'].values()))))
-        is_multi_project = len(sample_data['project_guids']) > 1
 
         dataset_results = []
         if inheritance_mode != COMPOUND_HET:
@@ -58,7 +57,7 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
             dataset_results += _evaluate_results(result_q, is_comp_het=True)
 
         if 'samples' not in sample_data:
-            _add_individual_guids(dataset_results, dataset_type, samples)
+            add_individual_guids(dataset_results, samples)
         results += dataset_results
 
     if has_comp_het and Sample.DATASET_TYPE_VARIANT_CALLS in sample_data_by_dataset_type and any(
@@ -140,7 +139,7 @@ def _get_multi_data_type_comp_het_results(genome_version, samples, sample_data_b
         )
         dataset_results = _evaluate_results(result_q, is_comp_het=True)
         if not sv_sample_data['samples']:
-            _add_individual_guids(dataset_results, Sample.DATASET_TYPE_SV_CALLS, samples)
+            add_individual_guids(dataset_results, samples)
         results += dataset_results
 
     return results
@@ -259,27 +258,25 @@ def _result_as_tuple(results, field_prefix):
     return Tuple(*fields.keys(), output_field=NamedTupleField(list(fields.values())))
 
 
-def _add_individual_guids(results, dataset_type, samples):
-    if dataset_type.startswith(Sample.DATASET_TYPE_SV_CALLS):
-        dataset_type = Sample.DATASET_TYPE_SV_CALLS
+def add_individual_guids(results, samples, encode_genotypes_json=False):
     families = set()
     for result in results:
         for r in (result if isinstance(result, list) else [result]):
             families.update(r.get('familyGenotypes', {}).keys())
     sample_map = {
         (family_guid, sample_id): individual_guid for family_guid, individual_guid, sample_id in samples.filter(
-            dataset_type=dataset_type, individual__family__guid__in=families,
+            individual__family__guid__in=families,
         ).values_list('individual__family__guid', 'individual__guid', 'sample_id')
     }
     for result in results:
         if isinstance(result, list):
             for variant in result:
-                _set_individual_guids(variant, sample_map)
+                _set_individual_guids(variant, sample_map, encode_genotypes_json)
         else:
-            _set_individual_guids(result, sample_map)
+            _set_individual_guids(result, sample_map, encode_genotypes_json)
 
 
-def _set_individual_guids(result, sample_map):
+def _set_individual_guids(result, sample_map, encode_genotypes_json):
     if 'familyGenotypes' not in result:
         return
     result['familyGuids'] = sorted(result['familyGenotypes'].keys())
@@ -288,7 +285,10 @@ def _set_individual_guids(result, sample_map):
         for genotype in genotypes:
             individual_guid = sample_map[(family_guid, genotype['sampleId'])]
             individual_genotypes[individual_guid].append({**genotype, 'individualGuid': individual_guid})
-    result['genotypes'] = {k: v[0] if len(v) == 1 else v for k, v in individual_genotypes.items()}
+    genotypes = {k: v[0] if len(v) == 1 else v for k, v in individual_genotypes.items()}
+    if encode_genotypes_json:
+        result['genotypes'] = clickhouse_genotypes_json(genotypes)
+    result['genotypes'] = genotypes
 
 
 def get_clickhouse_cache_results(results, sort, family_guid):
