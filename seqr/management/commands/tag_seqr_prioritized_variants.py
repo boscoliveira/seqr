@@ -9,9 +9,8 @@ from clickhouse_backend.models import ArrayField, StringField
 
 from clickhouse_search.backend.fields import NamedTupleField
 from clickhouse_search.backend.functions import ArrayFilter, ArrayMap
-from clickhouse_search.search import get_search_queryset, get_transcripts_queryset, clickhouse_genotypes_json, \
-    get_data_type_comp_het_results_queryset, get_multi_data_type_comp_het_results_queryset, add_individual_guids, \
-    SELECTED_GENE_FIELD
+from clickhouse_search.search import get_search_queryset, get_transcripts_queryset, add_individual_guids, \
+    get_data_type_comp_het_results_queryset, get_multi_data_type_comp_het_results_queryset, SELECTED_GENE_FIELD
 from panelapp.models import PaLocusListGene
 from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, Sample, LocusList
@@ -674,7 +673,6 @@ class Command(BaseCommand):
                 for variant, support_id in [(pair[0], pair[1]['variantId']), (pair[1], pair[0]['variantId'])]:
                     variant_data = family_variant_data[(family_guid_map[family_guid], variant['variantId'])]
                     variant_data.update(variant)
-                    variant_data['genotypes'] = clickhouse_genotypes_json(variant['genotypes'])
                     if 'transcripts' not in variant_data:
                         variant_data['gene_ids'] = list(dict.fromkeys([csq['geneId'] for csq in variant['sortedTranscriptConsequences']]))
                     variant_data['support_vars'].add(support_id)

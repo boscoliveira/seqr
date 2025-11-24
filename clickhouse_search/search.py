@@ -287,7 +287,7 @@ def _set_individual_guids(result, sample_map, encode_genotypes_json):
             individual_genotypes[individual_guid].append({**genotype, 'individualGuid': individual_guid})
     genotypes = {k: v[0] if len(v) == 1 else v for k, v in individual_genotypes.items()}
     if encode_genotypes_json:
-        result['genotypes'] = clickhouse_genotypes_json(genotypes)
+        genotypes = _clickhouse_genotypes_json(genotypes)
     result['genotypes'] = genotypes
 
 
@@ -718,12 +718,12 @@ def get_clickhouse_genotypes(project_guid, family_guids, genome_version, dataset
     )
     gt_field, gt_expr = entries.genotype_expression(sample_data)
     return {
-        key: clickhouse_genotypes_json(genotypes) for key, genotypes in
+        key: _clickhouse_genotypes_json(genotypes) for key, genotypes in
         entries.annotate(**{gt_field: gt_expr}).values_list('key', 'genotypes')
     }
 
 
-def clickhouse_genotypes_json(genotypes):
+def _clickhouse_genotypes_json(genotypes):
     return json.loads(json.dumps(genotypes, cls=DjangoJSONEncoderWithSets))
 
 
