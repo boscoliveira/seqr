@@ -5,7 +5,9 @@ from django.test import TransactionTestCase
 from django.urls.base import reverse
 import json
 import mock
+import responses
 
+from clickhouse_search.models import EntriesSnvIndel, ProjectGtStatsSnvIndel, AnnotationsSnvIndel
 from clickhouse_search.test_utils import VARIANT1, VARIANT2, VARIANT3, VARIANT4, CACHED_CONSEQUENCES_BY_KEY, \
     VARIANT_ID_SEARCH, VARIANT_IDS, LOCATION_SEARCH, GENE_IDS, SELECTED_TRANSCRIPT_MULTI_FAMILY_VARIANT, \
     SELECTED_ANNOTATION_TRANSCRIPT_VARIANT_4, SELECTED_ANNOTATION_TRANSCRIPT_VARIANT_3, COMP_HET_ALL_PASS_FILTERS, \
@@ -22,6 +24,7 @@ from reference_data.models import Omim
 from seqr.models import Project, Family, Sample, VariantSearch, VariantSearchResults
 from seqr.utils.search.search_utils_tests import SearchTestHelper
 from seqr.utils.search.utils import query_variants, variant_lookup, get_variant_query_gene_counts, get_single_variant, InvalidSearchException
+from seqr.views.apis.data_manager_api import trigger_delete_project
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 from seqr.views.utils.test_utils import AnvilAuthenticationTestMixin
 from seqr.views.apis.variant_search_api import gene_variant_lookup
@@ -1576,3 +1579,39 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
             'searchedVariants': [],
             'genesById': {},
         })
+
+    @responses.activate
+    def test_trigger_delete_project(self):
+        url = reverse(trigger_delete_project)
+        self.check_data_manager_login(url)
+
+        Project.objects.filter(guid='R0001_1kg').update(genome_version='38')
+        response = self.client.post(
+            url, content_type='application/json', data=json.dumps({'project': 'R0001_1kg', 'datasetType': 'SNV_INDEL'})
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertDictEqual(response.json(), {
+            'info': [
+                'Deactivated search for 7 individuals',
+                'Deleted all SNV_INDEL search data for project 1kg project n\xe5me with uni\xe7\xf8de',
+            ],
+        })
+        self.assertEqual(EntriesSnvIndel.objects.filter(project_guid='R0001_1kg').count(), 0)
+        self.assertEqual(ProjectGtStatsSnvIndel.objects.filter(project_guid='R0001_1kg').count(), 0)
+
+        updated_seqr_pops_by_key = dict(AnnotationsSnvIndel.objects.all().join_seqr_pop().values_list('key', 'seqrPop'))
+        self.assertDictEqual(updated_seqr_pops_by_key, {
+            1: (2, 2, 1, 1, 4, 2),
+            2: (1, 1, 0, 0, 2, 0),
+            3: (0, 0, 0, 0, 0, 0),
+            4: (0, 0, 0, 0, 0, 0),
+            5: (1, 1, 0, 0, 2, 0),
+            6: (0, 0, 0, 0, 0, 0),
+            22: (0, 3, 0, 1, 3, 1),
+        })
+
+        project_samples = Sample.objects.filter(individual__family__project__guid='R0001_1kg', is_active=True)
+        self.assertEqual(project_samples.filter(dataset_type='SNV_INDEL').count(), 0)
+        self.assertEqual(project_samples.count(), 4)
+
+
