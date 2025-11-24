@@ -843,9 +843,11 @@ class EntriesManager(SearchQuerySet):
        multi_sample_type_family_q = None
        for sample_type, families in sample_data['sample_type_families'].items():
            sample_family_q = Q(family_guid__in=families)
+           filter_sample_type = not self.single_sample_type
            if sample_type == 'multi':
                multi_sample_type_family_q = sample_family_q
-           if not self.single_sample_type:
+               filter_sample_type = False
+           if filter_sample_type:
                sample_family_q &= Q(sample_type=sample_type)
            if family_q:
                family_q |= sample_family_q
