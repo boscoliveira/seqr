@@ -1997,7 +1997,7 @@ Loading pipeline should be triggered with:
             4: (0, 0, 0, 0, 0, 0),
             5: (1, 1, 0, 0, 2, 0),
             6: (0, 0, 0, 0, 0, 0),
-            22: (0, 3, 0, 1, 0, 0),
+            22: (0, 3, 0, 1, 3, 1),
         })
 
         project_samples = Sample.objects.filter(individual__family__project__guid=PROJECT_GUID, is_active=True)

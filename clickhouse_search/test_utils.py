@@ -126,7 +126,7 @@ VARIANT2 = {
     'screenRegionType': None,
     'populations': {
        'seqr': {'ac': 10, 'hom': 3, 'ac_wes': 7, 'ac_wgs': 3, 'hom_wes': 2, 'hom_wgs': 1},
-       'seqr_affected': {'ac': 8, 'hom': 2},
+       'seqr_affected': {'ac': 6, 'hom': 2},
        'topmed': {'af': 0.246152, 'ac': 65154, 'an': 264690, 'hom': 8775, 'het': 47604},
        'exac': {'af': 0.29499999, 'ac': 35805, 'an': 121372, 'hom': 5872, 'hemi': 0, 'het': 24061, 'filter_af': 0.41530353},
        'gnomad_exomes': {'af': 0.00288997, 'ac': 72672, 'an': 251462, 'hom': 1, 'hemi': 0, 'filter_af': 0.0041164},
@@ -206,7 +206,7 @@ VARIANT3 = {
     'screenRegionType': None,
     'populations': {
         'seqr': {'ac': 7, 'hom': 0, 'ac_wes': 5, 'ac_wgs': 2, 'hom_wes': 0, 'hom_wgs': 0},
-        'seqr_affected': {'ac': 5, 'hom': 0},
+        'seqr_affected': {'ac': 3, 'hom': 0},
         'topmed': {'af': 0.362681, 'ac': 95998, 'an': 264690, 'hom': 19369, 'het': 57260},
         'exac': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'het': 0, 'filter_af': 0.0},
         'gnomad_exomes': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'filter_af': 0.0},
@@ -277,7 +277,7 @@ VARIANT4 = {
     'screenRegionType': 'CTCF-only',
     'populations': {
         'seqr': {'ac': 5, 'hom': 1, 'ac_wes': 2, 'ac_wgs': 3, 'hom_wes': 0, 'hom_wgs': 1},
-        'seqr_affected': {'ac': 3, 'hom': 1},
+        'seqr_affected': {'ac': 2, 'hom': 0},
         'topmed': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'het': 0},
         'exac': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'het': 0, 'filter_af': 0.0},
         'gnomad_exomes': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'filter_af': 0.0},
@@ -399,7 +399,7 @@ GRCH37_VARIANT = {
     },
     'populations': {
         'seqr': {'ac': 2, 'hom': 1, 'ac_wes': 2, 'ac_wgs': 0, 'hom_wes': 1, 'hom_wgs': 0},
-        'seqr_affected': {'ac': 0, 'hom': 0},
+        'seqr_affected': {'ac': 2, 'hom': 1},
         'topmed': {'af': 0.52131897, 'ac': 65461, 'an': 125568, 'hom': 16156, 'het': 33149},
         'exac': {'af': 0.63, 'ac': 66593, 'an': 104352, 'hom': 22162, 'hemi': 0, 'het': 22269, 'filter_af': 0.81987739},
         'gnomad_exomes': {'af': 0.63542193, 'ac': 137532, 'an': 216442, 'hom': 45869, 'hemi': 0, 'filter_af': 0.82261163},
@@ -665,7 +665,7 @@ SV_VARIANT2 = {
     },
     'populations': {
         'sv_seqr': {'ac': 2, 'hom': 0},
-        'sv_seqr_affected': {'ac': 2, 'hom': 0},
+        'sv_seqr_affected': {'ac': 1, 'hom': 0},
         'gnomad_svs': {'af': 0.005423, 'id': 'gnomAD-SV_v3_INS_1_299', 'hom': 10359, 'het': 35634},
     },
     'predictions': {'strvctvre': None},
@@ -706,7 +706,7 @@ SV_VARIANT3 = {
         },
     }, 'populations': {
         'sv_seqr': {'ac': 4, 'hom': 1},
-        'sv_seqr_affected': {'ac': 0, 'hom': 0},
+        'sv_seqr_affected': {'ac': 3, 'hom': 1},
         'gnomad_svs': {'af': 0.0, 'id': '', 'hom': 0, 'het': 0},
     },
     'predictions': {'strvctvre': None},
@@ -749,7 +749,7 @@ SV_VARIANT4 = {
     },
     'populations': {
         'sv_seqr': {'ac': 4, 'hom': 1},
-        'sv_seqr_affected': {'ac': 0, 'hom': 0},
+        'sv_seqr_affected': {'ac': 3, 'hom': 1},
         'gnomad_svs': {'af': 0.0, 'id': '', 'hom': 0, 'het': 0},
     },
     'predictions': {'strvctvre': 0.161},
@@ -1145,7 +1145,7 @@ PROJECT_4_COMP_HET_VARIANT = {
     'screenRegionType': None,
     'populations': {
         'seqr': {'ac': 3, 'hom': 1, 'ac_wes': 0, 'hom_wes': 0, 'ac_wgs': 3, 'hom_wgs': 1},
-        'seqr_affected': {'ac': 0, 'hom': 0},
+        'seqr_affected': {'ac': 3, 'hom': 1},
         'topmed': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'het': 0},
         'exac': {'af': 0.0, 'ac': 0, 'an': 0, 'hom': 0, 'hemi': 0, 'het': 0, 'filter_af': 0.0},
         'gnomad_exomes': {'af': 0.00004, 'ac': 4, 'an': 90386, 'hom': 0, 'hemi': 0, 'filter_af': 0.0001},
