@@ -349,6 +349,10 @@ def mock_opened_file(index):
 @mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
 @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
 @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
+@mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
+@mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
+@mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
+@mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
 class CheckNewSamplesTest(object):
 
     def set_up(self):
@@ -417,10 +421,6 @@ class CheckNewSamplesTest(object):
     def _additional_loading_logs(self, data_type, version):
         return []
 
-    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
-    @mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
-    @mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
-    @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
     def test_command(self, mock_email, mock_temp_dir):
         # Test errors
         self._set_empty_loading_files()
