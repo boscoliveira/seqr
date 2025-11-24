@@ -1203,7 +1203,7 @@ class EntriesManager(SearchQuerySet):
             mapped_expression='x.1', output_field=models.ArrayField(models.StringField()),
         )
 
-    def filter_locus(self, exclude_locations=False, intervals=None, genes=None, parsed_variant_ids=None, require_gene_filter=False, require_any_gene=False, **kwargs):
+    def filter_locus(self, exclude_locations=False, require_gene_filter=False, require_any_gene=False, intervals=None, genes=None, parsed_variant_ids=None, **kwargs):
         entries = self
         if parsed_variant_ids:
             # although technically redundant, the interval query is applied to the entries table before join and reduces the join size,

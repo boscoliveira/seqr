@@ -137,8 +137,9 @@ def _get_multi_data_type_comp_het_results(genome_version, sample_data_by_dataset
 
 def get_multi_data_type_comp_het_results_queryset(genome_version, sv_dataset_type, sv_sample_data, snv_indel_sample_data, num_families, exclude_key_pairs=None, **kwargs):
     entries = ENTRY_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS].objects.search(
-        snv_indel_sample_data, **kwargs,
-        inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True, annotate_hom_alts=True)
+        snv_indel_sample_data, inheritance_mode=COMPOUND_HET_ALLOW_HOM_ALTS, annotate_carriers=True,
+        annotate_hom_alts=True, **kwargs,
+    )
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][Sample.DATASET_TYPE_VARIANT_CALLS]
     snv_indel_q = annotations_cls.objects.subquery_join(entries).search(**kwargs)
 
