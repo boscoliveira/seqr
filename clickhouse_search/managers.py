@@ -839,15 +839,17 @@ class EntriesManager(SearchQuerySet):
        project_filter = Q(project_guid__in=project_guids) if len(project_guids) > 1 else Q(project_guid=project_guids[0])
        entries = entries.filter(project_filter)
 
+       multi_sample_type_families = sample_data['sample_type_families'].get('multi', [])
        family_q = None
        multi_sample_type_family_q = None
+       if multi_sample_type_families:
+           family_q = Q(family_guid__in=multi_sample_type_families)
+           multi_sample_type_family_q = family_q
        for sample_type, families in sample_data['sample_type_families'].items():
-           sample_family_q = Q(family_guid__in=families)
-           filter_sample_type = not self.single_sample_type
            if sample_type == 'multi':
-               multi_sample_type_family_q = sample_family_q
-               filter_sample_type = False
-           if filter_sample_type:
+               continue
+           sample_family_q = Q(family_guid__in=families)
+           if not self.single_sample_type:
                sample_family_q &= Q(sample_type=sample_type)
            if family_q:
                family_q |= sample_family_q
@@ -877,7 +879,7 @@ class EntriesManager(SearchQuerySet):
             if carriers_expression is not None:
                 entries = entries.annotate(carriers=carriers_expression)
 
-       if multi_sample_type_family_q is not None:
+       if multi_sample_type_families:
            entries, inheritance_q, quality_q = self._get_multi_sample_type_family_call_qs(
                entries, multi_sample_type_family_q, inheritance_q, quality_q, gt_filter, sample_data['family_missing_type_samples'],
            )
