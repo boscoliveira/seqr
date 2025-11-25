@@ -419,6 +419,10 @@ MULTI_DATA_TYPE_SEARCHES = {
                 'INTRAGENIC_EXON_DUP',
             ],
             'vep_consequences': [
+                'splice_donor_variant',
+                'splice_acceptor_variant',
+                'stop_gained',
+                'frameshift_variant',
                 'stop_lost',
                 'start_lost',
                 'inframe_insertion',
