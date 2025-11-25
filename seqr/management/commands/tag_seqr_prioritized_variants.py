@@ -369,7 +369,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 500},
-                'gnomad_svs': {'ac': 0.01},
+                'gnomad_svs': {'af': 0.01},
             },
             'qualityFilter': {
                 'min_gq_sv': 90,
@@ -387,7 +387,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 100},
-                'gnomad_svs': {'ac': 0.001},
+                'gnomad_svs': {'af': 0.001},
             },
             'qualityFilter': {
                 'vcf_filter': 'PASS',
@@ -402,7 +402,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 500},
-                'gnomad_svs': {'ac': 0.01},
+                'gnomad_svs': {'af': 0.01},
             },
             'qualityFilter': {
                 'min_gq_sv': 90,
@@ -445,7 +445,7 @@ MULTI_DATA_TYPE_SEARCHES = {
             'sv_callset': {'ac': 500},
             'gnomad_exomes': {'af': 0.01, 'hh': 2},
             'gnomad_genomes': {'af': 0.01, 'hh': 2},
-            'gnomad_svs': {'ac': 0.01}
+            'gnomad_svs': {'af': 0.01}
         },
         'qualityFilter': {
             'min_gq_sv': 90,
