@@ -920,8 +920,11 @@ class EntriesManager(SearchQuerySet):
                 samples_by_genotype[genotype].append(sample['sample_id'])
             elif inheritance_mode and inheritance_mode != ANY_AFFECTED:
                 genotype = self.INHERITANCE_FILTERS.get(inheritance_mode, {}).get(affected)
-                if (inheritance_mode == X_LINKED_RECESSIVE and affected == UNAFFECTED and sample['sex'] in MALE_SEXES):
-                    genotype = REF_REF
+                if inheritance_mode == X_LINKED_RECESSIVE and sample['sex'] in MALE_SEXES:
+                    if affected == UNAFFECTED:
+                        genotype = REF_REF
+                    elif affected == AFFECTED:
+                        genotype = HAS_ALT
                 samples_by_genotype[genotype].append(sample['sample_id'])
 
         gt_filter = None
