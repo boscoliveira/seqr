@@ -924,7 +924,7 @@ class EntriesManager(SearchQuerySet):
                     if affected == UNAFFECTED:
                         genotype = REF_REF
                     elif affected == AFFECTED:
-                        genotype = HAS_ALT
+                        genotype = REF_ALT
                 samples_by_genotype[genotype].append(sample['sample_id'])
 
         gt_filter = None
