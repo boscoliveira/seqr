@@ -750,11 +750,39 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
         }
         self._assert_expected_variants(variants, [grch37_lookup_variant])
 
+        variants = variant_lookup(self.user, '7-143270172-A-G', '37', hom_only=True, affected_only=True)
+        self._assert_expected_variants(variants, [grch37_lookup_variant])
+
         # Lookup works if variant is only present on a different build
         variants = variant_lookup(self.user, '7-143260172-A-G', '38')
         self._assert_expected_variants(variants, [grch37_lookup_variant])
         mock_liftover.assert_called_with('hg38', 'hg19')
         mock_convert_coordinate.assert_called_with('chr7', 143260172)
+
+        liftover_variant = {
+            **VARIANT_LOOKUP_VARIANT,
+            'familyGenotypes': {
+                family_guid: gts
+                for family_guid, gts in VARIANT_LOOKUP_VARIANT['familyGenotypes'].items() if family_guid != 'F000014_14'
+            },
+        }
+        del liftover_variant['liftedFamilyGuids']
+        variants = variant_lookup(self.user, '1-439-AC-A', '37')
+        self._assert_expected_variants(variants, [liftover_variant])
+        mock_liftover.assert_called_with('hg19', 'hg38')
+        mock_convert_coordinate.assert_called_with('chr1', 439)
+
+        hom_only_lookup_variant = {
+            **liftover_variant,
+            'familyGenotypes': {
+                **liftover_variant['familyGenotypes'],
+                'F000002_2': [gt for gt in liftover_variant['familyGenotypes']['F000002_2'] if gt['sampleType'] == 'WGS'],
+            },
+        }
+        variants = variant_lookup(self.user, '1-10439-AC-A', '38', hom_only=True)
+        self._assert_expected_variants(variants, [hom_only_lookup_variant])
+        variants = variant_lookup(self.user, '1-439-AC-A', '37', hom_only=True)
+        self._assert_expected_variants(variants, [hom_only_lookup_variant])
 
         variants = variant_lookup(self.user, 'M-4429-G-A', '38')
         self._assert_expected_variants(variants, [{
@@ -764,12 +792,28 @@ class ClickhouseSearchTests(SearchTestHelper, ClickhouseSearchTestCase):
             ]},
         }])
 
+        with self.assertRaises(ObjectDoesNotExist) as cm:
+            variant_lookup(self.user, 'M-4429-G-A', '38', hom_only=True)
+        self.assertEqual(str(cm.exception), 'Variant not present in seqr')
+
         variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS')
         self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, GCNV_LOOKUP_VARIANT])
+
+        affected_only_lookup_variant = {
+            **GCNV_LOOKUP_VARIANT,
+            'familyGenotypes': {
+                family_guid: gts for family_guid, gts in GCNV_LOOKUP_VARIANT['familyGenotypes'].items() if family_guid != 'F000002_2_x'
+            },
+        }
+        variants = variant_lookup(self.user, 'phase2_DEL_chr14_4640', '38', sample_type='WGS', affected_only=True)
+        self._assert_expected_variants(variants, [SV_LOOKUP_VARIANT, affected_only_lookup_variant])
 
         # reciprocal overlap does not meet the threshold for smaller events
         variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES')
         self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT])
+
+        variants = variant_lookup(self.user, 'suffix_140608_DUP', '38', sample_type='WES', affected_only=True)
+        self._assert_expected_variants(variants, [affected_only_lookup_variant])
 
         variants = variant_lookup(self.user, 'suffix_140593_DUP', '38', sample_type='WES')
         self._assert_expected_variants(variants, [GCNV_LOOKUP_VARIANT_3])

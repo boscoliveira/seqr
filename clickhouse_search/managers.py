@@ -737,6 +737,8 @@ class EntriesManager(SearchQuerySet):
         COMPOUND_HET_ALLOW_HOM_ALTS: {**INHERITANCE_FILTERS[COMPOUND_HET], AFFECTED: HAS_ALT},
     }
 
+    GET_AFFECTED_TEMPLATE = "dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, {field}), 'U')"
+
     @property
     def annotations_model(self):
         return self.model.key.field.related_model
@@ -950,11 +952,9 @@ class EntriesManager(SearchQuerySet):
         return affected_condition, unaffected_condition, gt_filter
 
     def _multi_family_affected_filters(self, sample_data, inheritance_mode, inheritance_filter, genotype_lookup):
-        get_affected_template = "dictGetOrDefault('seqrdb_affected_status_dict', 'affected', (family_guid, {field}), 'U')"
         any_unaffected = any(sample['affected'] == UNAFFECTED for sample in sample_data['samples']) \
             if sample_data.get('samples') else sample_data['num_unaffected'] > 0
-        unaffected_condition = (None, get_affected_template + " = 'N'") if any_unaffected else None
-        affected_condition = (None, get_affected_template + " = 'A'")
+        unaffected_condition = (None, self.GET_AFFECTED_TEMPLATE + " = 'N'") if any_unaffected else None
 
         gt_filter = None
         if inheritance_mode and inheritance_mode != ANY_AFFECTED:
@@ -962,7 +962,7 @@ class EntriesManager(SearchQuerySet):
             affected_gts = genotype_lookup.get(inheritance_mode_filters.get(AFFECTED), [])
             unaffected_gts = genotype_lookup.get(inheritance_mode_filters.get(UNAFFECTED), [])
             affected_gt_map = f"map('A', {affected_gts}, 'N', {unaffected_gts}, 'U', [-1, 0, 1, 2])"
-            affected_lookup = get_affected_template.format(field='x.sampleId')
+            affected_lookup = self.GET_AFFECTED_TEMPLATE.format(field='x.sampleId')
             gt_template = 'ifNull({field}, -1)'
             gt_filter_template = f'has({{value}}[{affected_lookup}], {gt_template})'
             if inheritance_mode == X_LINKED_RECESSIVE_MALE_AFFECTED and sample_data.get('unaffected_male_sample_ids'):
@@ -971,7 +971,10 @@ class EntriesManager(SearchQuerySet):
             gt_filter = (affected_gt_map, gt_filter_template)
 
 
-        return affected_condition, unaffected_condition, gt_filter
+        return self._affected_condition(), unaffected_condition, gt_filter
+
+    def _affected_condition(self):
+        return tuple([None, self.GET_AFFECTED_TEMPLATE + " = 'A'"])
 
     def _get_inheritance_quality_qs(self, sample_data, inheritance_mode, quality_filter, clinvar_override_q, annotate_carriers, inheritance_filter):
         allow_no_call = inheritance_filter.get('allowNoCall')
@@ -991,10 +994,7 @@ class EntriesManager(SearchQuerySet):
 
         inheritance_q = None
         if inheritance_mode == ANY_AFFECTED:
-            inheritance_q = Q(calls__array_exists={
-                'gt': (self.genotype_lookup[HAS_ALT], 'has({value}, {field})'),
-                'sampleId': affected_condition,
-            })
+            inheritance_q = self.any_affected_q(affected_condition)
         elif gt_filter:
             inheritance_q = Q(calls__array_all={'gt': gt_filter})
 
@@ -1003,6 +1003,14 @@ class EntriesManager(SearchQuerySet):
         carriers_expression = self._carriers_expression(unaffected_condition) if annotate_carriers and unaffected_condition else None
 
         return inheritance_q, quality_q, gt_filter, carriers_expression
+
+    def any_affected_q(self, affected_condition=None):
+        if affected_condition is None:
+            affected_condition = self._affected_condition()
+        return Q(calls__array_exists={
+            'gt': (self.genotype_lookup[HAS_ALT], 'has({value}, {field})'),
+            'sampleId': affected_condition,
+        })
 
     def _quality_q(self, quality_filter, allow_no_call, affected_condition, clinvar_override_q):
         quality_filter_conditions = {}
