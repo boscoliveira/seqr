@@ -527,13 +527,13 @@ class VariantSearchAPITest(object):
             ['12', '48367227', 'TC', 'T', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
              '', '2', 'AIP (None)|Known gene for phenotype (None)|Excluded (None)', 'a later note (None)|test n\xf8te (None)', '', '', '', '', '', '',
              '', '', '', '', '', '', '', '',  '', '', '', ''],
-            ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.03444932',
-             '0.28899795', '0.246152', '20.9', '0.197',
+            ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.00344493',
+             '0.00288997', '0.246152', '25.9', '0.197',
              '2.001', '0.0', '0.1', '0.05', '', '', 'rs1801131', 'ENST00000383791.8:c.156A>C',
              'ENSP00000373301.3:p.Leu52Phe', 'Conflicting_classifications_of_pathogenicity', '1', '2', '', '', '', '', '', 'HG00731', '2', '', '99', '1.0',
              'HG00732', '1', '', '99', '0.625', 'HG00733', '0', '', '40', '0.0'],
-            ['1', '91502721', 'G', 'A', 'ENSG00000097046', 'intron_variant', '7', '0.0', '0.38041073', '0.0',
-             '0.362681', '2.754', '', '1.378', '0.01', '', '', '',
+            ['1', '91502721', 'G', 'A', 'ENSG00000097046', 'intron_variant', '7', '0.0', '0.00380411', '0.0',
+             '0.362681', '28.754', '', '1.378', '0.01', '', '', '',
              '', 'rs13447464', 'ENST00000234626.11:c.-63-251G>A', '', '', '', '2', '', '', '', '', '', 'HG00731',
              '1', '', '99', '1.0', 'HG00732', '0', '', '99', '0.45946', 'HG00733', '1', '', '99', '0.40741'],
         ]
@@ -561,13 +561,13 @@ class VariantSearchAPITest(object):
                 ['12', '48367227', 'TC', 'T', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',
                  '2', 'AIP (None)|Known gene for phenotype (None)|Excluded (None)', 'a later note (None)|test n\xf8te (None)',
                  '', '', '', '', '', '', '', '', '', '', '', '', '', '', '',],
-                ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.03444932',
-                 '0.28899795', '0.246152', '20.9', '0.197',
+                ['1', '38724419', 'T', 'G', 'ENSG00000177000', 'missense_variant', '10', '0.29499999', '0.00344493',
+                 '0.00288997', '0.246152', '25.9', '0.197',
                  '2.001', '0.0', '0.1', '0.05', '', '', 'rs1801131', 'ENST00000383791.8:c.156A>C',
                  'ENSP00000373301.3:p.Leu52Phe', 'Conflicting_classifications_of_pathogenicity', '1', '2', '', '', 'HG00731', '2', '', '99', '1.0',
                  'HG00732', '1', '', '99', '0.625', 'HG00733', '0', '', '40', '0.0'],
-                ['1', '91502721', 'G', 'A', 'ENSG00000097046', 'intron_variant', '7', '0.0', '0.38041073', '0.0',
-                 '0.362681', '2.754', '', '1.378', '0.01', '', '',
+                ['1', '91502721', 'G', 'A', 'ENSG00000097046', 'intron_variant', '7', '0.0', '0.00380411', '0.0',
+                 '0.362681', '28.754', '', '1.378', '0.01', '', '',
                  '', '', 'rs13447464', 'ENST00000234626.11:c.-63-251G>A', '', '', '', '2', '', '', 'HG00731',
                  '1', '', '99', '1.0', 'HG00732', '0', '', '99', '0.45946', 'HG00733', '1', '', '99',
                  '0.40741'],
@@ -914,7 +914,7 @@ class VariantSearchAPITest(object):
         response_variant = deepcopy(VARIANT_LOOKUP_VARIANT)
         mock_variant_lookup.side_effect = lambda *args, **kwargs: [deepcopy(response_variant)]
 
-        url = f'{reverse(variant_lookup_handler)}?variantId=1-10439-AC-A&genomeVersion=38'
+        url = f'{reverse(variant_lookup_handler)}?variantId=1-10439-AC-A&genomeVersion=38&affectedOnly=true'
         self.check_require_login(url)
 
         response = self.client.get(url)
@@ -975,7 +975,7 @@ class VariantSearchAPITest(object):
             [expected_variant],
         )
         self.assertDictEqual(response.json(), expected_body)
-        mock_variant_lookup.assert_called_with(self.no_access_user, '1-10439-AC-A', '38', sample_type=None)
+        mock_variant_lookup.assert_called_with(self.no_access_user, '1-10439-AC-A', '38', sample_type=None, affected_only=True, hom_only=False)
 
         response_variant['transcripts'] = VARIANTS[0]['transcripts']
         expected_variant['transcripts'] = VARIANTS[0]['transcripts']
@@ -992,7 +992,7 @@ class VariantSearchAPITest(object):
         response_variant['variantId'] = '1-248367227-TC-T'
         response_variant['genomeVersion'] = '37'
         self.login_manager()
-        response = self.client.get(url.replace("38", "37"))
+        response = self.client.get(url.replace("38", "37") + '&homOnly=true')
         self.assertEqual(response.status_code, 200)
 
         individual_guid_map = [
@@ -1037,7 +1037,7 @@ class VariantSearchAPITest(object):
 
         self.assertDictEqual(response.json(), expected_body)
         mock_variant_lookup.assert_called_with(
-            self.manager_user, '1-10439-AC-A', '37', sample_type=None,
+            self.manager_user, '1-10439-AC-A', '37', sample_type=None, affected_only=True, hom_only=True,
         )
 
     def _expected_lookup_body(self, individuals_by_guid, variants):
@@ -1155,7 +1155,7 @@ class VariantSearchAPITest(object):
         },[expected_gcnv_variant, expected_sv_variant])
         self.assertDictEqual(response.json(), expected_body)
         mock_variant_lookup.assert_called_with(
-            self.no_access_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS',
+            self.no_access_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS', affected_only=False, hom_only=False,
         )
 
         self.login_manager()
@@ -1177,7 +1177,7 @@ class VariantSearchAPITest(object):
         expected_body.update({k: {} for k in {'mmeSubmissionsByGuid', 'variantTagsByGuid', 'variantNotesByGuid'}})
         del expected_body['transcriptsById']
         self.assertDictEqual(response.json(), expected_body)
-        mock_variant_lookup.assert_called_with(self.manager_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS')
+        mock_variant_lookup.assert_called_with(self.manager_user, 'phase2_DEL_chr14_4640', '37', sample_type='WGS', affected_only=False, hom_only=False,)
 
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_SECRET', 'abc123')
     @mock.patch('seqr.views.utils.vlm_utils.VLM_CLIENT_ID', MOCK_CLIENT_ID)
