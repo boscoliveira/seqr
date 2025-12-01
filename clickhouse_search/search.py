@@ -33,10 +33,12 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     inheritance_mode = search.get('inheritance_mode')
     has_comp_het = inheritance_mode in {RECESSIVE, COMPOUND_HET}
     has_x_chrom_comp_het = has_comp_het and _is_x_chrom_only(genome_version, **search)
+    has_x_linked = inheritance_mode in {RECESSIVE, X_LINKED_RECESSIVE} and _has_x_chrom(genome_version, **search)
     sample_data_by_dataset_type = _get_sample_data(
         samples,
         skip_multi_project_individual_guid=True,
-        annotate_affected_male_families=has_x_chrom_comp_het or inheritance_mode == RECESSIVE,
+        has_x_chrom_comp_het=has_x_chrom_comp_het,
+        has_x_linked=has_x_linked,
     )
     results = []
     family_guid = None
@@ -52,15 +54,12 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
         if inheritance_mode != COMPOUND_HET:
             dataset_results += _get_search_results(genome_version, dataset_type, sample_data, exclude_keys=exclude_keys.get(dataset_type), **search)
 
-        run_x_linked_male_search = _has_x_chrom(genome_version, **search) and (
-            inheritance_mode == RECESSIVE or (inheritance_mode == X_LINKED_RECESSIVE and not sample_data.get('samples'))
-        )
+        run_x_linked_male_search = has_x_linked and not (inheritance_mode == X_LINKED_RECESSIVE and sample_data.get('samples'))
         if run_x_linked_male_search:
             affected_male_family_guids = {
                 s['family_guid'] for s in sample_data['samples'] if s['affected'] == AFFECTED and s['sex'] in MALE_SEXES
             } if 'samples' in sample_data else sample_data['affected_male_family_guids']
             if affected_male_family_guids:
-                # TODO add unaffected_male_sample_ids to sample data if needed
                 x_linked_sample_data = _affected_male_families(sample_data, affected_male_family_guids)
                 x_linked_search = {**search, 'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED}
                 logger.info(f'Loading {dataset_type} X-linked male data for {x_linked_sample_data["num_families"]} families', user)
@@ -384,7 +383,7 @@ def _is_matched_minimal_transcript(transcript, minimal_transcript):
      and transcript.get('spliceregion', {}).get('extended_intronic_splice_region_variant') == minimal_transcript.get('extendedIntronicSpliceRegionVariant'))
 
 
-def _get_sample_data(samples, skip_multi_project_individual_guid=False, annotate_affected_male_families=False):
+def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_chrom_comp_het=False, has_x_linked=False):
     mismatch_affected_samples = samples.values('sample_id', 'dataset_type').annotate(
         projects=ArrayAgg('individual__family__project__name', distinct=True),
         affected=ArrayAgg('individual__affected', distinct=True),
@@ -407,9 +406,13 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, annotate
         annotations['num_unaffected'] = Count(
             'individual_id', distinct=True, filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED),
         )
-        if annotate_affected_male_families:
+        if has_x_chrom_comp_het or has_x_linked:
             annotations['affected_male_family_guids'] = ArrayAgg('individual__family__guid', distinct=True, filter=Q(
-                individual__affected=Individual.AFFECTED_STATUS_AFFECTED, individual__sex=Individual.SEX_MALE,
+                individual__affected=Individual.AFFECTED_STATUS_AFFECTED, individual__sex__in=Individual.MALE_SEXES,
+            ))
+        if has_x_linked:
+            annotations['unaffected_male_sample_ids'] = ArrayAgg('sample_id', distinct=True, filter=Q(
+                individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED, individual__sex__in=Individual.MALE_SEXES,
             ))
     else:
         annotations['samples'] = ArrayAgg(JSONObject(
