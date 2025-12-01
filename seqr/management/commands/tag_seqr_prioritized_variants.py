@@ -121,6 +121,19 @@ SEARCHES = {
                 'gnomad_genomes': {'af': 0.03}
             },
         },
+        'Clinvar Pathogenic - X-Linked Recessive': {
+            'gene_list_moi': 'R',
+            'inheritance_mode': 'x_linked_recessive',
+            'pathogenicity': {
+                'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
+                'clinvarMinStars': 1,
+            },
+            'freqs': {
+                'callset': {'ac': 2000},
+                'gnomad_exomes': {'af': 0.03},
+                'gnomad_genomes': {'af': 0.03}
+            },
+        },
         'Compound Heterozygous': {
             'gene_list_moi': 'R',
             'inheritance_mode': 'compound_het',
@@ -373,6 +386,43 @@ SEARCHES = {
                 'min_ab': 20,
             },
         },
+        'X-Linked Recessive': {
+            'gene_list_moi': 'R',
+            'inheritance_mode': 'x_linked_recessive',
+            'annotations': {
+                'vep_consequences': [
+                    'splice_donor_variant',
+                    'splice_acceptor_variant',
+                    'stop_gained',
+                    'frameshift_variant',
+                    'stop_lost',
+                    'start_lost',
+                    'inframe_insertion',
+                    'inframe_deletion',
+                    'protein_altering_variant',
+                    'missense_variant',
+                    'splice_donor_5th_base_variant',
+                    'splice_region_variant',
+                    'splice_donor_region_variant',
+                    'splice_polypyrimidine_tract_variant',
+                    'extended_intronic_splice_region_variant',
+                    'non_coding_transcript_exon_variant',
+                ],
+            },
+            'in_silico': {
+                'cadd': 25,
+                'revel': 0.6
+            },
+            'freqs': {
+                'callset': {'ac': 1000},
+                'gnomad_exomes': {'af': 0.01, 'hh': 5},
+                'gnomad_genomes': {'af': 0.01,'hh': 5},
+            },
+            'qualityFilter': {
+                'min_gq': 30,
+                'min_ab': 20,
+            },
+        },
     },
     'SV': {
         'SV - Compound Heterozygous': {
@@ -414,6 +464,20 @@ SEARCHES = {
         'SV - Recessive': {
             'gene_list_moi': 'R',
             'inheritance_mode': 'homozygous_recessive',
+            'annotations': {
+              'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
+            },
+            'freqs': {
+                'sv_callset': {'ac': 500},
+                'gnomad_svs': {'af': 0.01},
+            },
+            'qualityFilter': {
+                'min_gq_sv': 90,
+            }
+        },
+        'SV - X-Linked Recessive': {
+            'gene_list_moi': 'R',
+            'inheritance_mode': 'x_linked_recessive',
             'annotations': {
               'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
             },
