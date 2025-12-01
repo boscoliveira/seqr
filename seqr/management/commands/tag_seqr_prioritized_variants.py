@@ -540,7 +540,9 @@ class Command(BaseCommand):
         is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
         sample_qs = sample_qs.filter(dataset_type=dataset_type)
         if is_sv:
-            sample_qs = sample_qs.exclude(individual__sv_flags__contains=['outlier_num._calls'])
+            sample_qs = sample_qs.exclude(
+                individual__sv_flags__contains=['outlier_num._calls'], individual__affected=Individual.AFFECTED_STATUS_AFFECTED,
+            )
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         if len(sample_types) > 1:
             raise CommandError('Variant prioritization not supported for projects with multiple sample types')
