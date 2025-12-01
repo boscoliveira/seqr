@@ -17,7 +17,7 @@ from seqr.models import Sample, PhenotypePrioritization, Individual
 from seqr.utils.logging_utils import SeqrLogger
 from seqr.utils.search.constants import MAX_VARIANTS, XPOS_SORT_KEY, PATHOGENICTY_SORT_KEY, PATHOGENICTY_HGMD_SORT_KEY, \
     PRIORITIZED_GENE_SORT, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS, RECESSIVE, AFFECTED, MALE_SEXES, \
-    X_LINKED_RECESSIVE
+    X_LINKED_RECESSIVE, X_LINKED_RECESSIVE_MALE_AFFECTED
 from seqr.views.utils.json_utils import DjangoJSONEncoderWithSets
 
 logger = SeqrLogger(__name__)
@@ -51,13 +51,19 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
         dataset_results = []
         if inheritance_mode != COMPOUND_HET:
             dataset_results += _get_search_results(genome_version, dataset_type, sample_data, exclude_keys=exclude_keys.get(dataset_type), **search)
-        if inheritance_mode == RECESSIVE and not _is_no_x_chrom(genome_version, **search):
+
+        run_x_linked_male_search = _has_x_chrom(genome_version, **search) and (
+            inheritance_mode == RECESSIVE or (inheritance_mode == X_LINKED_RECESSIVE and not sample_data.get('samples'))
+        )
+        if run_x_linked_male_search:
             affected_male_family_guids = {
                 s['family_guid'] for s in sample_data['samples'] if s['affected'] == AFFECTED and s['sex'] in MALE_SEXES
             } if 'samples' in sample_data else sample_data['affected_male_family_guids']
             if affected_male_family_guids:
+                # TODO add unaffected_male_sample_ids to sample data if needed
                 x_linked_sample_data = _affected_male_families(sample_data, affected_male_family_guids)
-                x_linked_search = {**search, 'inheritance_mode': X_LINKED_RECESSIVE}
+                x_linked_search = {**search, 'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED}
+                logger.info(f'Loading {dataset_type} X-linked male data for {x_linked_sample_data["num_families"]} families', user)
                 dataset_results += _get_search_results(
                     genome_version, dataset_type, x_linked_sample_data, exclude_keys=exclude_keys.get(dataset_type),
                     **x_linked_search,
@@ -502,10 +508,10 @@ def _is_x_chrom_only(genome_version, genes=None, intervals=None, **kwargs):
     return all('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' in interval['chrom'] for interval in (intervals or []))
 
 
-def _is_no_x_chrom(genome_version, genes=None, intervals=None, **kwargs):
+def _has_x_chrom(genome_version, genes=None, intervals=None, **kwargs):
     if not (genes or intervals):
-        return False
-    return all('X' not in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) and all('X' not in interval['chrom'] for interval in (intervals or []))
+        return True
+    return any('X' in gene[f'chromGrch{genome_version}'] for gene in (genes or {}).values()) or any('X' in interval['chrom'] for interval in (intervals or []))
 
 
 OMIM_SORT = 'in_omim'

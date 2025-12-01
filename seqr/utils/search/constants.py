@@ -25,6 +25,7 @@ COMPOUND_HET = 'compound_het'
 COMPOUND_HET_ALLOW_HOM_ALTS = 'compound_het_allow_hom_alts'
 RECESSIVE = 'recessive'
 X_LINKED_RECESSIVE = 'x_linked_recessive'
+X_LINKED_RECESSIVE_MALE_AFFECTED = 'x_linked_recessive_male_affected'
 HOMOZYGOUS_RECESSIVE = 'homozygous_recessive'
 ANY_AFFECTED = 'any_affected'
 
@@ -35,6 +36,10 @@ RECESSIVE_FILTER = {
 INHERITANCE_FILTERS = {
     RECESSIVE: RECESSIVE_FILTER,
     X_LINKED_RECESSIVE: RECESSIVE_FILTER,
+    X_LINKED_RECESSIVE_MALE_AFFECTED: {
+        AFFECTED: REF_ALT,
+        UNAFFECTED: HAS_REF,
+    },
     HOMOZYGOUS_RECESSIVE: RECESSIVE_FILTER,
     COMPOUND_HET: {
         AFFECTED: REF_ALT,
