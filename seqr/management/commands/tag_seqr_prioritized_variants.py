@@ -16,6 +16,7 @@ from reference_data.models import GENOME_VERSION_GRCh38
 from seqr.models import Project, Family, Individual, Sample, LocusList
 from seqr.utils.communication_utils import send_project_notification
 from seqr.utils.gene_utils import get_genes
+from seqr.utils.search.constants import ANY_AFFECTED, HOMOZYGOUS_RECESSIVE, X_LINKED_RECESSIVE_MALE_AFFECTED
 from seqr.utils.search.utils import clickhouse_only, get_search_samples, COMPOUND_HET
 from seqr.views.utils.orm_to_json_utils import SEQR_TAG_TYPE
 from seqr.views.utils.variant_utils import bulk_create_tagged_variants, gene_ids_annotated_queryset
@@ -42,7 +43,7 @@ SEARCHES = {
     'SNV_INDEL': {
         'Clinvar Pathogenic': {
             'gene_list_moi': 'D',
-            'inheritance_mode': 'any_affected',
+            'inheritance_mode': ANY_AFFECTED,
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
                 'clinvarMinStars': 1,
@@ -55,7 +56,7 @@ SEARCHES = {
         },
         'Clinvar Pathogenic -  Compound Heterozygous': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'compound_het',
+            'inheritance_mode': COMPOUND_HET,
             'split_pathogenicity_annotations': True,
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
@@ -93,7 +94,7 @@ SEARCHES = {
         },
         'Clinvar Both Pathogenic -  Compound Heterozygous': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'compound_het',
+            'inheritance_mode': COMPOUND_HET,
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
                 'clinvarMinStars': 1,
@@ -110,7 +111,7 @@ SEARCHES = {
         },
         'Clinvar Pathogenic - Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'homozygous_recessive',
+            'inheritance_mode': HOMOZYGOUS_RECESSIVE,
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
                 'clinvarMinStars': 1,
@@ -123,7 +124,10 @@ SEARCHES = {
         },
         'Clinvar Pathogenic - X-Linked Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'x_linked_recessive',
+            'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED,
+            'family_filter': {
+                'affected_males': True
+            },
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
                 'clinvarMinStars': 1,
@@ -136,7 +140,7 @@ SEARCHES = {
         },
         'Compound Heterozygous': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'compound_het',
+            'inheritance_mode': COMPOUND_HET,
             'annotations': {
                 'vep_consequences': [
                     'splice_donor_variant',
@@ -186,7 +190,7 @@ SEARCHES = {
                 'confirmed_inheritance': True
             },
             'gene_list_moi': 'R',
-            'inheritance_mode': 'compound_het',
+            'inheritance_mode': COMPOUND_HET,
             'annotations': {
                 'vep_consequences': [
                     'stop_lost',
@@ -351,7 +355,7 @@ SEARCHES = {
         },
         'Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'homozygous_recessive',
+            'inheritance_mode': HOMOZYGOUS_RECESSIVE,
             'annotations': {
                 'vep_consequences': [
                     'splice_donor_variant',
@@ -388,7 +392,10 @@ SEARCHES = {
         },
         'X-Linked Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'x_linked_recessive',
+            'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED,
+            'family_filter': {
+                'affected_males': True
+            },
             'annotations': {
                 'vep_consequences': [
                     'splice_donor_variant',
@@ -430,7 +437,7 @@ SEARCHES = {
                 'confirmed_inheritance': True
             },
             'gene_list_moi': 'R',
-            'inheritance_mode': 'compound_het',
+            'inheritance_mode': COMPOUND_HET,
             'annotations': {
                 'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
             },
@@ -463,7 +470,7 @@ SEARCHES = {
         },
         'SV - Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'homozygous_recessive',
+            'inheritance_mode': HOMOZYGOUS_RECESSIVE,
             'annotations': {
               'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
             },
@@ -477,7 +484,10 @@ SEARCHES = {
         },
         'SV - X-Linked Recessive': {
             'gene_list_moi': 'R',
-            'inheritance_mode': 'x_linked_recessive',
+            'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED,
+            'family_filter': {
+                'affected_males': True
+            },
             'annotations': {
               'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
             },
@@ -614,10 +624,11 @@ class Command(BaseCommand):
         samples_by_family = {
             agg['individual__family__guid']: agg for agg in sample_qs.values('individual__family__guid').annotate(
                 affecteds=ArrayAgg(
-                    JSONObject(maternal_guid='individual__mother__guid', paternal_guid='individual__father__guid'),
+                    JSONObject(maternal_guid='individual__mother__guid', paternal_guid='individual__father__guid', sex='individual__sex'),
                     filter=Q(individual__affected=Individual.AFFECTED_STATUS_AFFECTED),
                 ),
                 unaffected_guids=ArrayAgg('individual__guid', filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED)),
+                unaffected_male_sample_ids=ArrayAgg('sample_id', filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED, individual__sex__in=Individual.MALE_SEXES)),
             ).filter(affecteds__len__gt=0)
         }
         samples_by_dataset_type[dataset_type] = samples_by_family
@@ -644,18 +655,25 @@ class Command(BaseCommand):
                 family_guid: sample_data for family_guid, sample_data in samples_by_family.items()
                 if cls._family_passes_filter(sample_data, family_filter)
             }
-        return {
+        valid_sample_data = {
             'project_guids': [project.guid],
             'num_families': len(samples_by_family),
             'num_unaffected': sum(len(s['unaffected_guids']) for s in samples_by_family.values()),
             'sample_type_families': {sample_type: samples_by_family.keys()},
         }
+        if (family_filter or {}).get('affected_males'):
+            valid_sample_data['unaffected_male_sample_ids'] = [
+                sample_id for s in samples_by_family.values() for sample_id in s['unaffected_male_sample_ids']
+            ]
+        return valid_sample_data
 
     @staticmethod
     def _family_passes_filter(sample_data, family_filter):
         if family_filter.get('min_affected') and len(sample_data['affecteds']) < family_filter['min_affected']:
             return False
         if family_filter.get('max_affected') and len(sample_data['affecteds']) > family_filter['max_affected']:
+            return False
+        if family_filter.get('affected_males') and all(s['sex'] not in Individual.MALE_SEXES for s in sample_data['affecteds']):
             return False
         if 'confirmed_inheritance' in family_filter:
             proband = next((s for s in sample_data['affecteds'] if s['maternal_guid'] and s['paternal_guid']), None)
