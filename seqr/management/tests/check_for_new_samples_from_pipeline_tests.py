@@ -1007,7 +1007,7 @@ The following users have been notified: test_user_manager@test.com""")
         return 8 if single_call else 9
 
     @staticmethod
-    def _anvil_email_calls(email_text=ANVIL_ERROR_TEXT_EMAIL, email_html=ANVIL_ERROR_HTML_EMAIL):
+    def _anvil_email_calls(*args, email_text=ANVIL_ERROR_TEXT_EMAIL, email_html=ANVIL_ERROR_HTML_EMAIL, **kwargs):
         return [
             mock.call(body=email_text, subject='Error loading seqr data', to=['test_user_manager@test.com']),
             mock.call().attach_alternative(email_html, 'text/html'),
