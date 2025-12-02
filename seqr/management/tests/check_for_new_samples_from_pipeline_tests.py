@@ -43,20 +43,23 @@ ANVIL_HTML_EMAIL = f'Dear seqr user,<br /><br />' \
                    f'We are following up on the request to load data from AnVIL on March 12, 2017.<br />' \
                    f'We have loaded 1 new WES samples from the AnVIL workspace {anvil_link} to the corresponding seqr project {seqr_link}.' \
                    f'<br />Let us know if you have any questions.<br /><br />All the best,<br />The seqr team'
-ANVIL_ERROR_TEXT_EMAIL = """Dear seqr user,
+ANVIL_ERROR_TEXT_EMAIL_TEMPLATE = """Dear seqr user,
 
 We are following up on the request to load data from AnVIL workspace ext-data/empty on March 12, 2017. This request could not be loaded due to the following error(s):
 - Missing the following expected contigs:chr17
-These errors often occur when a joint called VCF is not created in a supported manner. Please see our documentation for more information about supported calling pipelines and file formats. If you believe this error is incorrect and would like to request a manual review, please respond to this email.
+These errors often occur when a joint called VCF is not created in a supported manner. Please see our documentation for more information about supported calling pipelines and file formats. If you believe this error is incorrect and would like to request a manual review, please respond to this email.{error}
 
 All the best,
 The seqr team"""
-ANVIL_ERROR_HTML_EMAIL = f'Dear seqr user,<br /><br />' \
+ANVIL_ERROR_TEXT_EMAIL = ANVIL_ERROR_TEXT_EMAIL_TEMPLATE.format(error='')
+ANVIL_ERROR_HTML_EMAIL_TEMPLATE = 'Dear seqr user,<br /><br />' \
 f'We are following up on the request to load data from AnVIL workspace {anvil_link.replace("anvil-non-analyst-project 1000 Genomes Demo", "empty")} on March 12, 2017. This request could not be loaded due to the following error(s):<br />' \
-f'- Missing the following expected contigs:chr17<br />' \
-f'These errors often occur when a joint called VCF is not created in a supported manner. ' \
-f'Please see our <a href=https://storage.googleapis.com/seqr-reference-data/seqr-vcf-info.pdf>documentation</a> for more information about supported calling pipelines and file formats. If you believe this error is incorrect and would like to request a manual review, please respond to this email.'\
-f'<br /><br />All the best,<br />The seqr team'
+'- Missing the following expected contigs:chr17<br />' \
+'These errors often occur when a joint called VCF is not created in a supported manner. ' \
+'Please see our <a href=https://storage.googleapis.com/seqr-reference-data/seqr-vcf-info.pdf>documentation</a> for more information about supported calling pipelines and file formats. If you believe this error is incorrect and would like to request a manual review, please respond to this email.'\
+'{error}<br /><br />All the best,<br />The seqr team'
+ANVIL_ERROR_HTML_EMAIL = ANVIL_ERROR_HTML_EMAIL_TEMPLATE.format(error='')
+ANVIL_ERROR_DELAY = 'Please note that our team is currently away for our winter break, and therefore all responses will be delayed until we return in mid-January. We appreciate your understanding and support of our research team taking some well-deserved time off and hope you also have a nice break.'
 TEXT_EMAIL_TEMPLATE = """Dear seqr user,
 
 This is to notify you that data for {} new {} samples has been loaded in seqr project {}
@@ -435,7 +438,7 @@ class CheckNewSamplesTest(object):
         num_calls = self._assert_expected_airtable_calls(bool(run_loading_logs), single_call)
         self.assertEqual(len(responses.calls), num_calls)
 
-    def _test_success_call(self, mock_email):
+    def _test_success_call(self, mock_email, anvil_email_calls):
         Project.objects.filter(id__in=[1, 3]).update(genome_version=38)
 
         self._test_call(run_loading_logs={
@@ -511,7 +514,7 @@ The following 1 families failed sex check:
         ),
         ])
 
-        self.assertEqual(mock_email.call_count, 5 if self.ANVIL_EMAIL_CALLS else 4)
+        self.assertEqual(mock_email.call_count, 5 if anvil_email_calls else 4)
         mock_email.assert_has_calls([
             mock.call(body=TEXT_EMAIL_TEMPLATE.format(2, 'WES', 'Test Reprocessed Project'), subject='New WES data available in seqr', to=['test_user_manager@test.com']),
             mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(2, 'WES', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
@@ -525,7 +528,7 @@ The following 1 families failed sex check:
             mock.call(body=TEXT_EMAIL_TEMPLATE.format(1, 'WES SV', 'Test Reprocessed Project'), subject='New WES SV data available in seqr', to=['test_user_manager@test.com']),
             mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(1, 'WES SV', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
             mock.call().send(),
-        ] + self.ANVIL_EMAIL_CALLS)
+        ] + anvil_email_calls)
         self.assertDictEqual(mock_email.return_value.esp_extra, {'MessageStream': 'seqr-notifications'})
         self.assertDictEqual(mock_email.return_value.merge_data, {})
 
@@ -537,6 +540,10 @@ The following 1 families failed sex check:
             str(self.collaborator_user.notifications.first()), 'Non-Analyst Project Loaded 1 new WES samples 0 minutes ago')
 
     def _additional_loading_logs(self, data_type, version):
+        return []
+
+    @staticmethod
+    def _anvil_email_calls(*args, **kwargs):
         return []
 
     @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
@@ -576,7 +583,7 @@ The following 1 families failed sex check:
         # Test success
         self.mock_send_slack.reset_mock()
         mock_email.reset_mock()
-        self._test_success_call(mock_email)
+        self._test_success_call(mock_email, self._anvil_email_calls())
 
         # Tests Sample models created/updated
         snv_indel_samples = Sample.objects.filter(data_source='auto__2023-08-09')
@@ -705,7 +712,6 @@ class LocalCheckNewSamplesTest(DifferentDbTransactionSupportMixin, Authenticatio
     MOCK_DATA_DIR = '/seqr/seqr-hail-search-data'
     PROJECT_EMAIL_TEXT = TEXT_EMAIL_TEMPLATE.format(1, 'WES', 'Non-Analyst Project')
     PROJECT_EMAIL_HTML = HTML_EMAIL_TEMAPLTE.format(1, 'WES', EXTERNAL_PROJECT_GUID, 'Non-Analyst Project')
-    ANVIL_EMAIL_CALLS = []
 
     LIST_FILE_LOGS = []
     AIRTABLE_LOGS = []
@@ -781,11 +787,6 @@ class AirtableCheckNewSamplesTest(AnvilAuthenticationTestCase, CheckNewSamplesTe
     MOCK_DATA_DIR = 'gs://seqr-hail-search-data/v3.1'
     PROJECT_EMAIL_TEXT = ANVIL_TEXT_EMAIL
     PROJECT_EMAIL_HTML = ANVIL_HTML_EMAIL
-    ANVIL_EMAIL_CALLS = [
-        mock.call(body=ANVIL_ERROR_TEXT_EMAIL, subject='Error loading seqr data', to=['test_user_manager@test.com']),
-        mock.call().attach_alternative(ANVIL_ERROR_HTML_EMAIL, 'text/html'),
-        mock.call().send(),
-    ]
 
     LIST_FILE_LOGS = [
         ('==> gsutil ls gs://seqr-hail-search-data/v3.1/*/*/runs/*/*', None),
@@ -986,7 +987,15 @@ The following users have been notified: test_user_manager@test.com""")
 
         return 8 if single_call else 9
 
-    # @mock.patch('seqr.management.commands.check_for_new_samples_from_pipeline.IS_ANVIL_LOADING_DELAY', True)
+    @staticmethod
+    def _anvil_email_calls(email_text=ANVIL_ERROR_TEXT_EMAIL, email_html=ANVIL_ERROR_HTML_EMAIL):
+        return [
+            mock.call(body=email_text, subject='Error loading seqr data', to=['test_user_manager@test.com']),
+            mock.call().attach_alternative(email_html, 'text/html'),
+            mock.call().send(),
+        ]
+
+    @mock.patch('seqr.management.commands.check_for_new_samples_from_pipeline.IS_ANVIL_LOADING_DELAY', True)
     @mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', 'http://testairtable')
     @mock.patch('seqr.utils.communication_utils.BASE_URL', SEQR_URL)
     @mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
@@ -1000,4 +1009,7 @@ The following users have been notified: test_user_manager@test.com""")
     def test_loading_delay_command(self, mock_email, mock_temp_dir):
         self._add_responses()
         mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
-        self._test_success_call(mock_email)
+        self._test_success_call(mock_email, self._anvil_email_calls(
+            email_text=ANVIL_ERROR_TEXT_EMAIL_TEMPLATE.format(error='\n'+ANVIL_ERROR_DELAY),
+            email_html=ANVIL_ERROR_HTML_EMAIL_TEMPLATE.format(error='<br />'+ANVIL_ERROR_DELAY),
+        ))
