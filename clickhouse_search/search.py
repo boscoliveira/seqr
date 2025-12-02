@@ -162,18 +162,24 @@ def get_multi_data_type_comp_het_results_queryset(genome_version, sv_dataset_typ
     return _get_comp_het_results_queryset(annotations_cls, snv_indel_q, sv_q, num_families, exclude_key_pairs)
 
 
-def get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, inheritance_mode=None, exclude_key_pairs=None, no_secondary_annotations=False, **search_kwargs):
+def get_data_type_comp_het_results_queryset(genome_version, dataset_type, sample_data, annotations=None, annotations_secondary=None, pathogenicity=None, inheritance_mode=None, exclude_key_pairs=None, split_pathogenicity_annotations=False, **search_kwargs):
     entry_cls = ENTRY_CLASS_MAP[genome_version][dataset_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][dataset_type]
     entries = entry_cls.objects.search(
-        sample_data, **search_kwargs, inheritance_mode=COMPOUND_HET, annotations=annotations, annotate_carriers=True,
+        sample_data, **search_kwargs, inheritance_mode=COMPOUND_HET, pathogenicity=pathogenicity, annotations=annotations, annotate_carriers=True,
     )
 
-    if not no_secondary_annotations:
+    if split_pathogenicity_annotations:
+        pathogenicity_secondary = pathogenicity
+        pathogenicity = None
+    else:
         annotations_secondary = annotations_secondary or annotations
-    primary_q = annotations_cls.objects.subquery_join(entries).search(annotations=annotations, **search_kwargs)
+        pathogenicity_secondary = pathogenicity
+    primary_q = annotations_cls.objects.subquery_join(entries).search(
+        annotations=annotations, pathogenicity=pathogenicity, **search_kwargs,
+    )
     secondary_q = annotations_cls.objects.subquery_join(entries).search(
-        annotations=annotations_secondary, **search_kwargs,
+        annotations=annotations_secondary, pathogenicity=pathogenicity_secondary, **search_kwargs,
     )
 
     return _get_comp_het_results_queryset(annotations_cls, primary_q, secondary_q, sample_data['num_families'], exclude_key_pairs)
@@ -616,7 +622,7 @@ def clickhouse_variant_gene_lookup(user, gene, genome_version, search):
     return format_clickhouse_results(results, genome_version)
 
 
-def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None):
+def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=None, affected_only=False, hom_only=False):
     entry_cls = ENTRY_CLASS_MAP[genome_version][data_type]
     annotations_cls = ANNOTATIONS_CLASS_MAP[genome_version][data_type]
 
@@ -629,6 +635,7 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
     else:
         entries = entry_cls.objects.filter_locus(parsed_variant_ids=[variant_id])
 
+    entries = _filter_lookup_entries(entries, affected_only, hom_only)
     entries = entries.result_values(sample_data)
     results = annotations_cls.objects.subquery_join(entries)
     if isinstance(variant_id, str):
@@ -642,14 +649,23 @@ def _clickhouse_variant_lookup(variant_id, genome_version, data_type, samples=No
         variant = format_clickhouse_results([variant], genome_version)[0]
     return variant
 
-def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version):
+def _filter_lookup_entries(entries, affected_only, hom_only):
+    if affected_only:
+        entries = entries.filter(entries.any_affected_q())
+    if hom_only:
+        entries = entries.filter(calls__array_exists={'gt': (2,)})
+    return entries
+
+def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genome_version, affected_only, hom_only):
     is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
     data_type = f'{dataset_type}_{sample_type}' if is_sv else dataset_type
     logger.info(f'Looking up variant {variant_id} with data type {data_type}', user)
 
-    variant = _clickhouse_variant_lookup(variant_id, genome_version, data_type)
+    variant = _clickhouse_variant_lookup(
+        variant_id, genome_version, data_type, affected_only=affected_only, hom_only=hom_only,
+    )
     if variant:
-        _add_liftover_genotypes(variant, data_type, variant_id)
+        _add_liftover_genotypes(variant, data_type, variant_id, affected_only, hom_only)
     else:
         lifted_genome_version = next(gv for gv in ENTRY_CLASS_MAP.keys() if gv != genome_version)
         if ENTRY_CLASS_MAP[lifted_genome_version].get(data_type):
@@ -657,7 +673,9 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
             liftover_results = run_liftover(lifted_genome_version, variant_id[0], variant_id[1])
             if liftover_results:
                 lifted_id = (liftover_results[0], liftover_results[1], *variant_id[2:])
-                variant = _clickhouse_variant_lookup(lifted_id, lifted_genome_version, data_type)
+                variant = _clickhouse_variant_lookup(
+                    lifted_id, lifted_genome_version, data_type, affected_only=affected_only, hom_only=hom_only,
+                )
 
     if not variant:
         raise ObjectDoesNotExist('Variant not present in seqr')
@@ -673,6 +691,7 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
 
         padding = int((variant['end'] - variant['pos']) * 0.2)
         entries = other_entry_class.objects.search_padded_interval(variant['chrom'], variant['pos'], padding)
+        entries = _filter_lookup_entries(entries, affected_only, hom_only)
         results = other_annotations_cls.objects.subquery_join(entries).search(
             padded_interval_end=(variant['end'], padding),
             annotations={'structural': [variant['svType'], f"gCNV_{variant['svType']}"]},
@@ -682,7 +701,7 @@ def clickhouse_variant_lookup(user, variant_id, dataset_type, sample_type, genom
     return variants
 
 
-def _add_liftover_genotypes(variant, data_type, variant_id):
+def _add_liftover_genotypes(variant, data_type, variant_id, affected_only, hom_only):
     lifted_entry_cls = ENTRY_CLASS_MAP.get(variant.get('liftedOverGenomeVersion'), {}).get(data_type)
     if not lifted_entry_cls:
         return
@@ -693,6 +712,7 @@ def _add_liftover_genotypes(variant, data_type, variant_id):
     if not keys:
         return
     lifted_entries = lifted_entry_cls.objects.filter_locus(parsed_variant_ids=[lifted_id]).filter(key=keys[0])
+    lifted_entries = _filter_lookup_entries(lifted_entries, affected_only, hom_only)
     gt_field, gt_expr = lifted_entry_cls.objects.genotype_expression()
     lifted_entry_data = lifted_entries.values('key').annotate(**{gt_field: GroupArrayArray(gt_expr)})
     if lifted_entry_data:

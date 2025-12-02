@@ -56,7 +56,7 @@ SEARCHES = {
         'Clinvar Pathogenic -  Compound Heterozygous': {
             'gene_list_moi': 'R',
             'inheritance_mode': 'compound_het',
-            'no_secondary_annotations': True,
+            'split_pathogenicity_annotations': True,
             'pathogenicity': {
                 'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
                 'clinvarMinStars': 1,
@@ -80,6 +80,23 @@ SEARCHES = {
                     'extended_intronic_splice_region_variant',
                     'non_coding_transcript_exon_variant',
                 ]
+            },
+            'freqs': {
+                'callset': {'ac': 2000},
+                'gnomad_exomes': {'af': 0.03},
+                'gnomad_genomes': {'af': 0.03}
+            },
+            'qualityFilter': {
+                'min_gq': 30,
+                'min_ab': 20
+            },
+        },
+        'Clinvar Both Pathogenic -  Compound Heterozygous': {
+            'gene_list_moi': 'R',
+            'inheritance_mode': 'compound_het',
+            'pathogenicity': {
+                'clinvar': ['pathogenic', 'likely_pathogenic', 'conflicting_p_lp'],
+                'clinvarMinStars': 1,
             },
             'freqs': {
                 'callset': {'ac': 2000},
@@ -369,7 +386,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 500},
-                'gnomad_svs': {'ac': 0.01},
+                'gnomad_svs': {'af': 0.01},
             },
             'qualityFilter': {
                 'min_gq_sv': 90,
@@ -387,7 +404,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 100},
-                'gnomad_svs': {'ac': 0.001},
+                'gnomad_svs': {'af': 0.001},
             },
             'qualityFilter': {
                 'vcf_filter': 'PASS',
@@ -402,7 +419,7 @@ SEARCHES = {
             },
             'freqs': {
                 'sv_callset': {'ac': 500},
-                'gnomad_svs': {'ac': 0.01},
+                'gnomad_svs': {'af': 0.01},
             },
             'qualityFilter': {
                 'min_gq_sv': 90,
@@ -419,6 +436,10 @@ MULTI_DATA_TYPE_SEARCHES = {
                 'INTRAGENIC_EXON_DUP',
             ],
             'vep_consequences': [
+                'splice_donor_variant',
+                'splice_acceptor_variant',
+                'stop_gained',
+                'frameshift_variant',
                 'stop_lost',
                 'start_lost',
                 'inframe_insertion',
@@ -441,7 +462,7 @@ MULTI_DATA_TYPE_SEARCHES = {
             'sv_callset': {'ac': 500},
             'gnomad_exomes': {'af': 0.01, 'hh': 2},
             'gnomad_genomes': {'af': 0.01, 'hh': 2},
-            'gnomad_svs': {'ac': 0.01}
+            'gnomad_svs': {'af': 0.01}
         },
         'qualityFilter': {
             'min_gq_sv': 90,
@@ -519,7 +540,9 @@ class Command(BaseCommand):
         is_sv = dataset_type == Sample.DATASET_TYPE_SV_CALLS
         sample_qs = sample_qs.filter(dataset_type=dataset_type)
         if is_sv:
-            sample_qs = sample_qs.exclude(individual__sv_flags__contains=['outlier_num._calls'])
+            sample_qs = sample_qs.exclude(
+                individual__sv_flags__contains=['outlier_num._calls'], individual__affected=Individual.AFFECTED_STATUS_AFFECTED,
+            )
         sample_types = list(sample_qs.values_list('sample_type', flat=True).distinct())
         if len(sample_types) > 1:
             raise CommandError('Variant prioritization not supported for projects with multiple sample types')
@@ -622,7 +645,8 @@ class Command(BaseCommand):
             GENOME_VERSION_GRCh38, dataset_type, sample_data, **kwargs,
         )
         return cls._execute_comp_het_search(
-            queryset, search_name, config_search, family_variant_data, family_guid_map, samples, config_search.get('no_secondary_annotations'),
+            queryset, search_name, config_search, family_variant_data, family_guid_map, samples,
+            no_secondary_annotations=config_search.get('split_pathogenicity_annotations'),
         )
 
     @classmethod
