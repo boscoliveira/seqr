@@ -347,11 +347,6 @@ def mock_opened_file(index):
 
 
 @mock.patch('seqr.utils.file_utils.os.path.isfile', lambda *args: True)
-@mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', 'http://testairtable')
-@mock.patch('seqr.utils.communication_utils.BASE_URL', SEQR_URL)
-@mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
-@mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
-@mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
 class CheckNewSamplesTest(object):
 
     CREATE_SNV_INDEL_SAMPLES_LOGS = [
@@ -396,6 +391,35 @@ class CheckNewSamplesTest(object):
         mock_data_dir = patcher.start()
         mock_data_dir.__str__.return_value = self.MOCK_DATA_DIR
         self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
+        mock_temp_dir = patcher.start()
+        mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
+        self.mock_email = patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', 'http://testairtable')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.communication_utils.BASE_URL', SEQR_URL)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        patcher = mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
         Sample.objects.filter(guid=OLD_DATA_SAMPLE_GUID).update(sample_type='WES')
 
     def _test_call(self, error_logs=None, run_loading_logs=None, num_runs=5):
@@ -438,7 +462,7 @@ class CheckNewSamplesTest(object):
         num_calls = self._assert_expected_airtable_calls(bool(run_loading_logs), single_call)
         self.assertEqual(len(responses.calls), num_calls)
 
-    def _test_success_call(self, mock_email, anvil_email_calls):
+    def _test_success_call(self, anvil_email_calls):
         Project.objects.filter(id__in=[1, 3]).update(genome_version=38)
 
         self._test_call(run_loading_logs={
@@ -514,8 +538,8 @@ The following 1 families failed sex check:
         ),
         ])
 
-        self.assertEqual(mock_email.call_count, 5 if anvil_email_calls else 4)
-        mock_email.assert_has_calls([
+        self.assertEqual(self.mock_email.call_count, 5 if anvil_email_calls else 4)
+        self.mock_email.assert_has_calls([
             mock.call(body=TEXT_EMAIL_TEMPLATE.format(2, 'WES', 'Test Reprocessed Project'), subject='New WES data available in seqr', to=['test_user_manager@test.com']),
             mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(2, 'WES', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
             mock.call().send(),
@@ -529,8 +553,8 @@ The following 1 families failed sex check:
             mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(1, 'WES SV', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
             mock.call().send(),
         ] + anvil_email_calls)
-        self.assertDictEqual(mock_email.return_value.esp_extra, {'MessageStream': 'seqr-notifications'})
-        self.assertDictEqual(mock_email.return_value.merge_data, {})
+        self.assertDictEqual(self.mock_email.return_value.esp_extra, {'MessageStream': 'seqr-notifications'})
+        self.assertDictEqual(self.mock_email.return_value.merge_data, {})
 
         self.assertEqual(self.manager_user.notifications.count(), 5)
         self.assertEqual(
@@ -546,11 +570,7 @@ The following 1 families failed sex check:
     def _anvil_email_calls(*args, **kwargs):
         return []
 
-    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
-    @mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
-    @mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
-    @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
-    def test_command(self, mock_email, mock_temp_dir):
+    def test_command(self):
         # Test errors
         self._set_empty_loading_files()
         with self.assertRaises(CommandError) as ce:
@@ -561,7 +581,7 @@ The following 1 families failed sex check:
         self.reset_logs()
         call_command('check_for_new_samples_from_pipeline')
         self.assert_json_logs(user=None, expected=self.LIST_FILE_LOGS + [('No loaded data available', None)])
-        mock_email.assert_not_called()
+        self.mock_email.assert_not_called()
         self.mock_send_slack.assert_not_called()
 
         error_logs = {
@@ -570,7 +590,6 @@ The following 1 families failed sex check:
             'auto__2024-08-12': 'Data has genome version GRCh38 but the following projects have conflicting versions: R0001_1kg (GRCh37)',
             'auto__2024-09-14': 'Data has genome version GRCh38 but the following projects have conflicting versions: R0001_1kg (GRCh37), R0003_test (GRCh37)',
         }
-        mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
         self._test_call(error_logs=error_logs)
         self.assertEqual(Sample.objects.filter(guid__in=SAMPLE_GUIDS + GCNV_SAMPLE_GUIDS).count(), 0)
 
@@ -582,8 +601,8 @@ The following 1 families failed sex check:
 
         # Test success
         self.mock_send_slack.reset_mock()
-        mock_email.reset_mock()
-        self._test_success_call(mock_email, self._anvil_email_calls())
+        self.mock_email.reset_mock()
+        self._test_success_call(self._anvil_email_calls())
 
         # Tests Sample models created/updated
         snv_indel_samples = Sample.objects.filter(data_source='auto__2023-08-09')
@@ -680,7 +699,7 @@ The following 1 families failed sex check:
         # Test reloading has no effect
         self._set_reloading_loading_files()
         self.reset_logs()
-        mock_email.reset_mock()
+        self.mock_email.reset_mock()
         self.mock_send_slack.reset_mock()
         self.mock_redis.reset_mock()
         sample_last_modified = Sample.objects.filter(
@@ -688,7 +707,7 @@ The following 1 families failed sex check:
 
         call_command('check_for_new_samples_from_pipeline')
         self.assert_json_logs(user=None, expected=self.LIST_FILE_LOGS[:1] + [('Data already loaded for all 2 runs', None)])
-        mock_email.assert_not_called()
+        self.mock_email.assert_not_called()
         self.mock_send_slack.assert_not_called()
         self.assertFalse(Sample.objects.filter(last_modified_date__gt=sample_last_modified).exists())
         self.mock_redis.return_value.delete.assert_not_called()
@@ -996,20 +1015,10 @@ The following users have been notified: test_user_manager@test.com""")
         ]
 
     @mock.patch('seqr.management.commands.check_for_new_samples_from_pipeline.IS_ANVIL_LOADING_DELAY', True)
-    @mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', 'http://testairtable')
-    @mock.patch('seqr.utils.communication_utils.BASE_URL', SEQR_URL)
-    @mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
-    @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
-    @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
-    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
-    @mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
-    @mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
-    @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
     @responses.activate
-    def test_loading_delay_command(self, mock_email, mock_temp_dir):
+    def test_loading_delay_command(self):
         self._add_responses()
-        mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
-        self._test_success_call(mock_email, self._anvil_email_calls(
+        self._test_success_call(self._anvil_email_calls(
             email_text=ANVIL_ERROR_TEXT_EMAIL_TEMPLATE.format(error='\n'+ANVIL_ERROR_DELAY),
             email_html=ANVIL_ERROR_HTML_EMAIL_TEMPLATE.format(error='<br />'+ANVIL_ERROR_DELAY),
         ))
