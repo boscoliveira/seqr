@@ -173,7 +173,7 @@ class Command(BaseCommand):
         ]
         if IS_ANVIL_LOADING_DELAY:
             email_rows.append(
-                'Please note that our team is currently away for our winter break, and therefore all response will be '
+                'Please note that our team is currently away for our winter break, and therefore all responses will be '
                 'delayed until we return in mid-January. We appreciate your understanding and support of our research '
                 'team taking some well-deserved time off and hope you also have a nice break.'
             )

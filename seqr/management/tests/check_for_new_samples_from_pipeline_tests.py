@@ -349,11 +349,28 @@ def mock_opened_file(index):
 @mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
 @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
 @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
-@mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
-@mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
-@mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
-@mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
 class CheckNewSamplesTest(object):
+
+    CREATE_SNV_INDEL_SAMPLES_LOGS = [
+        ('Loading 4 WES SNV_INDEL samples in 2 projects', None),
+        ('create 4 Samples', {'dbUpdate': mock.ANY}),
+        ('update 4 Samples', {'dbUpdate': mock.ANY}),
+    ]
+    UPDATE_SAMPLE_LOGS = [
+        ('update 2 Individuals', {'dbUpdate': {
+            'dbEntity': 'Individual', 'entityIds': ['I000001_na19675', 'I000015_na20885'],
+            'updateFields': ['filter_flags', 'pop_platform_filters', 'population'],
+            'updateType': 'bulk_update'}}
+         ),
+        ('Reloading saved variants in 2 projects', None),
+        ('Reloading genotypes for 0 SNV_INDEL variants in family F000012_12', None),
+        ('Updated 0 variants in 2 families for project Test Reprocessed Project', None),
+        ('Reloading genotypes for 1 SNV_INDEL variants in family F000014_14', None),
+        ('update 1 SavedVariants', {'dbUpdate': mock.ANY}),
+        ('Updated 1 variants in 1 families for project Non-Analyst Project', None),
+        ('Reload Summary: ', None),
+        ('  Non-Analyst Project: Updated 1 variants', None),
+    ]
 
     def set_up(self):
         patcher = mock.patch('seqr.utils.communication_utils._post_to_slack')
@@ -418,9 +435,114 @@ class CheckNewSamplesTest(object):
         num_calls = self._assert_expected_airtable_calls(bool(run_loading_logs), single_call)
         self.assertEqual(len(responses.calls), num_calls)
 
+    def _test_success_call(self, mock_email):
+        Project.objects.filter(id__in=[1, 3]).update(genome_version=38)
+
+        self._test_call(run_loading_logs={
+            'GRCh38/SNV_INDEL': self.CREATE_SNV_INDEL_SAMPLES_LOGS + [
+                ('update 1 Samples', {'dbUpdate': mock.ANY}),
+                ('update 2 Familys', {'dbUpdate': mock.ANY}),
+            ] + self.AIRTABLE_LOGS + [
+                ('update 3 Familys', {'dbUpdate': mock.ANY}),
+            ] + self.UPDATE_SAMPLE_LOGS,
+            'GRCh38/MITO': [
+                ('Loading 2 WGS MITO samples in 1 projects', None)
+            ],
+            'GRCh38/SV': [
+                ('Loading 4 WES SV samples in 2 projects', None),
+                ('create 4 Samples', {'dbUpdate': mock.ANY}),
+                ('update 4 Samples', {'dbUpdate': mock.ANY}),
+                ('update 3 Samples', {'dbUpdate': mock.ANY}),
+                ('update 1 Familys', {'dbUpdate': mock.ANY}),
+                ('Reloading saved variants in 2 projects', None),
+                ('Updated 0 variants in 1 families for project 1kg project nåme with uniçøde', None),
+                ('Updated 0 variants in 1 families for project Test Reprocessed Project', None),
+                ('Reload Summary: ', None),
+            ],
+        }, error_logs={
+            'manual__2023-11-02': 'Invalid families in run metadata GRCh37/SNV_INDEL: manual__2023-11-02 - F0000123_ABC',
+            'auto__2024-08-12': 'Matches not found for sample ids: NA20885, NA22882',
+        })
+
+        # Test notifications
+        self.assertEqual(self.mock_send_slack.call_count, 7 + len(self.ADDITIONAL_SLACK_CALLS))
+        self.mock_send_slack.assert_has_calls([
+            mock.call(
+                'seqr-data-loading',
+                f'2 new WES samples are loaded in <{SEQR_URL}project/{PROJECT_GUID}/project_page|Test Reprocessed Project>\n```NA20888, NA20889```',
+            ),
+            ] + self.ADDITIONAL_SLACK_CALLS + [
+            mock.call(
+                'seqr_loading_notifications',
+                """Encountered the following errors loading 1kg project nåme with uniçøde:
+
+The following 1 families failed relatedness check:
+- 1: Sample NA19679 has expected relation "parent" to NA19675 but has coefficients [0.0, 0.8505002045292791, 0.14949979547072176, 0.5747498977353613]; Sample NA19678 has expected relation "sibling" to NA19675 but has coefficients [0.17424888135104177, 0.6041745754450025, 0.22157654320395614, 0.5236638309264574]\n\nRelatedness check results: https://storage.cloud.google.com/seqr-loading-temp/v3.1/GRCh38/SNV_INDEL/relatedness_check/test_callset_hash.tsv
+
+The following 1 families failed sex check:
+- 1: Sample NA19679 has pedigree sex F but imputed sex M
+
+The following 2 families failed missing samples:
+- 2: Missing samples: {'HG00732', 'HG00733'}
+- 3: Missing samples: {'NA20870'}""",
+            ),
+            mock.call(
+                'seqr_loading_notifications',
+                """Encountered the following errors loading Non-Analyst Project:
+
+The following 1 families failed sex check:
+- fam14: Sample NA21987 has pedigree sex M but imputed sex F""",
+            ),
+            mock.call(
+                'seqr-data-loading',
+                f'0 new WES SV samples are loaded in <{SEQR_URL}project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
+            ), mock.call(
+                'seqr-data-loading',
+                f'1 new WES SV samples are loaded in <{SEQR_URL}project/{PROJECT_GUID}/project_page|Test Reprocessed Project>\n```NA20889```',
+            ),
+            mock.call(*self.SLACK_VALIDATION_CALL),
+            mock.call('seqr_loading_notifications',
+                      f"""Callset Validation Failed
+*Projects:* MISSING FROM ERROR REPORT
+*Reference Genome:* GRCh38
+*Dataset Type:* SNV_INDEL
+*Run ID:* manual__2025-01-24
+*Validation Errors:* {{"error": "An unhandled error occurred during VCF ingestion"}}{self.SLACK_VALIDATION_MESSAGE}"""
+        ),
+        ])
+
+        self.assertEqual(mock_email.call_count, 5 if self.ANVIL_EMAIL_CALLS else 4)
+        mock_email.assert_has_calls([
+            mock.call(body=TEXT_EMAIL_TEMPLATE.format(2, 'WES', 'Test Reprocessed Project'), subject='New WES data available in seqr', to=['test_user_manager@test.com']),
+            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(2, 'WES', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
+            mock.call().send(),
+            mock.call(body=self.PROJECT_EMAIL_TEXT, subject='New WES data available in seqr', to=['test_user_collaborator@test.com']),
+            mock.call().attach_alternative(self.PROJECT_EMAIL_HTML, 'text/html'),
+            mock.call().send(),
+            mock.call(body=TEXT_EMAIL_TEMPLATE.format(0, 'WES SV', '1kg project nåme with uniçøde'), subject='New WES SV data available in seqr', to=['test_user_manager@test.com']),
+            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(0, 'WES SV', 'R0001_1kg', '1kg project nåme with uniçøde'), 'text/html'),
+            mock.call().send(),
+            mock.call(body=TEXT_EMAIL_TEMPLATE.format(1, 'WES SV', 'Test Reprocessed Project'), subject='New WES SV data available in seqr', to=['test_user_manager@test.com']),
+            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(1, 'WES SV', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
+            mock.call().send(),
+        ] + self.ANVIL_EMAIL_CALLS)
+        self.assertDictEqual(mock_email.return_value.esp_extra, {'MessageStream': 'seqr-notifications'})
+        self.assertDictEqual(mock_email.return_value.merge_data, {})
+
+        self.assertEqual(self.manager_user.notifications.count(), 5)
+        self.assertEqual(
+            str(self.manager_user.notifications.first()), 'Test Reprocessed Project Loaded 1 new WES SV samples 0 minutes ago')
+        self.assertEqual(self.collaborator_user.notifications.count(), 2)
+        self.assertEqual(
+            str(self.collaborator_user.notifications.first()), 'Non-Analyst Project Loaded 1 new WES samples 0 minutes ago')
+
     def _additional_loading_logs(self, data_type, version):
         return []
 
+    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
+    @mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
+    @mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
+    @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
     def test_command(self, mock_email, mock_temp_dir):
         # Test errors
         self._set_empty_loading_files()
@@ -446,7 +568,6 @@ class CheckNewSamplesTest(object):
         self.assertEqual(Sample.objects.filter(guid__in=SAMPLE_GUIDS + GCNV_SAMPLE_GUIDS).count(), 0)
 
         # Update fixture data to allow testing edge cases
-        Project.objects.filter(id__in=[1, 3]).update(genome_version=38)
         svs = SavedVariant.objects.filter(guid__in=['SV0000002_1248367227_r0390_100', 'SV0000006_1248367227_r0003_tes', 'SV0000007_prefix_19107_DEL_r00'])
         for sv in svs:
             sv.saved_variant_json['genomeVersion'] = '38'
@@ -455,51 +576,7 @@ class CheckNewSamplesTest(object):
         # Test success
         self.mock_send_slack.reset_mock()
         mock_email.reset_mock()
-        create_snv_indel_samples_logs = [
-            ('Loading 4 WES SNV_INDEL samples in 2 projects', None),
-            ('create 4 Samples', {'dbUpdate': mock.ANY}),
-            ('update 4 Samples', {'dbUpdate': mock.ANY}),
-        ]
-        update_sample_logs = [
-            ('update 2 Individuals', {'dbUpdate': {
-                'dbEntity': 'Individual', 'entityIds': ['I000001_na19675', 'I000015_na20885'],
-                'updateFields': ['filter_flags', 'pop_platform_filters', 'population'],
-                'updateType': 'bulk_update'}}
-            ),
-            ('Reloading saved variants in 2 projects', None),
-            ('Reloading genotypes for 0 SNV_INDEL variants in family F000012_12', None),
-            ('Updated 0 variants in 2 families for project Test Reprocessed Project', None),
-            ('Reloading genotypes for 1 SNV_INDEL variants in family F000014_14', None),
-            ('update 1 SavedVariants', {'dbUpdate': mock.ANY}),
-            ('Updated 1 variants in 1 families for project Non-Analyst Project', None),
-            ('Reload Summary: ', None),
-            ('  Non-Analyst Project: Updated 1 variants', None),
-        ]
-        self._test_call(run_loading_logs={
-            'GRCh38/SNV_INDEL': create_snv_indel_samples_logs + [
-                ('update 1 Samples', {'dbUpdate': mock.ANY}),
-                ('update 2 Familys', {'dbUpdate': mock.ANY}),
-            ] + self.AIRTABLE_LOGS + [
-                ('update 3 Familys', {'dbUpdate': mock.ANY}),
-            ] + update_sample_logs,
-            'GRCh38/MITO': [
-                ('Loading 2 WGS MITO samples in 1 projects', None)
-            ],
-            'GRCh38/SV': [
-                ('Loading 4 WES SV samples in 2 projects', None),
-                ('create 4 Samples', {'dbUpdate': mock.ANY}),
-                ('update 4 Samples', {'dbUpdate': mock.ANY}),
-                ('update 3 Samples', {'dbUpdate': mock.ANY}),
-                ('update 1 Familys', {'dbUpdate': mock.ANY}),
-                ('Reloading saved variants in 2 projects', None),
-                ('Updated 0 variants in 1 families for project 1kg project nåme with uniçøde', None),
-                ('Updated 0 variants in 1 families for project Test Reprocessed Project', None),
-                ('Reload Summary: ', None),
-            ],
-        }, error_logs={
-            'manual__2023-11-02': 'Invalid families in run metadata GRCh37/SNV_INDEL: manual__2023-11-02 - F0000123_ABC',
-            'auto__2024-08-12': 'Matches not found for sample ids: NA20885, NA22882',
-        })
+        self._test_success_call(mock_email)
 
         # Tests Sample models created/updated
         snv_indel_samples = Sample.objects.filter(data_source='auto__2023-08-09')
@@ -593,78 +670,6 @@ class CheckNewSamplesTest(object):
             'sampleId': 'NA21234', 'familyGuid': 'F000014_14', 'sampleType': 'WGS', 'individualGuid': 'I000018_na21234',
         }})
 
-        # Test notifications
-        self.assertEqual(self.mock_send_slack.call_count, 7 + len(self.ADDITIONAL_SLACK_CALLS))
-        self.mock_send_slack.assert_has_calls([
-            mock.call(
-                'seqr-data-loading',
-                f'2 new WES samples are loaded in <{SEQR_URL}project/{PROJECT_GUID}/project_page|Test Reprocessed Project>\n```NA20888, NA20889```',
-            ),
-            ] + self.ADDITIONAL_SLACK_CALLS + [
-            mock.call(
-                'seqr_loading_notifications',
-                """Encountered the following errors loading 1kg project nåme with uniçøde:
-
-The following 1 families failed relatedness check:
-- 1: Sample NA19679 has expected relation "parent" to NA19675 but has coefficients [0.0, 0.8505002045292791, 0.14949979547072176, 0.5747498977353613]; Sample NA19678 has expected relation "sibling" to NA19675 but has coefficients [0.17424888135104177, 0.6041745754450025, 0.22157654320395614, 0.5236638309264574]\n\nRelatedness check results: https://storage.cloud.google.com/seqr-loading-temp/v3.1/GRCh38/SNV_INDEL/relatedness_check/test_callset_hash.tsv
-
-The following 1 families failed sex check:
-- 1: Sample NA19679 has pedigree sex F but imputed sex M
-
-The following 2 families failed missing samples:
-- 2: Missing samples: {'HG00732', 'HG00733'}
-- 3: Missing samples: {'NA20870'}""",
-            ),
-            mock.call(
-                'seqr_loading_notifications',
-                """Encountered the following errors loading Non-Analyst Project:
-
-The following 1 families failed sex check:
-- fam14: Sample NA21987 has pedigree sex M but imputed sex F""",
-            ),
-            mock.call(
-                'seqr-data-loading',
-                f'0 new WES SV samples are loaded in <{SEQR_URL}project/R0001_1kg/project_page|1kg project nåme with uniçøde>',
-            ), mock.call(
-                'seqr-data-loading',
-                f'1 new WES SV samples are loaded in <{SEQR_URL}project/{PROJECT_GUID}/project_page|Test Reprocessed Project>\n```NA20889```',
-            ),
-            mock.call(*self.SLACK_VALIDATION_CALL),
-            mock.call('seqr_loading_notifications',
-                      f"""Callset Validation Failed
-*Projects:* MISSING FROM ERROR REPORT
-*Reference Genome:* GRCh38
-*Dataset Type:* SNV_INDEL
-*Run ID:* manual__2025-01-24
-*Validation Errors:* {{"error": "An unhandled error occurred during VCF ingestion"}}{self.SLACK_VALIDATION_MESSAGE}"""
-        ),
-        ])
-
-        self.assertEqual(mock_email.call_count, 5 if self.ANVIL_EMAIL_CALLS else 4)
-        mock_email.assert_has_calls([
-            mock.call(body=TEXT_EMAIL_TEMPLATE.format(2, 'WES', 'Test Reprocessed Project'), subject='New WES data available in seqr', to=['test_user_manager@test.com']),
-            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(2, 'WES', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
-            mock.call().send(),
-            mock.call(body=self.PROJECT_EMAIL_TEXT, subject='New WES data available in seqr', to=['test_user_collaborator@test.com']),
-            mock.call().attach_alternative(self.PROJECT_EMAIL_HTML, 'text/html'),
-            mock.call().send(),
-            mock.call(body=TEXT_EMAIL_TEMPLATE.format(0, 'WES SV', '1kg project nåme with uniçøde'), subject='New WES SV data available in seqr', to=['test_user_manager@test.com']),
-            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(0, 'WES SV', 'R0001_1kg', '1kg project nåme with uniçøde'), 'text/html'),
-            mock.call().send(),
-            mock.call(body=TEXT_EMAIL_TEMPLATE.format(1, 'WES SV', 'Test Reprocessed Project'), subject='New WES SV data available in seqr', to=['test_user_manager@test.com']),
-            mock.call().attach_alternative(HTML_EMAIL_TEMAPLTE.format(1, 'WES SV', PROJECT_GUID, 'Test Reprocessed Project'), 'text/html'),
-            mock.call().send(),
-        ] + self.ANVIL_EMAIL_CALLS)
-        self.assertDictEqual(mock_email.return_value.esp_extra, {'MessageStream': 'seqr-notifications'})
-        self.assertDictEqual(mock_email.return_value.merge_data, {})
-
-        self.assertEqual(self.manager_user.notifications.count(), 5)
-        self.assertEqual(
-            str(self.manager_user.notifications.first()), 'Test Reprocessed Project Loaded 1 new WES SV samples 0 minutes ago')
-        self.assertEqual(self.collaborator_user.notifications.count(), 2)
-        self.assertEqual(
-            str(self.collaborator_user.notifications.first()), 'Non-Analyst Project Loaded 1 new WES samples 0 minutes ago')
-
         # Test reloading has no effect
         self._set_reloading_loading_files()
         self.reset_logs()
@@ -687,7 +692,7 @@ The following 1 families failed sex check:
         if self.AIRTABLE_LOGS:
             airtable_logs.append(('Fetched 1 AnVIL Seqr Loading Requests Tracking records from airtable', None))
         self._test_call(num_runs=2, run_loading_logs={
-            'GRCh38/SNV_INDEL': create_snv_indel_samples_logs + airtable_logs + update_sample_logs,
+            'GRCh38/SNV_INDEL': self.CREATE_SNV_INDEL_SAMPLES_LOGS + airtable_logs + self.UPDATE_SAMPLE_LOGS,
         })
 
 
@@ -846,8 +851,7 @@ The following users have been notified: test_user_manager@test.com""")
         self.set_up()
         super().setUp()
 
-    @responses.activate
-    def test_command(self, *args, **kwargs):
+    def _add_responses(self):
         responses.add(
             responses.GET,
             self.airtable_loading_tracking_url + self.AIRTABLE_LOADING_QUERY_TEMPLATE.format(EXTERNAL_PROJECT_GUID),
@@ -877,6 +881,10 @@ The following users have been notified: test_user_manager@test.com""")
         responses.add_callback(responses.POST, self.airtable_pdo_url, callback=lambda request: (200, {}, json.dumps({
             'records': [{'id': f'rec{i}ABC123', **r} for i, r in enumerate(json.loads(request.body)['records'])]
         })))
+
+    @responses.activate
+    def test_command(self, *args, **kwargs):
+        self._add_responses()
         super().test_command(*args, **kwargs)
 
     def _set_empty_loading_files(self):
@@ -977,3 +985,19 @@ The following users have been notified: test_user_manager@test.com""")
         ]})
 
         return 8 if single_call else 9
+
+    # @mock.patch('seqr.management.commands.check_for_new_samples_from_pipeline.IS_ANVIL_LOADING_DELAY', True)
+    @mock.patch('seqr.views.utils.airtable_utils.AIRTABLE_URL', 'http://testairtable')
+    @mock.patch('seqr.utils.communication_utils.BASE_URL', SEQR_URL)
+    @mock.patch('seqr.utils.search.add_data_utils.BASE_URL', SEQR_URL)
+    @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_ANVIL_DATA_LOADING_CHANNEL', 'anvil-data-loading')
+    @mock.patch('seqr.utils.search.add_data_utils.SEQR_SLACK_DATA_ALERTS_NOTIFICATION_CHANNEL', 'seqr-data-loading')
+    @mock.patch('seqr.views.utils.airtable_utils.BASE_URL', 'https://test-seqr.org/')
+    @mock.patch('seqr.views.utils.airtable_utils.MAX_UPDATE_RECORDS', 2)
+    @mock.patch('seqr.views.utils.export_utils.TemporaryDirectory')
+    @mock.patch('seqr.utils.communication_utils.EmailMultiAlternatives')
+    @responses.activate
+    def test_loading_delay_command(self, mock_email, mock_temp_dir):
+        self._add_responses()
+        mock_temp_dir.return_value.__enter__.return_value = '/mock/tmp'
+        self._test_success_call(mock_email)
