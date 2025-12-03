@@ -824,6 +824,11 @@ def delete_clickhouse_project(project, dataset_type, sample_type=None):
     return f'Deleted all {dataset_type} search data for project {project.name}'
 
 
+def reload_clickhouse_sex_dict():
+    with connections['clickhouse_write'].cursor() as cursor:
+        cursor.execute(f'SYSTEM RELOAD DICTIONARY "seqrdb_sex_dict"')
+
+
 SV_DATASET_TYPES = {
     Sample.SAMPLE_TYPE_WGS: Sample.DATASET_TYPE_SV_CALLS,
     Sample.SAMPLE_TYPE_WES: 'GCNV',

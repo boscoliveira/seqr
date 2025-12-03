@@ -972,7 +972,6 @@ class EntriesManager(SearchQuerySet):
                 gt_map = f"map({', '.join(sex_map)})[dictGetOrDefault('seqrdb_sex_dict', 'sex', (family_guid, x.sampleId), 'U')]"
             gt_filter = (gt_map, f'has({{value}}[{affected_lookup}], ifNull({{field}}, -1))')
 
-
         return self._affected_condition(), unaffected_condition, gt_filter
 
     def _affected_condition(self):
