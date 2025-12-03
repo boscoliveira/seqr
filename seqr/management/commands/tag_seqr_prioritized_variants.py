@@ -486,7 +486,8 @@ SEARCHES = {
             'gene_list_moi': 'R',
             'inheritance_mode': X_LINKED_RECESSIVE_MALE_AFFECTED,
             'family_filter': {
-                'affected_males': True
+                'affected_males': True,
+                'confirmed_inheritance': True,
             },
             'annotations': {
               'structural_consequence': ['LOF', 'INTRAGENIC_EXON_DUP'],
