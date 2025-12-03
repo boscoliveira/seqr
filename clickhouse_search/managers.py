@@ -17,7 +17,7 @@ from seqr.utils.search.constants import INHERITANCE_FILTERS, ANY_AFFECTED, AFFEC
     EXTENDED_SPLICE_REGION_CONSEQUENCE, CLINVAR_PATH_RANGES, CLINVAR_PATH_SIGNIFICANCES, CLINVAR_LIKELY_PATH_FILTER, \
     CLINVAR_CONFLICTING_P_LP, CLINVAR_CONFLICTING_NO_P, CLINVAR_CONFLICTING, PATH_FREQ_OVERRIDE_CUTOFF, \
     HGMD_CLASS_FILTERS, SV_TYPE_FILTER_FIELD, SV_CONSEQUENCES_FIELD, COMPOUND_HET, COMPOUND_HET_ALLOW_HOM_ALTS, \
-    X_LINKED_RECESSIVE_MALE_AFFECTED
+    X_LINKED_RECESSIVE_MALE_AFFECTED, FEMALE_SEXES
 from seqr.utils.xpos_utils import get_xpos, MIN_POS, MAX_POS
 
 
@@ -961,14 +961,16 @@ class EntriesManager(SearchQuerySet):
             inheritance_mode_filters = self.INHERITANCE_FILTERS.get(inheritance_mode, {})
             affected_gts = genotype_lookup.get(inheritance_mode_filters.get(AFFECTED), [])
             unaffected_gts = genotype_lookup.get(inheritance_mode_filters.get(UNAFFECTED), [])
-            affected_gt_map = f"map('A', {affected_gts}, 'N', {unaffected_gts}, 'U', [-1, 0, 1, 2])"
+            gt_map = f"map('A', {affected_gts}, 'N', {unaffected_gts}, 'U', [-1, 0, 1, 2])"
             affected_lookup = self.GET_AFFECTED_TEMPLATE.format(field='x.sampleId')
-            gt_template = 'ifNull({field}, -1)'
-            gt_filter_template = f'has({{value}}[{affected_lookup}], {gt_template})'
-            if inheritance_mode == X_LINKED_RECESSIVE_MALE_AFFECTED and sample_data.get('unaffected_male_sample_ids'):
-                unaffected_male_template = f'or({gt_template} < 1, not has({sample_data["unaffected_male_sample_ids"]}, x.sampleId))'
-                gt_filter_template = f'and({gt_filter_template}, {unaffected_male_template})'
-            gt_filter = (affected_gt_map, gt_filter_template)
+            if inheritance_mode == X_LINKED_RECESSIVE_MALE_AFFECTED:
+                male_unaffected_gts = [gt for gt in unaffected_gts if gt < 1]
+                male_gt_map = f"map('A', {affected_gts}, 'N', {male_unaffected_gts}, 'U', [-1, 0, 1, 2])"
+                sex_map = [
+                    f"'{sex}', {gt_map}" for sex in FEMALE_SEXES + [UNAFFECTED]
+                ] + [f"'{sex}', {male_gt_map}" for sex in MALE_SEXES]
+                gt_map = f"map({', '.join(sex_map)})[dictGetOrDefault('seqrdb_sex_dict', 'sex', (family_guid, x.sampleId), 'U')]"
+            gt_filter = (gt_map, f'has({{value}}[{affected_lookup}], ifNull({{field}}, -1))')
 
 
         return self._affected_condition(), unaffected_condition, gt_filter

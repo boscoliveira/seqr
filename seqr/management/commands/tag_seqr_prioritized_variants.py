@@ -630,7 +630,6 @@ class Command(BaseCommand):
                     filter=Q(individual__affected=Individual.AFFECTED_STATUS_AFFECTED),
                 ),
                 unaffected_guids=ArrayAgg('individual__guid', filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED)),
-                unaffected_male_sample_ids=ArrayAgg('sample_id', filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED, individual__sex__in=Individual.MALE_SEXES)),
             ).filter(affecteds__len__gt=0)
         }
         samples_by_dataset_type[dataset_type] = samples_by_family
@@ -657,17 +656,12 @@ class Command(BaseCommand):
                 family_guid: sample_data for family_guid, sample_data in samples_by_family.items()
                 if cls._family_passes_filter(sample_data, family_filter)
             }
-        valid_sample_data = {
+        return {
             'project_guids': [project.guid],
             'num_families': len(samples_by_family),
             'num_unaffected': sum(len(s['unaffected_guids']) for s in samples_by_family.values()),
             'sample_type_families': {sample_type: samples_by_family.keys()},
         }
-        if (family_filter or {}).get('affected_males'):
-            valid_sample_data['unaffected_male_sample_ids'] = [
-                sample_id for s in samples_by_family.values() for sample_id in s['unaffected_male_sample_ids']
-            ]
-        return valid_sample_data
 
     @staticmethod
     def _family_passes_filter(sample_data, family_filter):

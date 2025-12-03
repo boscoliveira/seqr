@@ -37,8 +37,7 @@ def get_clickhouse_variants(samples, search, user, previous_search_results, geno
     sample_data_by_dataset_type = _get_sample_data(
         samples,
         skip_multi_project_individual_guid=True,
-        has_x_chrom_comp_het=has_x_chrom_comp_het,
-        has_x_linked=has_x_linked,
+        annotate_affected_males=has_x_chrom_comp_het or has_x_linked,
     )
     results = []
     family_guid = None
@@ -389,7 +388,7 @@ def _is_matched_minimal_transcript(transcript, minimal_transcript):
      and transcript.get('spliceregion', {}).get('extended_intronic_splice_region_variant') == minimal_transcript.get('extendedIntronicSpliceRegionVariant'))
 
 
-def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_chrom_comp_het=False, has_x_linked=False):
+def _get_sample_data(samples, skip_multi_project_individual_guid=False, annotate_affected_males=False):
     mismatch_affected_samples = samples.values('sample_id', 'dataset_type').annotate(
         projects=ArrayAgg('individual__family__project__name', distinct=True),
         affected=ArrayAgg('individual__affected', distinct=True),
@@ -412,13 +411,9 @@ def _get_sample_data(samples, skip_multi_project_individual_guid=False, has_x_ch
         annotations['num_unaffected'] = Count(
             'individual_id', distinct=True, filter=Q(individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED),
         )
-        if has_x_chrom_comp_het or has_x_linked:
+        if annotate_affected_males:
             annotations['affected_male_family_guids'] = ArrayAgg('individual__family__guid', distinct=True, filter=Q(
                 individual__affected=Individual.AFFECTED_STATUS_AFFECTED, individual__sex__in=Individual.MALE_SEXES,
-            ))
-        if has_x_linked:
-            annotations['unaffected_male_sample_ids'] = ArrayAgg('sample_id', distinct=True, filter=Q(
-                individual__affected=Individual.AFFECTED_STATUS_UNAFFECTED, individual__sex__in=Individual.MALE_SEXES,
             ))
     else:
         annotations['samples'] = ArrayAgg(JSONObject(
