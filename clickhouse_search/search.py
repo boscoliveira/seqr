@@ -826,7 +826,7 @@ def delete_clickhouse_project(project, dataset_type, sample_type=None):
 
 def reload_clickhouse_sex_dict():
     with connections['clickhouse_write'].cursor() as cursor:
-        cursor.execute(f'SYSTEM RELOAD DICTIONARY "seqrdb_sex_dict"')
+        cursor.execute('SYSTEM RELOAD DICTIONARY "seqrdb_sex_dict"')
 
 
 SV_DATASET_TYPES = {
