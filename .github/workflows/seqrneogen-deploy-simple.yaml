@@ -30,15 +30,14 @@ jobs:
       - name: Build and push Docker image
         env:
           COMMIT_SHA: ${{ github.sha }}
-          PROJECT_ID: seqrneogen
         run: |
           # Create custom cloudbuild config for seqrneogen
           cat > /tmp/seqrneogen-build.yaml << 'BUILDEOF'
           steps:
           - name: 'gcr.io/kaniko-project/executor:v1.3.0'
             args:
-            - --destination=gcr.io/${PROJECT_ID}/seqr:${COMMIT_SHA}
-            - --destination=gcr.io/${PROJECT_ID}/seqr:latest
+            - --destination=gcr.io/seqrneogen/seqr:${_COMMIT_SHA}
+            - --destination=gcr.io/seqrneogen/seqr:latest
             - --dockerfile=deploy/docker/seqr/Dockerfile
             - --cache=true
             - --cache-ttl=168h
@@ -47,7 +46,7 @@ jobs:
           
           gcloud builds submit \
             --quiet \
-            --substitutions="COMMIT_SHA=${COMMIT_SHA},PROJECT_ID=${PROJECT_ID}" \
+            --substitutions="_COMMIT_SHA=${COMMIT_SHA}" \
             --config=/tmp/seqrneogen-build.yaml \
             .
 
