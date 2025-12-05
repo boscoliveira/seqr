@@ -1,0 +1,65 @@
+name: seqrneogen deploy
+on:
+  push:
+    branches:
+      - master
+    paths:
+      - 'seqr/**'
+      - 'ui/**'
+      - 'deploy/docker/seqr/**'
+      - 'requirements.txt'
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push Docker image
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          PROJECT_ID: seqrneogen
+        run: |
+          # Create custom cloudbuild config for seqrneogen
+          cat > /tmp/seqrneogen-build.yaml << 'BUILDEOF'
+          steps:
+          - name: 'gcr.io/kaniko-project/executor:v1.3.0'
+            args:
+            - --destination=gcr.io/${PROJECT_ID}/seqr:${COMMIT_SHA}
+            - --destination=gcr.io/${PROJECT_ID}/seqr:latest
+            - --dockerfile=deploy/docker/seqr/Dockerfile
+            - --cache=true
+            - --cache-ttl=168h
+          timeout: 1800s
+          BUILDEOF
+          
+          gcloud builds submit \
+            --quiet \
+            --substitutions="COMMIT_SHA=${COMMIT_SHA},PROJECT_ID=${PROJECT_ID}" \
+            --config=/tmp/seqrneogen-build.yaml \
+            .
+
+      - name: Output deployment command
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+        run: |
+          echo "✅ Docker image built: gcr.io/seqrneogen/seqr:${COMMIT_SHA}"
+          echo ""
+          echo "To deploy, run:"
+          echo "  helm upgrade seqr seqr-helm/seqr-platform \\"
+          echo "    --reuse-values \\"
+          echo "    --set seqr.image.repository=gcr.io/seqrneogen/seqr \\"
+          echo "    --set seqr.image.tag=${COMMIT_SHA} \\"
+          echo "    -f seqr-values.yaml"
