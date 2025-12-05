@@ -39,14 +39,48 @@ def _validate_vcf_header(header):
         raise ErrorsWarningsException([f'Missing required VCF header field(s) {missing_fields}.'], [])
 
 
-def _validate_vcf_meta(meta, genome_version, dataset_type):
+def _detect_dataset_type_from_filename(file_path):
+    """
+    Auto-detect dataset type from filename patterns.
+    Returns dataset_type string or None if cannot be determined.
+    """
+    if not file_path:
+        return None
+    
+    filename_lower = file_path.lower()
+    
+    # SV/CNV indicators in filename
+    sv_patterns = ['sv', 'cnv', 'structural', 'gcnv', 'copy_number']
+    if any(pattern in filename_lower for pattern in sv_patterns):
+        return Sample.DATASET_TYPE_SV_CALLS
+    
+    # Mitochondria indicators
+    mito_patterns = ['mito', 'mt', 'mtdna']
+    if any(pattern in filename_lower for pattern in mito_patterns):
+        return Sample.DATASET_TYPE_MITO_CALLS
+    
+    # Default to SNV_INDEL if no patterns match
+    return None
+
+
+def _validate_vcf_meta(meta, genome_version, dataset_type, file_path=None):
     errors = []
     expected_format_fields = DATA_TYPE_FORMAT_FIELDS.get(dataset_type, ALL_EXPECTED_FORMAT_FIELDS)
     format_meta = meta.get('FORMAT', {})
     missing_meta = [m for m in expected_format_fields if not format_meta.get(m)]
     if missing_meta:
         missing_fields = ', '.join(missing_meta)
-        errors.append(f'Missing required FORMAT field(s) {missing_fields}')
+        error_msg = f'Missing required FORMAT field(s) {missing_fields}'
+        
+        # Provide helpful suggestion if AD is missing and this might be an SV file
+        if 'AD' in missing_meta and dataset_type != Sample.DATASET_TYPE_SV_CALLS:
+            detected_type = _detect_dataset_type_from_filename(file_path)
+            if detected_type == Sample.DATASET_TYPE_SV_CALLS:
+                error_msg += f'. This VCF appears to be a Structural Variant (SV) file based on the filename. Please select "SV" as the Dataset Type instead of "SNV_INDEL".'
+            else:
+                error_msg += f'. For SNV/INDEL VCFs, all format fields (GT, AD, GQ) are required. If this is an SV/CNV VCF, please select "SV" as the Dataset Type.'
+        
+        errors.append(error_msg)
     for sub_field, expected in expected_format_fields.items():
         value = format_meta.get(sub_field)
         if value and value != expected:
@@ -81,6 +115,11 @@ def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None
     if vcf_filename is None:
         return None
 
+    # Auto-detect dataset type from filename if not provided
+    file_path_for_detection = path_name or data_path
+    if not dataset_type:
+        dataset_type = _detect_dataset_type_from_filename(file_path_for_detection)
+
     byte_range = None if vcf_filename.endswith('.vcf') else (0, BLOCK_SIZE)
     meta = defaultdict(dict)
     try:
@@ -102,7 +141,7 @@ def validate_vcf_and_get_samples(data_path, user, genome_version, path_name=None
     _validate_vcf_header(header)
     if not samples:
         raise ErrorsWarningsException(['No samples found in the provided VCF.'], [])
-    _validate_vcf_meta(meta, genome_version, dataset_type)
+    _validate_vcf_meta(meta, genome_version, dataset_type, file_path=file_path_for_detection)
 
     return samples
 

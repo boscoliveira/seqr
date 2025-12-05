@@ -194,7 +194,9 @@ def loading_vcfs(request):
 @pm_or_data_manager_required
 def validate_callset(request):
     request_json = json.loads(request.body)
-    dataset_type = request_json['datasetType'] if anvil_enabled() else None
+    # Always accept datasetType if provided (not just for Anvil)
+    # This allows non-Anvil users to specify dataset type via the MULTI_DATA_TYPE_CALLSET_PAGE
+    dataset_type = request_json.get('datasetType')
     samples = validate_vcf_and_get_samples(
         _callset_path(request_json), request.user, request_json['genomeVersion'], dataset_type=dataset_type,
         path_name=request_json['filePath'],

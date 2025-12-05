@@ -133,8 +133,9 @@ const formatSubmitUrl = () => '/api/data_management/load_data'
 const LoadData = ({ user }) => (
   <div>
     {!user.isAnvil && <LoadDataVCFMessage isAnvil={false} />}
+    {/* Always use MULTI_DATA_TYPE_LOAD_DATA_PAGES to allow dataset type selection for all users */}
     <FormWizard
-      pages={user.isAnvil ? MULTI_DATA_TYPE_LOAD_DATA_PAGES : LOAD_DATA_PAGES}
+      pages={MULTI_DATA_TYPE_LOAD_DATA_PAGES}
       formatSubmitUrl={formatSubmitUrl}
       successMessage="Data loading has been triggered"
       noModal
